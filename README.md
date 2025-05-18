@@ -3,6 +3,9 @@ Enhanced Voice Assistant
 
 # EVA – Enhanced Voice Assistant
 
+![eva_054704](https://github.com/user-attachments/assets/5ef974ad-4d9c-46da-832e-e7bf9b48a514)
+
+
 ## Présentation
 
 EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écrit en Python 🔥. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, SerpAPI pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
