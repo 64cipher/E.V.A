@@ -67,7 +67,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écri
 
    ```bash
    pip install --upgrade pip
-   pip install -r requirements.txt  # fourni dans le repo
+   pip install -r requirements.txt
    ```
 3. \*\*Fichier \*\***`.env`** (à la racine) :
 
@@ -126,7 +126,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écri
 
 * **Voix continue** : appuyez sur **Espace** pour commencer, Space à nouveau pour arrêter.
 * **Voix ponctuelle** : cliquez sur le micro.
-* **Commandes supportées** : « Crée un événement demain à 14 h », « Envoie un e‑mail à Alice … », « Ajoute une tâche … », « Itinéraire jusqu’à Genève », « Recherche Web : flux d’énergie libre ».
+* **Commandes supportées** : « Crée un événement demain à 14 h », « Envoie un e‑mail à Alice … », « Ajoute une tâche … », « Itinéraire jusqu’à Genève », « Recherche Web : les actus sur l'IA ».
 * EVA détecte une commande ➜ renvoie un JSON (voir `SYSTEM_MESSAGE_CONTENT` dans `main.py`) ➜ backend exécute.
 
 ---
