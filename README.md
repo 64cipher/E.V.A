@@ -186,11 +186,3 @@ pip freeze > requirements.txt
 | Frontend rapide      | `python -m http.server 8080` |
 
 ---
-
-## Sécurité
-
-* **Ne laissez jamais** votre vraie clé Gemini ou Google dans le repo public.
-* Ajoutez `client_secret.json` et `.env` dans `.gitignore` avant de pousser.
-* Le code force `OAUTHLIB_INSECURE_TRANSPORT=1` pour le dev local ➜ **Ne pas utiliser en production**.
-
----
