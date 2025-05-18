@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Voice Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        #mainAppContainer {
+            display: flex;
+            width: 100%;
+            flex-grow: 1;
+            padding: 1rem;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        #infoPanelColumn {
+            flex-basis: 45%;
+            min-width: 0;
+            max-width: 45%;
+            display: flex;
+            flex-direction: column;
+            transition: flex-basis 0.3s ease-in-out, min-width 0.3s ease-in-out, max-width 0.3s ease-in-out, padding 0.3s ease-in-out, background-color 0.3s ease-in-out;
+            position: relative;
+            background-color: #1F2937; 
+            border-radius: 0.5rem; 
+        }
+        #infoPanelColumn.collapsed {
+            flex-basis: 50px;
+            min-width: 50px;
+            max-width: 50px;
+            overflow: hidden;
+            background-color: transparent !important;
+            border-radius: 0;
+        }
+        #infoPanelColumn.collapsed #infoPanelTabs,
+        #infoPanelColumn.collapsed #infoPanelContentArea {
+            display: none;
+        }
+
+        #toggleInfoPanelButton {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 20;
+            background-color: rgba(26, 32, 44, 0.8);
+            color: white;
+            border: 1px solid #4A5568;
+            border-radius: 0.375rem;
+            padding: 0.5rem;
+            cursor: pointer;
+            transition: left 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        #infoPanelColumn.collapsed #toggleInfoPanelButton {
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #infoPanelColumn.collapsed #toggleInfoPanelButton .fa-chevron-left { display: none; }
+        #infoPanelColumn.collapsed #toggleInfoPanelButton .fa-chevron-right { display: inline-block; }
+        #infoPanelColumn:not(.collapsed) #toggleInfoPanelButton .fa-chevron-left { display: inline-block; }
+        #infoPanelColumn:not(.collapsed) #toggleInfoPanelButton .fa-chevron-right { display: none; }
+
+
+        #infoPanelTabs {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 0.25rem;
+            background-color: #374151; 
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            margin-top: 45px;
+        }
+        .info-tab-button {
+            padding: 0.5rem 0.75rem;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+            border-radius: 0.375rem;
+            background-color: #4B5563; 
+            color: #D1D5DB; 
+            font-weight: 500;
+            font-size: 0.875rem; 
+            cursor: pointer;
+            transition: background-color 0.2s;
+            white-space: nowrap;
+        }
+        .info-tab-button:hover {
+            background-color: #6B7280; 
+        }
+        .info-tab-button.active-tab {
+            background-color: #10B981; 
+            color: white;
+        }
+
+        #infoPanelContentArea {
+            flex-grow: 1; 
+            background-color: #374151; 
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            overflow: hidden; 
+            position: relative;
+            height: 400px; 
+        }
+        .info-content-panel {
+            display: none;
+            height: 100%; 
+            width: 100%;
+            overflow-y: auto; 
+            color: #E5E7EB; 
+        }
+        .info-content-panel.active-content {
+            display: flex; 
+            flex-direction: column; 
+        }
+        
+        #mapContent, #searchContent, #emailContent, #taskContent, #calendarContent, #weatherForecastContent {
+            padding: 1rem;
+        }
+        #mapDiv { 
+            height: 100%;
+            width: 100%;
+        }
+        
+        #codeDisplayContent {
+             padding: 0; 
+        }
+
+        #searchResultsContent h3, #emailListContent h3, #taskListContent h3, #calendarEventListContent h3, #weatherForecastDisplay h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #F3F4F6;
+            border-bottom: 1px solid #4B5563;
+            padding-bottom: 0.5rem;
+        }
+        #searchResultsContent a, .task-item a, .calendar-event-item a { color: #60A5FA; }
+        #searchResultsContent a:hover, .task-item a:hover, .calendar-event-item a:hover { text-decoration: underline; }
+        .task-item, .calendar-event-item {
+            padding: 0.75rem;
+            background-color: #4B5563;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .task-item strong, .calendar-event-item strong { color: #93C5FD; }
+        .task-notes, .calendar-event-time { font-size: 0.75rem; color: #D1D5DB; margin-top: 0.25rem; }
+
+        
+        #weatherForecastDisplay .forecast-day {
+            background-color: #4B5563; 
+            border-radius: 0.375rem; 
+            padding: 0.75rem; 
+            margin-bottom: 0.75rem; 
+        }
+        #weatherForecastDisplay .forecast-day h4 {
+            font-size: 1rem; 
+            font-weight: 600; 
+            color: #E5E7EB; 
+            margin-bottom: 0.5rem; 
+        }
+        #weatherForecastDisplay .forecast-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0; 
+            border-bottom: 1px solid #5A6676; 
+            font-size: 0.875rem; 
+        }
+        #weatherForecastDisplay .forecast-item:last-child {
+            border-bottom: none;
+        }
+        #weatherForecastDisplay .forecast-item .time {
+            color: #D1D5DB; 
+            width: 15%;
+        }
+        #weatherForecastDisplay .forecast-item .icon {
+            width: 10%;
+            text-align: center;
+            font-size: 1.25rem; 
+        }
+        #weatherForecastDisplay .forecast-item .temp {
+            color: #F3F4F6; 
+            font-weight: 500; 
+            width: 15%;
+            text-align: right;
+        }
+        #weatherForecastDisplay .forecast-item .desc {
+            color: #CBD5E1; 
+            flex-grow: 1;
+            padding-left: 0.5rem; 
+            text-align: left;
+        }
+         #weatherForecastDisplay .forecast-item .wind,
+         #weatherForecastDisplay .forecast-item .humidity {
+            color: #9CA3AF; 
+            font-size: 0.75rem; 
+            width: 20%;
+            text-align: right;
+         }
+
+
+        #chatColumn {
+            flex: 1;
+            max-width: 42rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .listening-indicator { width: 150px; height: 150px; border-radius: 50%; background-color: #10B981; display: flex; justify-content: center; align-items: center; box-shadow: 0 0 0 0 rgba(16, 185, 129, 1); }
+        .listening-indicator.active { animation: pulse 1.5s infinite; }
+        .listening-indicator.speaking { animation: speak-pulse 1s infinite; }
+        .listening-indicator-inner { width: 50px; height: 50px; border-radius: 50%; background-color: #D1FAE5; }
+        @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        @keyframes speak-pulse { 0% { transform: scale(1); background-color: #6EE7B7; } 50% { transform: scale(1.1); background-color: #10B981; } 100% { transform: scale(1); background-color: #6EE7B7; } }
+        #webcamVideo { object-fit: cover; transform: scaleX(-1); border-radius: 50%; width: 150px; height: 150px; }
+        #chatbox { scroll-behavior: smooth; }
+        .user-message { text-align: right; margin-left: auto; background-color: #3B82F6; color: white; }
+        .assistant-message { text-align: left; margin-right: auto; background-color: #4B5563; color: white; }
+        #snapshotCanvas { display: none; }
+
+        #codeDisplayContent #evaCodeCanvasContainer {
+            height: 100%; 
+            display: flex;
+            flex-direction: column;
+        }
+         #codeDisplayContent #evaCodeCanvasContainer .bg-gray-800 {
+            background-color: #374151; 
+         }
+
+        #evaCodeCanvasContentWrapper {
+            overflow-y: auto; 
+            transition: opacity 0.5s ease-in-out; 
+            background-color: #1e1e1e;
+            border-bottom-left-radius: 0.5rem;
+            border-bottom-right-radius: 0.5rem;
+            flex-grow: 1; 
+            padding: 1rem;
+            height: 0; 
+            opacity: 0;
+        }
+        #evaCodeCanvasContentWrapper.expanded {
+            height: auto;
+            opacity: 1;
+            min-height: 0; 
+        }
+        #evaCodeCanvasContentCode { color: #d4d4d4; font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; word-break: break-all; display: block; }
+
+        @media (max-width: 700px) {
+            #mainAppContainer { flex-direction: column; align-items: center; }
+            #infoPanelColumn, #chatColumn { width: 100%; flex-basis: auto; max-width: 100%; min-width: unset; }
+            #infoPanelColumn.collapsed { flex-basis: auto; height: 50px; }
+            #infoPanelColumn.collapsed #infoPanelTabs,
+            #infoPanelColumn.collapsed #infoPanelContentArea { display: none; }
+            #infoPanelContentArea { height: 250px; } 
+            .info-content-panel { padding: 0.75rem; }
+            #codeDisplayContent { padding: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <h1 class="text-5xl font-bold my-8 text-center">‎ ‎ ‎ ‎ ‎  E.V.A</h1>
+
+    <div id="mainAppContainer">
+        <div id="infoPanelColumn">
+            <button id="toggleInfoPanelButton" title="Afficher/Masquer Panneau d'Info">
+                <i class="fas fa-chevron-left"></i>
+                <i class="fas fa-chevron-right" style="display:none;"></i>
+            </button>
+            <div id="infoPanelTabs">
+                <button class="info-tab-button active-tab" data-target="mapContent">Carte</button>
+                <button class="info-tab-button" data-target="searchContent">Recherche</button>
+                <button class="info-tab-button" data-target="emailContent">Emails</button>
+                <button class="info-tab-button" data-target="taskContent">Tâches</button>
+                <button class="info-tab-button" data-target="calendarContent">Calendrier</button>
+                <button class="info-tab-button" data-target="weatherForecastContent">Météo</button>
+                <button class="info-tab-button" data-target="codeDisplayContent">Code</button>
+            </div>
+            <div id="infoPanelContentArea">
+                <div id="mapContent" class="info-content-panel active-content">
+                    <div id="mapDiv"></div> </div>
+                <div id="searchContent" class="info-content-panel">
+                    <div id="searchResultsContent"></div>
+                </div>
+                <div id="emailContent" class="info-content-panel">
+                    <div id="emailListContent"></div>
+                </div>
+                <div id="taskContent" class="info-content-panel">
+                    <div id="taskListContent"></div>
+                </div>
+                <div id="calendarContent" class="info-content-panel">
+                    <div id="calendarEventListContent"></div>
+                </div>
+                <div id="weatherForecastContent" class="info-content-panel">
+                    <div id="weatherForecastDisplay">
+                         <h3>Prévisions Météo</h3>
+                         <p>Chargement des prévisions...</p>
+                    </div>
+                </div>
+                <div id="codeDisplayContent" class="info-content-panel">
+                    <div id="evaCodeCanvasContainer" class="w-full rounded-lg">
+                        <div class="flex justify-between items-center p-3 bg-gray-800 rounded-t-lg">
+                            <h3 class="text-lg font-semibold text-gray-200">Code généré par EVA</h3>
+                            <button id="toggleCodeCanvasButton" class="p-2 text-gray-400 hover:text-white rounded-md">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div id="evaCodeCanvasContentWrapper" class="rounded-b-lg">
+                            <pre><code id="evaCodeCanvasContentCode" class="text-sm"></code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="chatColumn" class="w-full">
+            <div id="dashboard" class="w-full p-3 mb-6 bg-gray-800 rounded-lg shadow-md text-sm text-gray-300 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                <div id="dateDisplay" class="text-center sm:text-left">Chargement date...</div>
+                <div id="timeDisplay" class="text-center font-semibold text-lg order-first sm:order-none">Chargement heure...</div>
+                <div id="weatherDisplay" class="text-center sm:text-right">
+                    <span id="weatherLocation" class="font-medium">Localisation...</span>:
+                    <span id="weatherTemp">--°C</span>,
+                    <span id="weatherDesc">Chargement météo...</span>
+                    <span id="weatherIcon" class="ml-1"></span>
+                </div>
+            </div>
+
+            <div id="visualIndicator" class="mb-4 relative flex justify-center items-center" style="width: 150px; height: 150px;">
+                <div id="listeningIndicator" class="listening-indicator absolute">
+                    <div class="listening-indicator-inner"></div>
+                </div>
+                 <video id="webcamVideo" class="hidden absolute rounded-full" autoplay playsinline></video>
+                 <div id="webcamError" class="text-red-500 text-xs hidden absolute bottom-[-20px]">Erreur Webcam</div>
+            </div>
+            <p id="statusText" class="text-gray-400 mb-4 text-sm">Appuyez sur Espace (continu) ou Micro (unique)</p>
+
+            <div id="chatbox" class="w-full h-96 overflow-y-auto bg-gray-800 rounded-lg p-4 mb-4 border border-gray-700 flex flex-col space-y-2">
+                <div class="assistant-message p-2 rounded-lg max-w-xs md:max-w-md">
+                     E.V.A Activée. Pour accéder aux services Google, veuillez autoriser l'application.
+                 </div>
+            </div>
+
+            <div class="w-full flex items-center space-x-2 mb-4">
+                <button id="micButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white focus:outline-none" title="Activer/Désactiver le microphone (ou touche 'ESPACE' pour continu)">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <input type="text" id="messageInput" placeholder="Écrivez votre message ou utilisez le micro..." class="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400">
+                <button id="sendButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold focus:outline-none">Envoyer</button>
+                <button id="interruptModeButton" class="p-3 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-white focus:outline-none" title="Activer l'interruption d'EVA (Désactivé)">
+                    <i class="fas fa-comment-slash"></i>
+                </button>
+                <button id="muteButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver le son (ou touche 'M')">Muet</button>
+                <button id="camButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver la caméra (ou touche 'C')">Cam</button>
+            </div>
+
+            <div class="w-full flex justify-center mb-4">
+                <button id="authorizeGoogleButton" class="p-3 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold focus:outline-none">
+                    <i class="fab fa-google mr-2"></i> Autoriser l'accès aux services Google
+                </button>
+            </div>
+            <p id="authStatus" class="text-xs text-gray-500 mb-2"></p>
+        </div>
+    </div>
+
+    <audio id="audioPlayer" class="hidden"></audio>
+    <canvas id="snapshotCanvas" class="hidden"></canvas>
+
+    <script>
+        // --- DOM Elements ---
+        const authorizeGoogleButton = document.getElementById('authorizeGoogleButton');
+        const authStatus = document.getElementById('authStatus');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const micButton = document.getElementById('micButton');
+        const muteButton = document.getElementById('muteButton');
+        const camButton = document.getElementById('camButton');
+        const chatbox = document.getElementById('chatbox');
+        const statusText = document.getElementById('statusText');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const listeningIndicator = document.getElementById('listeningIndicator');
+        const webcamVideo = document.getElementById('webcamVideo');
+        const webcamError = document.getElementById('webcamError');
+        const snapshotCanvas = document.getElementById('snapshotCanvas');
+        const interruptModeButton = document.getElementById('interruptModeButton'); 
+
+        // Info Panel Elements
+        const infoPanelColumn = document.getElementById('infoPanelColumn');
+        const toggleInfoPanelButton = document.getElementById('toggleInfoPanelButton');
+        const infoPanelTabsContainer = document.getElementById('infoPanelTabs');
+        const infoPanelContentArea = document.getElementById('infoPanelContentArea');
+        const mapContentPanel = document.getElementById('mapContent'); 
+        const searchContentPanel = document.getElementById('searchContent');
+        const emailContentPanel = document.getElementById('emailContent');
+        const taskContentPanel = document.getElementById('taskContent');
+        const calendarContentPanel = document.getElementById('calendarContent');
+        const weatherForecastContentPanel = document.getElementById('weatherForecastContent');
+        const codeDisplayContentPanel = document.getElementById('codeDisplayContent');
+
+        const mapElementDiv = document.getElementById('mapDiv'); 
+        const searchResultsContentDiv = document.getElementById('searchResultsContent');
+        const emailListContentDiv = document.getElementById('emailListContent');
+        const taskListContentDiv = document.getElementById('taskListContent');
+        const calendarEventListContentDiv = document.getElementById('calendarEventListContent');
+        const weatherForecastDisplayDiv = document.getElementById('weatherForecastDisplay');
+
+        const evaCodeCanvasContainer = document.getElementById('evaCodeCanvasContainer');
+        const toggleCodeCanvasButton = document.getElementById('toggleCodeCanvasButton');
+        const evaCodeCanvasContentWrapper = document.getElementById('evaCodeCanvasContentWrapper');
+        const evaCodeCanvasContentCode = document.getElementById('evaCodeCanvasContentCode');
+        const codeCanvasIcon = toggleCodeCanvasButton.querySelector('i');
+
+        // --- Backend URL ---
+        const backendHttpUrl = 'http://localhost:5000';
+        const backendWsUrl = 'ws://localhost:5000/api/chat_ws';
+
+        // --- WebSocket ---
+        let ws = null;
+        let wsReady = false;
+        let wsRetryInterval = 5000;
+
+        // --- Google Maps Variables ---
+        let gMap; 
+        let directionsService;
+        let directionsRenderer;
+        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; 
+        let currentMapCenter = defaultMapCenter;
+        let currentMapZoom = 12;
+        let activeInfoPanelId = 'mapContent';
+        let userLocatedCity = "Thonon-les-Bains"; 
+        let userLatitude = null;
+        let userLongitude = null;
+
+        // --- Application State ---
+        let isMuted = false;
+        let isCamOn = false;
+        let currentRecognition = null;
+        let mediaStream = null;
+        let userExplicitlyWantsContinuousListen = false; 
+        let recognitionActive = false;
+        let pausedForEvaOutput = false; 
+        let skipNextAudioDueToCode = false;
+        let isSpeakingClientSide = false; 
+        let interruptEvaEnabled = false; 
+        let evaIsCurrentlySpeaking = false; 
+
+
+        // --- OpenWeatherMap API Key (REPLACE with your actual key) ---
+        const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
+
+        // --- Dashboard Functions ---
+        function updateDateTimeDashboard() {
+            const dateDisplay = document.getElementById('dateDisplay');
+            const timeDisplay = document.getElementById('timeDisplay');
+            if (!dateDisplay || !timeDisplay) return;
+            const now = new Date();
+            dateDisplay.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            timeDisplay.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Europe/Paris' });
+        }
+
+        async function fetchWeatherDashboard(latitude, longitude) {
+            const weatherLocationEl = document.getElementById('weatherLocation');
+            const weatherTempEl = document.getElementById('weatherTemp');
+            const weatherDescEl = document.getElementById('weatherDesc');
+            const weatherIconEl = document.getElementById('weatherIcon');
+            if (!weatherLocationEl || !weatherTempEl || !weatherDescEl || !weatherIconEl) return;
+
+            const lang = 'fr';
+            const units = 'metric';
+            let apiUrl;
+
+            if (openWeatherMapApiKey === 'YOUR_OPENWEATHERMAP_API_KEY' || !openWeatherMapApiKey) { 
+                console.warn("Clé API OpenWeatherMap non configurée.");
+                weatherDescEl.textContent = "Config. API requise";
+                weatherLocationEl.textContent = "N/A";
+                weatherTempEl.textContent = ""; weatherIconEl.textContent = "⚙️"; return;
+            }
+
+            if (latitude && longitude) {
+                apiUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${openWeatherMapApiKey}&lang=${lang}&units=${units}`;
+            } else {
+                apiUrl = `https://api.openweathermap.org/data/2.5/weather?q=${userLocatedCity}&appid=${openWeatherMapApiKey}&lang=${lang}&units=${units}`;
+            }
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`Erreur API Météo (dashboard): ${response.status}`);
+                const data = await response.json();
+                weatherLocationEl.textContent = data.name;
+                weatherTempEl.textContent = `${Math.round(data.main.temp)}°C`;
+                weatherDescEl.textContent = data.weather[0].description;
+                weatherIconEl.textContent = getWeatherEmoji(data.weather[0].icon);
+            } catch (error) {
+                console.error("Erreur météo (dashboard):", error);
+                if (weatherLocationEl) weatherLocationEl.textContent = userLocatedCity; 
+                if (weatherDescEl) weatherDescEl.textContent = "Météo indisponible";
+                if (weatherTempEl) weatherTempEl.textContent = ""; 
+                if (weatherIconEl) weatherIconEl.textContent = "⚠️";
+            }
+        }
+
+        function getWeatherEmoji(iconCode) {
+            // Corrected moon emoji for '01n' and wind emoji for detailed forecast
+            const emojiMap = { 
+                "01d": "☀️", "01n": "🌑", "02d": "⛅", "02n": "☁️", 
+                "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️", 
+                "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️", 
+                "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️", 
+                "50d": "🌫️", "50n": "🌫️" 
+            };
+            return emojiMap[iconCode] || "❓";
+        }
+
+        function getUserLocationAndFetchWeather() {
+            const weatherLocationEl = document.getElementById('weatherLocation');
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLatitude = position.coords.latitude;
+                        userLongitude = position.coords.longitude;
+                        if (openWeatherMapApiKey !== 'YOUR_OPENWEATHERMAP_API_KEY' && openWeatherMapApiKey) {
+                            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${userLatitude}&lon=${userLongitude}&appid=${openWeatherMapApiKey}&lang=fr&units=metric`)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.name) {
+                                        userLocatedCity = data.name;
+                                    }
+                                    fetchWeatherDashboard(userLatitude, userLongitude);
+                                })
+                                .catch(err => {
+                                    console.warn("Erreur récupération nom ville depuis coords:", err);
+                                    fetchWeatherDashboard(userLatitude, userLongitude); 
+                                });
+                        } else {
+                             fetchWeatherDashboard(userLatitude, userLongitude); 
+                        }
+                    },
+                    (error) => {
+                        console.warn("Erreur de géolocalisation: ", error.message);
+                        userLatitude = null; userLongitude = null;
+                        fetchWeatherDashboard(); 
+                    }
+                );
+            } else {
+                console.warn("La géolocalisation n'est pas supportée.");
+                userLatitude = null; userLongitude = null;
+                fetchWeatherDashboard(); 
+            }
+        }
+
+        async function displayWeatherForecast() {
+            setActiveInfoPanel('weatherForecastContent', true); 
+            weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo pour ${userLocatedCity || 'votre position'}</h3><p>Chargement des prévisions...</p>`;
+
+            if (openWeatherMapApiKey === 'YOUR_OPENWEATHERMAP_API_KEY' || !openWeatherMapApiKey) {
+                weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo</h3><p class="text-red-400">Clé API OpenWeatherMap non configurée.</p>`;
+                return;
+            }
+
+            let forecastApiUrl;
+            const lang = 'fr';
+            const units = 'metric';
+            const cnt = 40; 
+
+            if (userLatitude && userLongitude) {
+                forecastApiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${userLatitude}&lon=${userLongitude}&appid=${openWeatherMapApiKey}&lang=${lang}&units=${units}&cnt=${cnt}`;
+            } else if (userLocatedCity) {
+                forecastApiUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${userLocatedCity}&appid=${openWeatherMapApiKey}&lang=${lang}&units=${units}&cnt=${cnt}`;
+            } else {
+                weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo</h3><p>Localisation non disponible.</p>`;
+                return;
+            }
+
+            try {
+                const response = await fetch(forecastApiUrl);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Erreur API Prévisions: ${response.status} - ${errorData.message || 'Erreur inconnue'}`);
+                }
+                const data = await response.json();
+
+                if (!data.list || data.list.length === 0) {
+                    weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo pour ${data.city.name}</h3><p>Aucune donnée de prévision.</p>`;
+                    return;
+                }
+
+                let html = `<h3>Prévisions Météo pour ${data.city.name}</h3>`;
+                const forecastsByDay = {};
+                data.list.forEach(item => {
+                    const date = new Date(item.dt * 1000);
+                    const dayKey = date.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    if (!forecastsByDay[dayKey]) forecastsByDay[dayKey] = [];
+                    forecastsByDay[dayKey].push(item);
+                });
+
+                for (const day in forecastsByDay) {
+                    html += `<div class="forecast-day"><h4>${day}</h4>`;
+                    forecastsByDay[day].forEach(item => {
+                        const time = new Date(item.dt * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                        html += `
+                            <div class="forecast-item">
+                                <span class="time">${time}</span>
+                                <span class="icon">${getWeatherEmoji(item.weather[0].icon)}</span>
+                                <span class="desc">${item.weather[0].description}</span>
+                                <span class="temp">${Math.round(item.main.temp)}°C</span>
+                                <span class="humidity">💧 ${item.main.humidity}%</span>
+                                <span class="wind">💨 ${Math.round(item.wind.speed * 3.6)} km/h</span> 
+                            </div>
+                        `; // Replaced wind emoji here
+                    });
+                    html += `</div>`;
+                }
+                weatherForecastDisplayDiv.innerHTML = html;
+            } catch (error) {
+                console.error("Erreur obtention prévisions météo:", error);
+                weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo</h3><p class="text-red-400">Impossible de charger: ${error.message}</p>`;
+            }
+        }
+
+        // --- Speech Recognition ---
+        const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+        function createAndStartRecognition() {
+            if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
+            if (recognitionActive) { console.warn("Reconnaissance déjà active. Annulation."); return; } 
+            
+            currentRecognition = new SpeechRecognitionAPI(); 
+            currentRecognition.lang = 'fr-FR'; 
+            currentRecognition.interimResults = false; 
+            currentRecognition.maxAlternatives = 1; 
+            
+            const effectiveContinuous = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
+            currentRecognition.continuous = effectiveContinuous; 
+            console.log(`Recognition starting. interruptEvaEnabled: ${interruptEvaEnabled}, userExplicitlyWantsContinuousListen: ${userExplicitlyWantsContinuousListen}, effectiveContinuous: ${effectiveContinuous}`);
+
+
+            currentRecognition.onstart = () => {
+                recognitionActive = true; 
+                listeningIndicator.classList.add('active'); 
+                micButton.classList.add('bg-red-600', 'hover:bg-red-700'); 
+                micButton.classList.remove('bg-blue-600', 'hover:bg-blue-700'); 
+                micButton.innerHTML = '<i class="fas fa-stop"></i>';
+                
+                if (interruptEvaEnabled && evaIsCurrentlySpeaking) {
+                    console.log("Mode interruption: EVA parlait, interruption...");
+                    statusText.textContent = "Interruption d'EVA...";
+                    if (audioPlayer && !audioPlayer.paused) {
+                        audioPlayer.pause(); 
+                    }
+                    if (speechSynthesis.speaking) {
+                        speechSynthesis.cancel(); 
+                    }
+                } else {
+                     statusText.textContent = effectiveContinuous ? 'Écoute continue...' : 'Écoute...';
+                }
+            };
+
+            currentRecognition.onresult = (event) => { 
+                const lastResultIndex = event.results.length - 1;
+                if (lastResultIndex < 0) { 
+                    console.warn("onresult called with no results.");
+                    return;
+                }
+                const transcript = event.results[lastResultIndex][0].transcript.trim();
+                console.log(`onresult - continuous: ${currentRecognition.continuous}, transcript: "${transcript}"`, event.results);
+
+                if (transcript) {
+                    sendMessageViaWebSocket(transcript);
+                } else {
+                    console.warn("Empty transcript from onresult");
+                }
+            };
+
+            currentRecognition.onerror = (event) => {
+                console.error('Erreur SpeechRecognition:', event.error, event.message);
+                const wasRecognizingBeforeError = recognitionActive;
+                recognitionActive = false; 
+
+                listeningIndicator.classList.remove('active');
+                micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
+
+                let errorMsg = `Erreur reco: ${event.error}`;
+                if (event.error === 'no-speech') errorMsg = 'Aucune parole détectée.';
+                else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio.';
+                else if (event.error === 'not-allowed') {
+                    errorMsg = 'Accès micro refusé.';
+                    userExplicitlyWantsContinuousListen = false; 
+                }
+                statusText.textContent = errorMsg;
+                
+                const shouldRestart = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
+                if (shouldRestart && wasRecognizingBeforeError && (interruptEvaEnabled || !pausedForEvaOutput)) {
+                     console.log(`Error occurred, but trying to restart. EffectiveContinuous: ${shouldRestart}`);
+                     setTimeout(createAndStartRecognition, 250);
+                } else if (!shouldRestart) {
+                     statusText.textContent = errorMsg + " Écoute arrêtée.";
+                }
+            };
+
+            currentRecognition.onend = () => {
+                const wasRecognizingBeforeEnd = recognitionActive; 
+                recognitionActive = false; 
+
+                listeningIndicator.classList.remove('active');
+                micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
+                
+                const shouldBeContinuousBasedOnFlags = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
+                console.log(`Recognition ended. interruptEvaEnabled: ${interruptEvaEnabled}, userExplicitlyWantsContinuousListen: ${userExplicitlyWantsContinuousListen}, shouldBeContinuousBasedOnFlags: ${shouldBeContinuousBasedOnFlags}, wasRecognizing: ${wasRecognizingBeforeEnd}, pausedForEvaOutput: ${pausedForEvaOutput}`);
+
+                if (pausedForEvaOutput && !interruptEvaEnabled) { 
+                    console.log("onend: Recognition stopped because EVA is speaking or message sent (interrupt OFF). Waiting for EVA to finish or for explicit user action.");
+                    statusText.textContent = "En attente d'EVA...";
+                } else if (shouldBeContinuousBasedOnFlags && wasRecognizingBeforeEnd) {
+                    console.log("onend: Should be continuous and was recognizing (and not paused for EVA). Restarting.");
+                    createAndStartRecognition();
+                } else if (!shouldBeContinuousBasedOnFlags) {
+                    statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
+                    console.log("onend: Not continuous. Setting default status.");
+                }
+            };
+            try { currentRecognition.start(); } catch (e) {
+                console.error("Erreur démarrage reco:", e); 
+                recognitionActive = false; 
+                statusText.textContent = "Erreur démarrage reco.";
+                listeningIndicator.classList.remove('active'); 
+                micButton.classList.remove('bg-red-600', 'hover:bg-red-700'); 
+                micButton.classList.add('bg-blue-600', 'hover:bg-blue-700'); 
+                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
+            }
+        }
+        
+        
+
+        // --- Info Panel Management ---
+        function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) {
+            if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) {
+                infoPanelColumn.classList.remove('collapsed');
+                const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left');
+                const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
+                leftIcon.style.display = 'inline-block';
+                rightIcon.style.display = 'none';
+            }
+
+            document.querySelectorAll('.info-tab-button').forEach(button => {
+                button.classList.remove('active-tab');
+                if (button.dataset.target === targetPanelId) button.classList.add('active-tab');
+            });
+            document.querySelectorAll('.info-content-panel').forEach(panel => {
+                panel.classList.remove('active-content');
+                if (panel.id === targetPanelId) panel.classList.add('active-content');
+            });
+            activeInfoPanelId = targetPanelId;
+
+            if (targetPanelId === 'mapContent' && gMap) { 
+                setTimeout(() => { if (google && google.maps && gMap) { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); } }, 350);
+            }
+        }
+
+        // --- Google Maps Functions ---
+        window.initMap = function() {
+            console.log("Google Maps API chargée.");
+            const apiKey = "YOUR_GOOGLE_MAPS_API_KEY"; 
+            if (apiKey === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKey) { 
+                 console.error("Clé API Google Maps non configurée. Veuillez remplacer YOUR_GOOGLE_MAPS_API_KEY dans le code HTML.");
+                 if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps requise.</p>";
+                 return;
+            }
+
+            if (typeof google === 'undefined' || typeof google.maps === 'undefined') { console.error("API Google Maps non chargée."); addMessageToChat("Erreur: API Google Maps non chargée.", "assistant"); setActiveInfoPanel(null, false); return; }
+            try {
+                directionsService = new google.maps.DirectionsService(); 
+                directionsRenderer = new google.maps.DirectionsRenderer();
+                gMap = new google.maps.Map(mapElementDiv, { 
+                    center: currentMapCenter, 
+                    zoom: currentMapZoom, 
+                    mapTypeId: google.maps.MapTypeId.ROADMAP, 
+                    styles: [ {elementType:"geometry",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.stroke",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.fill",stylers:[{color:"#746855"}]},{featureType:"administrative.locality",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#263c3f"}]},{featureType:"poi.park",elementType:"labels.text.fill",stylers:[{color:"#6b9a76"}]},{featureType:"road",elementType:"geometry",stylers:[{color:"#38414e"}]},{featureType:"road",elementType:"geometry.stroke",stylers:[{color:"#212a37"}]},{featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#9ca5b3"}]},{featureType:"road.highway",elementType:"geometry",stylers:[{color:"#746855"}]},{featureType:"road.highway",elementType:"geometry.stroke",stylers:[{color:"#1f2835"}]},{featureType:"road.highway",elementType:"labels.text.fill",stylers:[{color:"#f3d19c"}]},{featureType:"transit",elementType:"geometry",stylers:[{color:"#2f3948"}]},{featureType:"transit.station",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"water",elementType:"geometry",stylers:[{color:"#17263c"}]},{featureType:"water",elementType:"labels.text.fill",stylers:[{color:"#515c6d"}]},{featureType:"water",elementType:"labels.text.stroke",stylers:[{color:"#17263c"}]}]
+                });
+                directionsRenderer.setMap(gMap); 
+                gMap.addListener('center_changed', () => { currentMapCenter = gMap.getCenter(); }); 
+                gMap.addListener('zoom_changed', () => { currentMapZoom = gMap.getZoom(); }); 
+                console.log("Carte initialisée.");
+
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const userPos = { lat: position.coords.latitude, lng: position.coords.longitude };
+                            gMap.setCenter(userPos); currentMapCenter = userPos;
+                        },
+                        () => { console.warn("Impossible d'obtenir la position pour centrer la carte."); }
+                    );
+                }
+            } catch (e) { console.error("Erreur init Google Maps:", e); addMessageToChat("Erreur init carte.", "assistant"); setActiveInfoPanel(null, false); }
+        }
+        function calculateAndDisplayRoute(origin, destination) {
+            if (!directionsService || !directionsRenderer || !gMap) { console.warn("Services carte non init."); addMessageToChat("Services carte non prêts.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
+            if (!origin || !destination) { addMessageToChat("Origine/destination manquante.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
+            
+            let originForMap = origin;
+            if (typeof origin === 'string' && (origin.toLowerCase().includes("votre position") || origin.toLowerCase().includes("ma position") || origin.toLowerCase().includes("actuelle"))) {
+                if (userLatitude && userLongitude) {
+                     const userCurrentPos = { lat: userLatitude, lng: userLongitude };
+                     directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
+                            if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
+                            else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                        }
+                    );
+                    return;
+                } else if (navigator.geolocation) {
+                     navigator.geolocation.getCurrentPosition(position => {
+                        const userCurrentPos = { lat: position.coords.latitude, lng: position.coords.longitude };
+                        directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
+                                if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
+                                else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                            }
+                        );
+                     }, () => {
+                        addMessageToChat("Impossible d'obtenir votre position actuelle. Utilisation de " + userLocatedCity + ".", "assistant");
+                        directionsService.route( { origin: userLocatedCity, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
+                            if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
+                            else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                        });
+                     });
+                     return;
+                } else {
+                    addMessageToChat("Géolocalisation non supportée. Utilisation de " + userLocatedCity + ".", "assistant");
+                    originForMap = userLocatedCity;
+                }
+            }
+
+            directionsService.route( { origin: originForMap, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
+                    if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
+                    else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                }
+            );
+        }
+        function parseDirectionsFromText(textResponse) { 
+            const match = textResponse.match(/^Itinéraire de\s+(.+?)\s+à\s+(.+?):/i);
+            if (match && match[1] && match[2]) return { origin: match[1].trim(), destination: match[2].trim() };
+            return null;
+        }
+
+        // --- Chat & Content Formatting Functions ---
+        function addMessageToChat(text, sender) { 
+            const messageElement = document.createElement('div');
+            messageElement.textContent = text;
+            messageElement.classList.add('p-2', 'rounded-lg', 'max-w-xs', 'md:max-w-md', 'mb-2', 'break-words');
+            if (sender === 'user') {
+                messageElement.classList.add('user-message');
+            } else { 
+                messageElement.classList.add('assistant-message');
+            }
+            chatbox.appendChild(messageElement);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        function formatSearchResults(rawText) { 
+            let html = `<h3>Résultats de recherche</h3>`;
+            const queryMatch = rawText.match(/(?:Résultats web pour|Réponse directe pour|Information pour)\s+'([^']+)'/i);
+            if (queryMatch && queryMatch[1]) {
+                html = `<h3>Résultats pour : <span class="italic">${queryMatch[1]}</span></h3>`;
+            }
+            const mainContent = queryMatch ? rawText.substring(rawText.indexOf(':') + 1).trim() : rawText;
+            const parts = mainContent.split(/\n\s*\n/);
+            parts.forEach(part => {
+                const lines = part.split('\n').map(l => l.trim()).filter(l => l); if (lines.length === 0) return;
+                if (lines[0].match(/^\d+\.\s+/)) { 
+                    const title = lines[0].substring(lines[0].indexOf(' ') + 1);
+                    const snippet = (lines.find(l => l.toLowerCase().startsWith("extrait:")) || "").substring(8).trim();
+                    const source = (lines.find(l => l.toLowerCase().startsWith("source:")) || "").substring(7).trim() || "#";
+                    html += `<div class="mb-4 p-3 bg-gray-600 rounded-md shadow"><h4 class="font-semibold text-blue-300 text-md mb-1"><a href="${source}" target="_blank" rel="noopener noreferrer">${title}</a></h4>${snippet ? `<p class="text-sm text-gray-200 mb-1">${snippet}</p>` : ''}<p class="text-xs text-gray-400 truncate"><a href="${source}" target="_blank" rel="noopener noreferrer">${source}</a></p></div>`;
+                } else if (lines.length > 0) { 
+                     html += `<div class="mb-4 p-3 bg-gray-600 rounded-md shadow"><p class="text-sm text-gray-200">${lines.join('<br>')}</p></div>`;
+                }
+            }); return html;
+        }
+        function formatEmailList(rawText) {
+            let html = `<h3>Emails Non Lus</h3>`; const lines = rawText.split('\n');
+            if (lines.length > 1 && lines[0].toLowerCase().includes("voici vos derniers e-mails non lus")) {
+                html += '<ul class="space-y-2 mt-2">';
+                lines.slice(1).forEach(line => {
+                    if (line.trim().startsWith("- De:")) {
+                        const content = line.substring(line.indexOf("- De:") + 5).trim(); const parts = content.split(", Sujet: ");
+                        html += `<li class="task-item"><strong class="text-blue-300">${parts[0]}:</strong> ${parts.length > 1 ? parts[1] : "Pas de sujet"}</li>`;
+                    }
+                }); html += '</ul>';
+            } else { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; } return html;
+        }
+        function formatTaskList(rawText) {
+            let html = `<h3>Liste des Tâches</h3>`; const lines = rawText.split('\n');
+            const titleMatch = rawText.match(/Voici vos tâches actives de la liste '([^']+)' :/i);
+            if (titleMatch && titleMatch[1]) html = `<h3>Tâches Actives - ${titleMatch[1]}</h3>`;
+            else if (rawText.toLowerCase().includes("aucune tâche active trouvée")) { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; return html;}
+
+            html += '<ul class="space-y-1 mt-2">';
+            let currentTaskTitle = "";
+            lines.forEach(line => {
+                line = line.trim();
+                if (line.startsWith("- ")) {
+                    if (currentTaskTitle) html += `</div></li>`;
+                    currentTaskTitle = line.substring(2).trim();
+                    html += `<li class="task-item"><div><strong>${currentTaskTitle}</strong>`;
+                } else if (line.toLowerCase().startsWith("notes:") && currentTaskTitle) {
+                    const notes = line.substring(6).trim();
+                    html += `<p class="task-notes">${notes}</p>`;
+                }
+            });
+            if (currentTaskTitle) html += `</div></li>`; 
+            html += '</ul>';
+            return html;
+        }
+        function formatCalendarEvents(rawText) {
+            let html = `<h3>Événements du Calendrier</h3>`; const lines = rawText.split('\n');
+            if (rawText.toLowerCase().includes("aucun événement à venir trouvé")) { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; return html; }
+
+            if (lines.length > 0 && lines[0].toLowerCase().includes("voici vos 10 prochains événements")) {
+                 html += '<ul class="space-y-1 mt-2">';
+                 lines.slice(1).forEach(line => {
+                    line = line.trim();
+                    if (line.startsWith("- ")) {
+                        const eventDetails = line.substring(2).trim();
+                        const timeMatch = eventDetails.match(/\(le (.+?)\)$/);
+                        const eventName = timeMatch ? eventDetails.substring(0, timeMatch.index).trim() : eventDetails;
+                        const eventTime = timeMatch ? timeMatch[1] : "";
+                        html += `<li class="calendar-event-item"><div><strong>${eventName}</strong>${eventTime ? `<p class="calendar-event-time">${eventTime}</p>` : ''}</div></li>`;
+                    }
+                 });
+                 html += '</ul>';
+            } else { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`;}
+            return html;
+        }
+        function formatContactList(rawText) { 
+            let html = `<h3>Liste des Contacts</h3>`;
+            const lines = rawText.split('\n');
+            if (lines.length > 1 && lines[0].toLowerCase().includes("voici vos contacts")) {
+                html += '<ul class="space-y-2 mt-2">';
+                lines.slice(1).forEach(line => {
+                    if (line.trim().startsWith("- ")) {
+                        const contact = line.substring(2).trim();
+                        html += `<li class="task-item">${contact}</li>`; 
+                    }
+                });
+                html += '</ul>';
+            } else {
+                html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; 
+            }
+            return html;
+        }
+
+
+        function getWebcamFrameData() {
+            if (!isCamOn || !webcamVideo.srcObject || webcamVideo.readyState < 3) return null;
+            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { console.error("Erreur capture webcam:", error); return null; }
+        }
+        function extractCodeInfo(markdownText) {
+            const infos = []; const regex = /```([a-zA-Z0-9]*)\n([\s\S]*?)\n```/g; let match;
+            while ((match = regex.exec(markdownText)) !== null) infos.push({ language: match[1].toLowerCase() || 'plaintext', code: match[2].trim() });
+            return infos;
+        }
+
+        // --- Client-side TTS ---
+        function speakClientSideMessage(textToSpeak) {
+            if (!('speechSynthesis' in window)) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; } 
+            if (isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; }
+            
+            speechSynthesis.cancel(); 
+            if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
+                pausedForEvaOutput = true; 
+                currentRecognition.abort(); 
+            }
+            
+            isSpeakingClientSide = true; 
+            evaIsCurrentlySpeaking = true; 
+            listeningIndicator.classList.add('speaking'); 
+            statusText.textContent = 'EVA parle...' + ((interruptEvaEnabled || userExplicitlyWantsContinuousListen) && (pausedForEvaOutput || interruptEvaEnabled) ? ' (Mode continu en pause)' : '');
+            
+            const utterance = new SpeechSynthesisUtterance(textToSpeak); 
+            utterance.lang = 'fr-FR';
+            
+            utterance.onend = () => { 
+                isSpeakingClientSide = false; 
+                evaIsCurrentlySpeaking = false; 
+                listeningIndicator.classList.remove('speaking'); 
+                restartRecognitionAfterEva(); 
+            };
+            utterance.onerror = (event) => { 
+                console.error("Erreur SpeechSynthesis:", event.error); 
+                isSpeakingClientSide = false; 
+                evaIsCurrentlySpeaking = false; 
+                listeningIndicator.classList.remove('speaking'); 
+                restartRecognitionAfterEva(); 
+            };
+            setTimeout(() => { speechSynthesis.speak(utterance); }, 50); 
+        }
+
+        // --- WebSocket Functions ---
+        function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return; 
+            statusText.textContent = "Connexion au serveur..."; 
+            ws = new WebSocket(backendWsUrl);
+            ws.onopen = () => { wsReady = true; statusText.textContent = "Connecté. Prêt à discuter."; };
+            ws.onmessage = (event) => {
+                try {
+                    const serverMessage = JSON.parse(event.data);
+                    
+                    if (serverMessage.text) {
+                        addMessageToChat(serverMessage.text, 'assistant');
+                    }
+
+                    if (serverMessage.panel_data && serverMessage.panel_target_id) {
+                        setActiveInfoPanel(serverMessage.panel_target_id, true); 
+                        const panelData = serverMessage.panel_data;
+
+                        switch (serverMessage.panel_target_id) {
+                            case 'mapContent':
+                                const directionsInfo = parseDirectionsFromText(panelData);
+                                if (directionsInfo) {
+                                    calculateAndDisplayRoute(directionsInfo.origin, directionsInfo.destination);
+                                } else {
+                                    mapElementDiv.innerHTML = `<p class="p-4 text-gray-300">${panelData}</p>`; 
+                                }
+                                break;
+                            case 'searchContent':
+                                if (panelData.toLowerCase().startsWith("voici vos contacts") || panelData.toLowerCase().startsWith("votre carnet d'adresses est vide")) {
+                                    searchResultsContentDiv.innerHTML = formatContactList(panelData);
+                                } else {
+                                    searchResultsContentDiv.innerHTML = formatSearchResults(panelData);
+                                }
+                                break;
+                            case 'emailContent':
+                                emailListContentDiv.innerHTML = formatEmailList(panelData);
+                                break;
+                            case 'taskContent':
+                                taskListContentDiv.innerHTML = formatTaskList(panelData);
+                                break;
+                            case 'calendarContent':
+                                calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData);
+                                break;
+                            case 'weatherForecastContent':
+                                displayWeatherForecast(); 
+                                break;
+                            case 'codeDisplayContent':
+                                const codeInfos = extractCodeInfo(panelData); 
+                                if (codeInfos.length > 0) {
+                                     evaCodeCanvasContentCode.textContent = codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n');
+                                } else {
+                                     evaCodeCanvasContentCode.textContent = panelData; 
+                                }
+                                if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                                    evaCodeCanvasContentWrapper.classList.add('expanded');
+                                    codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
+                                }
+                                break;
+                            default:
+                                console.warn("Unknown panel_target_id:", serverMessage.panel_target_id);
+                        }
+                    } else if (serverMessage.type === 'final_text' && serverMessage.text) {
+                        const codeInfos = extractCodeInfo(serverMessage.text);
+                        if (codeInfos.length > 0 && activeInfoPanelId !== 'codeDisplayContent') { 
+                             setActiveInfoPanel('codeDisplayContent', true);
+                             evaCodeCanvasContentCode.textContent = codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n');
+                             if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                                evaCodeCanvasContentWrapper.classList.add('expanded');
+                                codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
+                             }
+                             const chatMsgForCode = serverMessage.text.replace(/```(?:[a-zA-Z0-9]*)?\n[\s\S]*?\n```/g, "").trim();
+                             if (chatMsgForCode === "" && chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
+                                 chatbox.lastChild.textContent = "Code généré. (Affiché dans l'onglet Code)";
+                             } else if (chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
+                                 chatbox.lastChild.textContent = chatMsgForCode + "\n\n(Code affiché dans l'onglet dédié.)";
+                             }
+                        } else if (codeInfos.length === 0 && activeInfoPanelId === 'codeDisplayContent' && evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                            evaCodeCanvasContentWrapper.classList.remove('expanded');
+                            codeCanvasIcon.classList.replace('fa-minus', 'fa-plus');
+                        }
+                    }
+
+
+                    if (serverMessage.type === 'audio_data') {
+                        if (skipNextAudioDueToCode) {
+                            skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva();
+                        } else if (!isMuted && serverMessage.audio) {
+                            playAudio(serverMessage.audio); 
+                        } else {
+                            evaIsCurrentlySpeaking = false; 
+                            restartRecognitionAfterEva();
+                        }
+                    } else if (serverMessage.type === 'no_audio_data') {
+                        if (skipNextAudioDueToCode) { skipNextAudioDueToCode = false; }
+                        evaIsCurrentlySpeaking = false; 
+                        restartRecognitionAfterEva();
+                    } else if (serverMessage.type === 'error') {
+                        skipNextAudioDueToCode = false; 
+                        evaIsCurrentlySpeaking = false; 
+                        restartRecognitionAfterEva(); 
+                    } else if (serverMessage.type === 'system_ping') {
+                        // Ping, do nothing else
+                    } else if (serverMessage.type !== 'final_text') { 
+                        console.warn("Type message inconnu ou déjà traité:", serverMessage);
+                        skipNextAudioDueToCode = false; 
+                    }
+
+                } catch (error) { 
+                    console.error("Erreur WebSocket message:", error, "Data:", event.data); 
+                    addMessageToChat("Erreur communication.", "assistant"); 
+                    skipNextAudioDueToCode = false; 
+                    evaIsCurrentlySpeaking = false; 
+                    restartRecognitionAfterEva(); 
+                }
+            };
+            ws.onerror = (error) => { console.error("Erreur WebSocket:", error); statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
+            ws.onclose = (event) => { console.log("WebSocket déconnecté:", event.code, event.reason); wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
+        }
+        function sendMessageViaWebSocket(speechTranscript = null) {
+            let messageTextToSend = speechTranscript ? speechTranscript.trim() : messageInput.value.trim();
+            if (!messageTextToSend && !isCamOn) { statusText.textContent = speechTranscript ? 'Rien compris.' : 'Rien à envoyer.'; messageInput.value = ''; restartRecognitionAfterEva(); return; }
+            if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) { addMessageToChat("Non connecté. Reconnexion...", "assistant"); connectWebSocket(); return; }
+            if (messageTextToSend) addMessageToChat(messageTextToSend, 'user');
+            
+            if (!interruptEvaEnabled) { 
+                console.log("Normal mode: Message sent. Setting pausedForEvaOutput = true and aborting recognition.");
+                pausedForEvaOutput = true;
+                if (recognitionActive && currentRecognition) {
+                    currentRecognition.abort();
+                }
+                 statusText.textContent = 'Traitement...'; 
+            } else { 
+                const currentlyEffectivelyContinuous = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
+                if (!currentlyEffectivelyContinuous || !recognitionActive) { 
+                    if (!speechTranscript) statusText.textContent = 'Traitement...'; 
+                }
+            }
+
+
+            try { const requestData = { text: messageTextToSend, imageData: isCamOn ? getWebcamFrameData() : null }; if (!requestData.text && requestData.imageData) addMessageToChat("[Analyse image...]", 'user'); ws.send(JSON.stringify(requestData)); messageInput.value = ''; } catch (error) { console.error("Erreur envoi WebSocket:", error); addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
+        }
+        function playAudio(audioSource) {
+            if (isSpeakingClientSide) { console.log("playAudio: Client-side TTS active, audio backend ignoré."); evaIsCurrentlySpeaking = false; return; } 
+            
+            if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
+                pausedForEvaOutput = true; 
+                console.log("playAudio: Normal mode, EVA speaking, aborting recognition and setting pausedForEvaOutput.");
+                currentRecognition.abort(); 
+            }
+            statusText.textContent = 'EVA parle...' + ((interruptEvaEnabled || userExplicitlyWantsContinuousListen) && (pausedForEvaOutput || interruptEvaEnabled) ? ' (Mode continu en pause)' : '');
+            
+            evaIsCurrentlySpeaking = true; 
+            audioPlayer.src = audioSource; 
+            audioPlayer.play().catch(e => { 
+                console.error("Erreur lecture audio:", e); 
+                listeningIndicator.classList.remove('speaking'); 
+                evaIsCurrentlySpeaking = false; 
+                restartRecognitionAfterEva(); 
+            });
+            listeningIndicator.classList.add('speaking'); 
+            audioPlayer.onended = () => { 
+                listeningIndicator.classList.remove('speaking'); 
+                evaIsCurrentlySpeaking = false; 
+                restartRecognitionAfterEva(); 
+            };
+        }
+        function restartRecognitionAfterEva() {
+            console.log(`restartRecognitionAfterEva. Interrupt: ${interruptEvaEnabled}, UserExplicitly: ${userExplicitlyWantsContinuousListen}, Paused: ${pausedForEvaOutput}, RecoActive: ${recognitionActive}`);
+            
+            if (pausedForEvaOutput && !interruptEvaEnabled) { 
+                pausedForEvaOutput = false; 
+                if (userExplicitlyWantsContinuousListen && !recognitionActive) {
+                    console.log("Restarting (normal continuous) after EVA spoke.");
+                    createAndStartRecognition();
+                } else if (!userExplicitlyWantsContinuousListen && !recognitionActive) {
+                    statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
+                }
+            } else if (interruptEvaEnabled) { 
+                if (!recognitionActive) { 
+                     console.log("Restarting (interrupt context) after EVA spoke/was interrupted and reco is not active.");
+                    createAndStartRecognition();
+                 }
+            }
+        }
+
+        // --- Webcam & Mute ---
+        async function toggleWebcam() {
+            webcamError.classList.add('hidden'); 
+            if (!isCamOn) { 
+                try { 
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
+                    webcamVideo.srcObject = mediaStream; 
+                    webcamVideo.onloadedmetadata = () => { 
+                        webcamVideo.classList.remove('hidden'); 
+                        listeningIndicator.classList.add('hidden'); 
+                        isCamOn = true; 
+                        camButton.textContent = 'Off Cam'; 
+                        camButton.classList.replace('bg-gray-600', 'bg-red-600'); 
+                        camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
+                    }; 
+                } catch (err) { 
+                    console.error("Erreur Webcam:", err); 
+                    webcamError.textContent = `Erreur: ${err.name}`; 
+                    webcamError.classList.remove('hidden'); 
+                    isCamOn = false; 
+                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
+                    webcamVideo.srcObject = null; 
+                    listeningIndicator.classList.remove('hidden'); 
+                    camButton.textContent = 'Cam'; 
+                    camButton.classList.replace('bg-red-600', 'bg-gray-600'); 
+                    camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                } 
+            } else { 
+                if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
+                webcamVideo.srcObject = null; 
+                webcamVideo.classList.add('hidden'); 
+                listeningIndicator.classList.remove('hidden'); 
+                isCamOn = false; 
+                camButton.textContent = 'Cam'; 
+                camButton.classList.replace('bg-red-600', 'bg-gray-600'); 
+                camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+            }
+        }
+        function toggleMute() {
+            isMuted = !isMuted; 
+            muteButton.textContent = isMuted ? 'Son' : 'Muet'; 
+            muteButton.classList.toggle('bg-red-600', isMuted); 
+            muteButton.classList.toggle('hover:bg-red-700', isMuted); 
+            muteButton.classList.toggle('bg-gray-600', !isMuted); 
+            muteButton.classList.toggle('hover:bg-gray-700', !isMuted);
+            if (isMuted && audioPlayer && !audioPlayer.paused) { 
+                audioPlayer.pause(); 
+                listeningIndicator.classList.remove('speaking'); 
+                evaIsCurrentlySpeaking = false; 
+                if (!pausedForEvaOutput && !interruptEvaEnabled) statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : 'Appuyez sur Espace/Micro.'); 
+                else if (interruptEvaEnabled) statusText.textContent = 'Muet. Mode interruption activé.';
+            }
+            if (isMuted && isSpeakingClientSide) { 
+                speechSynthesis.cancel(); 
+                isSpeakingClientSide = false; 
+                listeningIndicator.classList.remove('speaking'); 
+                evaIsCurrentlySpeaking = false; 
+                restartRecognitionAfterEva(); 
+            }
+        }
+
+        // --- Event Listeners ---
+        sendButton.addEventListener('click', () => sendMessageViaWebSocket());
+        messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessageViaWebSocket(); });
+        
+        micButton.addEventListener('click', () => {
+            if (!SpeechRecognitionAPI) return;
+            if (recognitionActive) { 
+                userExplicitlyWantsContinuousListen = false; 
+                if (currentRecognition) currentRecognition.abort(); 
+            } else { 
+                userExplicitlyWantsContinuousListen = true; 
+                createAndStartRecognition();
+            }
+        });
+        
+        interruptModeButton.addEventListener('click', () => {
+            interruptEvaEnabled = !interruptEvaEnabled; 
+            
+            if (interruptEvaEnabled) {
+                interruptModeButton.classList.replace('bg-yellow-500', 'bg-orange-500');
+                interruptModeButton.classList.replace('hover:bg-yellow-600', 'hover:bg-orange-600');
+                interruptModeButton.title = "Désactiver l'interruption d'EVA (Activé)";
+                statusText.textContent = "Mode interruption : Activé. Écoute...";
+                
+                if (!recognitionActive) {
+                    createAndStartRecognition(); 
+                } else if (currentRecognition && currentRecognition.continuous !== (interruptEvaEnabled || userExplicitlyWantsContinuousListen) ) {
+                    currentRecognition.abort(); 
+                }
+            } else { 
+                interruptModeButton.classList.replace('bg-orange-500', 'bg-yellow-500');
+                interruptModeButton.classList.replace('hover:bg-orange-600', 'hover:bg-yellow-600');
+                interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé)";
+                statusText.textContent = "Mode interruption : Désactivé.";
+                
+                if (recognitionActive && currentRecognition) {
+                    console.log("Interrupt OFF: Aborting recognition. userExplicitlyWantsContinuousListen will be checked by onend.");
+                    currentRecognition.abort(); 
+                } else {
+                     statusText.textContent = userExplicitlyWantsContinuousListen ? 
+                                              "Mode continu explicite actif." : 
+                                              "Mode interruption : Désactivé. Appuyez Micro/Espace.";
+                }
+            }
+        });
+
+        muteButton.addEventListener('click', toggleMute); 
+        camButton.addEventListener('click', toggleWebcam);
+        
+        if (authorizeGoogleButton) { authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; }); }
+        
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement === messageInput) return;
+            if (e.code === 'Space') { 
+                e.preventDefault(); 
+                userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; 
+                console.log(`Space toggled userExplicitlyWantsContinuousListen to: ${userExplicitlyWantsContinuousListen}`);
+                if (recognitionActive && currentRecognition) {
+                    currentRecognition.abort(); 
+                } else if (userExplicitlyWantsContinuousListen && !recognitionActive) { 
+                    createAndStartRecognition(); 
+                }
+            }
+            else if (e.key.toLowerCase() === 'c') { e.preventDefault(); toggleWebcam(); } 
+            else if (e.key.toLowerCase() === 'm') { e.preventDefault(); toggleMute(); }
+        });
+
+        toggleInfoPanelButton.addEventListener('click', () => {
+            infoPanelColumn.classList.toggle('collapsed'); 
+            const isCollapsed = infoPanelColumn.classList.contains('collapsed');
+            const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
+            const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
+            leftIcon.style.display = isCollapsed ? 'none' : 'inline-block'; 
+            rightIcon.style.display = isCollapsed ? 'inline-block' : 'none';
+            if (!isCollapsed && activeInfoPanelId === 'mapContent' && gMap) { 
+                setTimeout(() => { if (google && google.maps && gMap) { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); } }, 350); 
+            }
+        });
+        infoPanelTabsContainer.addEventListener('click', (event) => {
+            if (event.target.classList.contains('info-tab-button')) { 
+                const targetPanelId = event.target.dataset.target; 
+                setActiveInfoPanel(targetPanelId, false); 
+            }
+        });
+        toggleCodeCanvasButton.addEventListener('click', () => {
+            evaCodeCanvasContentWrapper.classList.toggle('expanded');
+            codeCanvasIcon.classList.toggle('fa-plus');
+            codeCanvasIcon.classList.toggle('fa-minus');
+        });
+
+        // --- Initialisation ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDateTimeDashboard(); 
+            setInterval(updateDateTimeDashboard, 1000);
+            getUserLocationAndFetchWeather();
+            setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); 
+
+            if (statusText) statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
+            connectWebSocket();
+            addMessageToChat("Si vous souhaitez utiliser les fonctionnalités Google (Agenda, Gmail, etc.), cliquez sur le bouton 'Autoriser l'accès aux services Google' ci-dessous.", "assistant");
+            setActiveInfoPanel('mapContent', false); 
+            infoPanelColumn.classList.add('collapsed');
+            const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
+            const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
+            leftIcon.style.display = 'none'; 
+            rightIcon.style.display = 'inline-block';
+            if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                 codeCanvasIcon.classList.remove('fa-minus');
+                 codeCanvasIcon.classList.add('fa-plus');
+            } else {
+                 codeCanvasIcon.classList.remove('fa-plus');
+                 codeCanvasIcon.classList.add('fa-minus');
+            }
+
+            window.addEventListener('resize', () => { 
+                if (gMap && activeInfoPanelId === 'mapContent' && !infoPanelColumn.classList.contains('collapsed')) { 
+                    if (google && google.maps && gMap) { 
+                        google.maps.event.trigger(gMap, 'resize'); 
+                        gMap.setCenter(currentMapCenter); 
+                        gMap.setZoom(currentMapZoom); 
+                    } 
+                } 
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+Flask
+Flask‑Sock
+Flask-CORS
+python‑dotenv
+google‑auth‑oauthlib
+google‑api‑python‑client
+googlemaps
+gtts
+pillow
+simple‑websocket
+serpapi
+google‑generativeai
+pickle
+dotenv
