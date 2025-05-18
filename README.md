@@ -1,6 +1,6 @@
 # E.V.A – Enhanced Voice Assistant 
 
-(Inspiré par le projet ada_app Nlouis38
+(Inspiré par le projet ada_app de Nlouis38
 https://github.com/Nlouis38/ada_app)
 
 ![image](https://github.com/user-attachments/assets/4d4282a7-5980-496d-b9ec-858169f5a0b4)
