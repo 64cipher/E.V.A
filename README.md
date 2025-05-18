@@ -1,6 +1,7 @@
 # E.V.A – Enhanced Voice Assistant
 
-![eva_054704](https://github.com/user-attachments/assets/5ef974ad-4d9c-46da-832e-e7bf9b48a514)
+![image](https://github.com/user-attachments/assets/010b1de0-13e9-4257-b0f6-07e02052c88e)
+
 
 
 ## Présentation
