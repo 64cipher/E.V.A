@@ -32,9 +32,9 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écri
 ## Architecture rapide
 
 ```
-┌───────────────┐            WebSocket             ┌──────────────┐
+┌───────────────┐            WebSocket              ┌──────────────┐
 │   Front‑end   │  <─────────────────────────────►  │   Flask API  │
-│  index.html   │         (JSON + audio)          │   main.py    │
+│  index.html   │         (JSON + audio)            │   main.py    │
 └───────────────┘                                   └──────────────┘
         │                                                    │
         ▼ Google Maps JS                                     ▼
