@@ -136,7 +136,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écri
 ```text
 Flask
 Flask‑Sock
-Flask‑CORS
+Flask-CORS
 python‑dotenv
 google‑auth‑oauthlib
 google‑api‑python‑client
@@ -146,6 +146,8 @@ pillow
 simple‑websocket
 serpapi
 google‑generativeai
+pickle
+dotenv
 ```
 
 Générez le fichier exact via :
@@ -188,15 +190,3 @@ pip freeze > requirements.txt
 * Le code force `OAUTHLIB_INSECURE_TRANSPORT=1` pour le dev local ➜ **Ne pas utiliser en production**.
 
 ---
-
-## Limitations & TODO
-
-* Pas de support Google Keep.
-* La synthèse vocale n’est pas multilingue (gTTS FR uniquement).
-* Pas de déploiement Docker prêt à l’emploi (PR bienvenue).
-
----
-
-## Licence
-
-MIT – Voir `LICENSE`.
