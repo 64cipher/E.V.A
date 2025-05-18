@@ -19,7 +19,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel écri
 | Catégorie         | Détail                                                                        |
 | ----------------- | ----------------------------------------------------------------------------- |
 | **NLP/IA**        | Appels direct au modèle Gemini 2 (configurable).                              |
-| **Voix**          | 🔈 Synthèse vocale via gTTS (facultatif) & Web Speech API côté navigateur.    |
+| **Voix**          | Synthèse vocale via gTTS (facultatif) & Web Speech API côté navigateur.       |
 | **Google API**    | OAuth 2 offline + Calendar, Gmail, Tasks, Maps Directions.                    |
 | **Recherche Web** | Résumés SerpAPI (fallback answer‑box / knowledge graph).                      |
 | **Météo**         | OpenWeatherMap affiché dans le tableau de bord.                               |
