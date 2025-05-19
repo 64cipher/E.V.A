@@ -1441,7 +1441,7 @@ def chat_ws(ws):
                             if parsed_command_action == "list_calendar_events":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "calendarContent"
-                                chat_display_message = panel_data_content
+                                chat_display_message = "Voici vos événements prévus."
                                 # More specific chat message if needed, e.g., "Voici les événements correspondants."
                             elif parsed_command_action == "list_emails": # General unread emails
                                 panel_data_content = str(final_text_response_for_action)
