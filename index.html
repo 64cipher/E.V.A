@@ -6,7 +6,7 @@
     <title>Enhanced Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
             display: flex;
@@ -527,7 +527,7 @@
 
 
         // --- OpenWeatherMap API Key (REPLACE with your actual key) ---
-        const openWeatherMapApiKey = 'OPENWEATHERMAP_API_KEY'; 
+        const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
 
         // --- Dashboard Functions ---
         function updateDateTimeDashboard() {
@@ -843,7 +843,7 @@
         window.initMap = function() {
             console.log("Google Maps API chargée.");
             const apiKey = "YOUR_GOOGLE_MAPS_API_KEY"; 
-            if (apiKey === "GOOGLE_MAPS_API_KEY" || !apiKey) { 
+            if (apiKey === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKey) { 
                  console.error("Clé API Google Maps non configurée. Veuillez remplacer YOUR_GOOGLE_MAPS_API_KEY dans le code HTML.");
                  if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps requise.</p>";
                  return;
