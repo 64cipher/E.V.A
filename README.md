@@ -87,12 +87,13 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    # HTTP_PROXY=http://...
    # HTTPS_PROXY=https://...
    ```
-4. **OAuth Google**
+4. **OAuth Google et AI Studio**
 
    * Allez sur [console.cloud.google.com](https://console.cloud.google.com)
    * Créez un projet ▶ “API & Services” ▶ “Identifiants” ▶ **“ID client OAuth 2.0 (Desktop)”**.
    * Téléchargez `client_secret_<id>.json`, renommez‑le `client_secret.json`, placez‑le à la racine.
    * Dans l’écran de consentement, ajoutez `http://localhost:5000/oauth2callback_google` comme URI de redirection.
+   * Récupérez et utiliser gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
 5. **Frontend : insérez vos clés JS**
 
    * Ouvrez `index.html` et recherchez :
