@@ -10,6 +10,7 @@ import datetime # Pour l'exemple avec Google Calendar
 from email.mime.text import MIMEText # Pour créer le corps de l'e-mail
 import json # Ajouté pour WebSockets et carnet d'adresses
 import time
+import calendar # Ajouté pour la gestion des mois
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -37,7 +38,7 @@ print("--- Fin Configuration gTTS ---")
 # --- Autres Importations (Flask, Pillow, etc.) ---
 from flask import Flask, request, jsonify, redirect, session, url_for
 from flask_cors import CORS
-from PIL import Image
+from PIL import Image # Pillow pour la manipulation d'images
 from flask_sock import Sock
 
 # --- Imports pour Google OAuth et API Client ---
@@ -183,8 +184,6 @@ def get_contact_email(name):
 def list_contacts_from_book():
     global CONTACT_BOOK
     if not CONTACT_BOOK: return "Votre carnet d'adresses est vide."
-    # This function already returns a detailed list, which is fine for panel_data.
-    # The chat message will be "Voici vos contacts."
     return "Voici vos contacts :\n" + "\n".join([f"- {c['display_name']} ({c['email']})" for c in CONTACT_BOOK.values()])
 
 def remove_contact_from_book(name):
@@ -209,70 +208,101 @@ load_contacts()
 
 # --- Fonctions Google Calendar ---
 def parse_french_datetime(datetime_str):
-    # print(f"DEBUG [parse_french_datetime] Parsing: '{datetime_str}'")
     now = datetime.datetime.now()
-    datetime_str_cleaned = datetime_str.strip() # Nettoyer les espaces au début/fin
+    datetime_str_cleaned = datetime_str.strip().lower() # Convert to lowercase for easier matching
 
-    if "demain" in datetime_str_cleaned.lower():
+    # Helper to extract time
+    def extract_time(text):
+        time_match = re.search(r"(\d{1,2})h(?:(\d{2}))?", text, re.IGNORECASE)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2)) if time_match.group(2) else 0
+            return hour, minute
+        return 9, 0 # Default to 9 AM if no specific time is found in the relative string
+
+    # Handle "dans X semaine(s)"
+    week_match = re.search(r"dans\s+(\d+|une)\s+semaine(s)?", datetime_str_cleaned)
+    if week_match:
+        num_weeks_str = week_match.group(1)
+        num_weeks = 1 if num_weeks_str == "une" else int(num_weeks_str)
+        target_date = now + datetime.timedelta(weeks=num_weeks)
+        hour, minute = extract_time(datetime_str_cleaned)
+        return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+    # Handle "dans X mois"
+    month_match = re.search(r"dans\s+(\d+|un|une)\s+mois", datetime_str_cleaned)
+    if month_match:
+        num_months_str = month_match.group(1)
+        if num_months_str.lower() == "un" or num_months_str.lower() == "une":
+            num_months = 1
+        else:
+            num_months = int(num_months_str)
+        
+        current_month = now.month
+        current_year = now.year
+        
+        new_month_abs = current_month + num_months
+        
+        new_year = current_year + (new_month_abs - 1) // 12
+        new_month = (new_month_abs - 1) % 12 + 1
+        
+        last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
+        new_day = min(now.day, last_day_of_new_month)
+
+        hour, minute = extract_time(datetime_str_cleaned)
+        return datetime.datetime(new_year, new_month, new_day, hour, minute, second=0, microsecond=0)
+
+    if "demain" in datetime_str_cleaned:
         target_date = now + datetime.timedelta(days=1)
-        time_part_match = re.search(r"(\d{1,2})h(?:(\d{2}))?", datetime_str_cleaned, re.IGNORECASE)
-        if time_part_match:
-            hour = int(time_part_match.group(1))
-            minute = int(time_part_match.group(2)) if time_part_match.group(2) else 0
-            return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return target_date.replace(hour=9, minute=0, second=0, microsecond=0) 
+        hour, minute = extract_time(datetime_str_cleaned) 
+        return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    if "aujourd'hui" in datetime_str_cleaned.lower() or "ce jour" in datetime_str_cleaned.lower():
+    if "aujourd'hui" in datetime_str_cleaned or "ce jour" in datetime_str_cleaned:
         target_date = now
-        time_part_match = re.search(r"(\d{1,2})h(?:(\d{2}))?", datetime_str_cleaned, re.IGNORECASE)
-        if time_part_match:
-            hour = int(time_part_match.group(1))
-            minute = int(time_part_match.group(2)) if time_part_match.group(2) else 0
-            return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        return target_date.replace(hour=now.hour, minute=now.minute, second=0, microsecond=0)
+        hour, minute = extract_time(datetime_str_cleaned) 
+        return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    # Regex pour date ET heure, avec "le" optionnel
     pattern_datetime = re.compile(
-        r"(?:le\s+|l')?(\d{1,2})\s+(Janvier|Février|Fevrier|Mars|Avril|Mai|Juin|Juillet|Août|Aout|Septembre|Octobre|Novembre|Décembre)\s*(?:l'année\s*(\d{4})\s*)?(?:à|a)\s*(\d{1,2})h(?:(\d{2}))?",
+        r"(?:le\s+|l')?(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre)\s*(?:l'année\s*(\d{4})\s*)?(?:à|a)\s*(\d{1,2})h(?:(\d{2}))?",
         re.IGNORECASE
     )
-    match_datetime = pattern_datetime.match(datetime_str_cleaned)
+    match_datetime = pattern_datetime.search(datetime_str_cleaned) 
 
     if match_datetime:
         day_str, month_name_fr, year_str, hour_str, minute_str = match_datetime.groups()
     else:
-        # Regex pour date SEULEMENT, avec "le" optionnel
         pattern_date_only = re.compile(
-             r"(?:le\s+|l')?(\d{1,2})\s+(Janvier|Février|Fevrier|Mars|Avril|Mai|Juin|Juillet|Août|Aout|Septembre|Octobre|Novembre|Décembre)\s*(?:l'année\s*(\d{4})\s*)?",
+             r"(?:le\s+|l')?(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre)\s*(?:l'année\s*(\d{4})\s*)?",
              re.IGNORECASE
         )
-        match_date_only = pattern_date_only.match(datetime_str_cleaned)
+        match_date_only = pattern_date_only.search(datetime_str_cleaned) 
         if match_date_only:
             day_str, month_name_fr, year_str = match_date_only.groups()
-            hour_str, minute_str = "9", "00" # Heure par défaut si seulement la date est fournie
+            hour_str, minute_str = "9", "00" # Default time
         else:
-            # print(f"DEBUG [parse_french_datetime] No match found for: '{datetime_str_cleaned}'")
-            return None # Aucun format reconnu
+            return None 
 
     try:
         day = int(day_str)
         month_num = MONTH_FR_TO_NUM.get(month_name_fr.lower())
-        if not month_num:
-            # print(f"DEBUG [parse_french_datetime] Mois non reconnu: '{month_name_fr}'")
-            return None
+        if not month_num: return None
         year = int(year_str) if year_str else datetime.datetime.now().year
         hour = int(hour_str)
-        minute = int(minute_str) if minute_str else 0 
-        if not (1 <= day <= 31 and 0 <= hour <= 23 and 0 <= minute <= 59):
-            # print(f"DEBUG [parse_french_datetime] Valeurs jour/heure/minute invalides: D={day}, H={hour}, M={minute}")
-            return None
-        # print(f"DEBUG [parse_french_datetime] Parsed: Y={year}, M={month_num}, D={day}, H={hour}, Min={minute}")
-        return datetime.datetime(year, month_num, day, hour, minute)
-    except ValueError:
-        # print(f"DEBUG [parse_french_datetime] ValueError lors de la conversion int.")
-        return None
+        minute = int(minute_str) if minute_str else 0
+        if not (1 <= day <= 31 and 0 <= hour <= 23 and 0 <= minute <= 59): return None
+        
+        parsed_dt = datetime.datetime(year, month_num, day, hour, minute)
+        if parsed_dt < now and not year_str and \
+           ("prochain" in datetime_str_cleaned or "prochaine" in datetime_str_cleaned or \
+            (month_num < now.month and year == now.year ) ): 
+            year += 1
+            last_day_of_new_month_for_specific = calendar.monthrange(year, month_num)[1]
+            day = min(day, last_day_of_new_month_for_specific)
+            parsed_dt = datetime.datetime(year, month_num, day, hour, minute)
+
+        return parsed_dt
+    except ValueError: return None
     except Exception as e:
-        # print(f"DEBUG [parse_french_datetime] Erreur inattendue: {e}")
         traceback.print_exc()
         return None
 
@@ -304,7 +334,6 @@ def create_calendar_event(summary, start_datetime_obj, duration_hours=1):
         service = build('calendar', 'v3', credentials=creds)
         created_event = service.events().insert(calendarId='primary', body=event_body).execute()
         event_link = created_event.get('htmlLink', 'Lien non disponible')
-        # This is a confirmation message, not a list for the panel.
         return f"Événement '{summary}' ajouté à votre calendrier pour le {start_datetime_obj.strftime('%d %B %Y à %Hh%M')}. Lien: {event_link}"
     except HttpError as error:
         error_content = error.content.decode('utf-8') if error.content else "Aucun détail d'erreur."
@@ -318,6 +347,31 @@ def create_calendar_event(summary, start_datetime_obj, duration_hours=1):
         traceback.print_exc()
         return f"Erreur inattendue lors de la création de l'événement: {type(e).__name__}"
 
+def format_event_datetime(start_str):
+    """
+    Formats a Google Calendar start datetime string into a more readable French format.
+    Handles both full datetime strings and date-only strings.
+    Converts UTC times to Paris local time.
+    """
+    try:
+        paris_tz = datetime.timezone(datetime.timedelta(hours=2)) # Example: CEST (UTC+2)
+
+        if 'T' in start_str:  # Indicates a full datetime
+            if 'Z' in start_str:
+                dt_object_utc = datetime.datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+            elif '+' in start_str[10:] or '-' in start_str[10:]: # Has offset
+                dt_object_utc = datetime.datetime.fromisoformat(start_str)
+            else: # No explicit timezone, assume UTC as per Google API common practice
+                dt_object_utc = datetime.datetime.fromisoformat(start_str).replace(tzinfo=datetime.timezone.utc)
+            
+            dt_object_paris = dt_object_utc.astimezone(paris_tz)
+            return dt_object_paris.strftime("%d %B %Y à %Hh%M")
+        else:  # Date only string
+            dt_object_date = datetime.datetime.strptime(start_str, "%Y-%m-%d")
+            return dt_object_date.strftime("%d %B %Y")
+    except ValueError as e:
+        print(f"Error formatting event datetime '{start_str}': {e}")
+        return start_str # Fallback to original string if parsing fails
 
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Enhanced Voice Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
@@ -325,10 +379,11 @@ Ta tâche principale est d'analyser la requête de l'utilisateur.
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, ou obtenir les prévisions météo), tu DOIS la reformuler en un objet JSON structuré.
 Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
-- "list_calendar_events": {} (les entités peuvent être vides)
+- "list_calendar_events": {"event_summary_hint": "partie du nom de l'événement (optionnel)", "specific_datetime_str": "date et heure précises recherchées par l'utilisateur (optionnel)"}
 - "send_email": {"recipient_name_or_email": "nom du contact ou adresse email", "subject": "objet de l'email (peut être 'Sans objet')", "body": "contenu du message"}
 - "list_emails": {} (les entités peuvent être vides)
 - "create_task": {"title": "titre de la tâche", "notes": "notes additionnelles pour la tâche (optionnel)"}
@@ -343,11 +398,13 @@ Exemples d'entités attendues pour chaque action :
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
-Si la requête est une QUESTION GÉNÉRALE, une salutation, ou une conversation qui NE correspond PAS à une commande spécifique listée ci-dessus, tu DOIS répondre directement en langage naturel. NE PAS générer de JSON dans ce cas. Ta réponse textuelle sera directement utilisée.
+Si la requête est une QUESTION GÉNÉRALE, une salutation, ou une conversation qui NE correspond PAS à une commande spécifique listée ci-dessus, tu DOIS répondre directement en langage naturel ET NE PAS générer de JSON.
+Si une question générale PEUT être résolue par une commande (par exemple, 'quel temps fait-il?' peut utiliser 'get_weather_forecast', 'comment aller à Paris?' peut utiliser 'get_directions', 'quelles sont les nouvelles sur X?' peut utiliser 'web_search'), alors tu DOIS prioriser la génération du JSON de la commande correspondante.
 
-Si l'utilisateur fournit une image, analyse-la et intègre tes observations dans ta réponse si c'est pertinent pour une réponse générale. Pour les commandes, l'image n'est généralement pas utilisée.
+Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et intègre tes observations dans ta réponse si c'est pertinent. Si l'utilisateur joint un fichier texte, son contenu te sera fourni précédé d'une note indiquant son nom. Utilise ce contenu textuel comme partie intégrante de la requête de l'utilisateur. Pour les commandes, les images ou fichiers ne sont généralement pas utilisés directement pour remplir les entités, mais peuvent fournir un contexte.
+
 Tu t'exprimes toujours en français, de manière claire, concise et professionnelle, tout en restant amicale.
-N'écris jamais d'émojis. Écris des markdown quand on te demande du code informatique.
+N'écris jamais d'émojis.
 Les fonctionnalités pour Google Keep ne sont pas disponibles (informe l'utilisateur si demandé).
 Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et SerpAPI.
 Le système principal gère un carnet d'adresses local.
@@ -388,7 +445,7 @@ def get_google_credentials():
         else:
             return None
     if creds:
-         with open(TOKEN_PICKLE_FILE, 'wb') as token_file: # Save refreshed token
+         with open(TOKEN_PICKLE_FILE, 'wb') as token_file: 
             pickle.dump(creds, token_file)
     return creds
 
@@ -442,53 +499,14 @@ def oauth2callback_google():
     <script>setTimeout(function() { window.close(); }, 1000);</script></body></html>
     """
 
-def list_next_10_calendar_events():
-    creds = get_google_credentials()
-    if not creds: return "Authentification Google requise. Veuillez autoriser via /authorize_google."
-    try:
-        service = build('calendar', 'v3', credentials=creds)
-        now_utc = datetime.datetime.utcnow().isoformat() + 'Z'
-        events_result = service.events().list(calendarId='primary', timeMin=now_utc,
-                                              maxResults=10, singleEvents=True,
-                                              orderBy='startTime').execute()
-        events = events_result.get('items', [])
-        if not events: return "Aucun événement à venir trouvé."
-        # This detailed text is for panel_data
-        response_text = "Voici vos 10 prochains événements :\n"
-        for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            try:
-                if 'T' in start: 
-                    dt_object_utc = datetime.datetime.fromisoformat(start.replace('Z', '+00:00'))
-                    dt_object_paris = dt_object_utc.astimezone(datetime.timezone(datetime.timedelta(hours=2))) 
-                    start_formatted = dt_object_paris.strftime("%d %B %Y à %H:%M")
-                else: 
-                    dt_object_date = datetime.datetime.strptime(start, "%Y-%m-%d")
-                    start_formatted = dt_object_date.strftime("%d %B %Y")
-            except ValueError: 
-                start_formatted = start 
-            response_text += f"- {event['summary']} (le {start_formatted})\n"
-        return response_text
-    except HttpError as error:
-        print(f"Erreur API Calendar: {error.resp.status} - {error._get_reason()}")
-        if error.resp.status == 401 or 'invalid_grant' in str(error).lower():
-            if os.path.exists(TOKEN_PICKLE_FILE): os.remove(TOKEN_PICKLE_FILE)
-            return "Identifiants Calendar invalides/révoqués. Réauthentifiez-vous."
-        return f"Erreur lors de l'accès à Calendar: {error.resp.status} - {error._get_reason()}"
-    except Exception as e:
-        print(f"Erreur inattendue lors de l'accès à Calendar: {e}")
-        traceback.print_exc()
-        return f"Erreur inattendue lors de l'accès à Calendar: {type(e).__name__}"
-
-def list_unread_emails(max_results=10):
+def list_unread_emails(max_results=10): # Added default value
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour Gmail. Veuillez autoriser via /authorize_google."
     try:
         service = build('gmail', 'v1', credentials=creds)
-        results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=max_results).execute()
+        results = service.users().messages().list(userId='me', labelIds=['INBOX', 'UNREAD'], maxResults=int(max_results)).execute() # Ensure max_results is int
         messages = results.get('messages', [])
         if not messages: return "Aucun e-mail non lu trouvé."
-        # This detailed text is for panel_data
         email_list_details = "Voici vos derniers e-mails non lus :\n"
         for msg_ref in messages:
             msg = service.users().messages().get(userId='me', id=msg_ref['id'], format='metadata', metadataHeaders=['Subject', 'From']).execute()
@@ -519,7 +537,6 @@ def send_email(to_address, subject, message_text):
         encoded_message = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
         create_message_body = {'raw': encoded_message}
         service.users().messages().send(userId='me', body=create_message_body).execute()
-        # This is a confirmation message.
         return f"E-mail envoyé avec succès à {to_address} avec l'objet '{subject}'."
     except HttpError as error:
         error_content = error.content.decode('utf-8') if error.content else "Aucun détail."
@@ -568,7 +585,6 @@ def create_google_task(title, notes=None):
         task_body = {'title': title}
         if notes and notes.strip(): task_body['notes'] = notes
         created_task = service.tasks().insert(tasklist=tasklist_id, body=task_body).execute()
-        # This is a confirmation message.
         return f"Tâche '{created_task['title']}' ajoutée à la liste '{tasklist_title}'."
     except HttpError as error:
         error_content = error.content.decode('utf-8') if error.content else "Aucun détail."
@@ -582,7 +598,7 @@ def create_google_task(title, notes=None):
         traceback.print_exc()
         return f"Erreur inattendue lors de la création de la tâche: {type(e).__name__}"
 
-def list_google_tasks(max_results=10):
+def list_google_tasks(max_results=10): # Added default value
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour Tasks. Veuillez autoriser via /authorize_google."
     try:
@@ -600,10 +616,9 @@ def list_google_tasks(max_results=10):
                 tasklist_title = tl['title']
                 break
         
-        results = service.tasks().list(tasklist=tasklist_id, maxResults=max_results, showCompleted=False, showHidden=False).execute()
+        results = service.tasks().list(tasklist=tasklist_id, maxResults=int(max_results), showCompleted=False, showHidden=False).execute() # Ensure max_results is int
         tasks = results.get('items', [])
         if not tasks: return f"Aucune tâche active trouvée dans la liste '{tasklist_title}'."
-        # This detailed text is for panel_data
         task_list_details = f"Voici vos tâches actives de la liste '{tasklist_title}' :\n"
         for task in tasks:
             task_list_details += f"- {task.get('title', 'Tâche sans titre')}\n"
@@ -635,7 +650,6 @@ def get_directions_from_google_maps_api(origin, destination):
 
         if directions_result and len(directions_result) > 0:
             leg = directions_result[0]['legs'][0] 
-            # This detailed text is for panel_data
             route_summary = f"Itinéraire de {origin} à {destination}:\n"
             route_summary += f"  Distance: {leg['distance']['text']}, Durée: {leg['duration']['text']}\n"
             if len(leg['steps']) > 0:
@@ -670,15 +684,12 @@ def perform_web_search(query, num_results=6):
         if not organic_results:
             answer_box = results.get("answer_box")
             if answer_box and (answer_box.get("answer") or answer_box.get("snippet")):
-                # This detailed text is for panel_data
                 return f"Réponse directe pour '{query}':\n{answer_box.get('answer') or answer_box.get('snippet')}"
             knowledge_graph = results.get("knowledge_graph")
             if knowledge_graph and knowledge_graph.get("description"):
-                 # This detailed text is for panel_data
                  return f"Information pour '{query}':\n{knowledge_graph['description']}"
             return f"Aucun résultat pertinent pour '{query}'."
 
-        # This detailed text is for panel_data
         summary_details = f"Résultats web pour '{query}':\n"
         for i, res in enumerate(organic_results[:num_results]): 
             summary_details += f"{i+1}. {res.get('title', 'Sans titre')}\n"
@@ -701,7 +712,18 @@ def get_gemini_response(current_user_parts):
 
     api_request_contents = list(gemini_conversation_history) 
     if current_user_parts:
-        api_request_contents.append({"role": "user", "parts": current_user_parts})
+        formatted_parts = []
+        for part in current_user_parts:
+            if isinstance(part, str):
+                formatted_parts.append({"text": part})
+            elif isinstance(part, Image.Image): 
+                formatted_parts.append(part) 
+            else:
+                print(f"WARN: Partie utilisateur non gérée pour Gemini: {type(part)}")
+        
+        if formatted_parts:
+             api_request_contents.append({"role": "user", "parts": formatted_parts})
+
     elif not api_request_contents: 
         return "Rien à envoyer à Gemini."
 
@@ -736,21 +758,28 @@ def get_gemini_response(current_user_parts):
                      else: 
                          return "Réponse de Gemini non interprétable comme texte ou JSON de commande."
 
-        if current_user_parts: 
-            gemini_conversation_history.append({"role": "user", "parts": current_user_parts})
+        if current_user_parts and formatted_parts: 
+            gemini_conversation_history.append({"role": "user", "parts": formatted_parts})
         
         is_command_json = False
         if isinstance(response_text, str) and response_text.strip().startswith("{") and response_text.strip().endswith("}"):
             try:
+                # Validate if it's actually a JSON command structure expected
                 parsed_json = json.loads(response_text)
-                if isinstance(parsed_json, dict) and "action" in parsed_json:
+                if isinstance(parsed_json, dict) and "action" in parsed_json and "entities" in parsed_json:
                     is_command_json = True
             except json.JSONDecodeError:
-                pass 
+                pass # Not a valid JSON
 
-        if not is_command_json and response_text and not any(err in str(response_text) for err in ["bloquée", "simulée", "incomplète"]): 
-            gemini_conversation_history.append({"role": "model", "parts": [{"text": str(response_text)}]}) 
-        
+        # Only add to history if it's NOT a command JSON or if it's a textual response
+        if not is_command_json and response_text and not any(err in str(response_text) for err in ["bloquée", "simulée", "incomplète"]):
+            gemini_conversation_history.append({"role": "model", "parts": [{"text": str(response_text)}]})
+        elif is_command_json:
+             # If it IS a command JSON, we don't add it to the model's conversational history here,
+             # as the system will act on it, and the *result* of the action will be spoken/shown.
+             # The user's query that led to the command is already in history.
+             pass
+
         if len(gemini_conversation_history) > MAX_HISTORY_ITEMS * 2: 
             gemini_conversation_history = gemini_conversation_history[-(MAX_HISTORY_ITEMS * 2):]
         
@@ -778,8 +807,6 @@ def get_gtts_audio(text_to_speak, lang='fr'):
         return None
 
 # --- NLU Action Handlers ---
-# These handlers now return the DETAILED string, which will be used for panel_data.
-# The chat_ws function will craft the short chat_display_message.
 def handle_create_calendar_event(entities):
     summary = entities.get("summary")
     datetime_str = entities.get("datetime_str")
@@ -792,7 +819,133 @@ def handle_create_calendar_event(entities):
     return "Pour créer un événement, j'ai besoin d'un titre et d'une date/heure (ex: 'Réunion projet demain à 10h')."
 
 def handle_list_calendar_events(entities):
-    return list_next_10_calendar_events()
+    creds = get_google_credentials()
+    if not creds:
+        return "Authentification Google requise. Veuillez autoriser via /authorize_google."
+
+    try:
+        service = build('calendar', 'v3', credentials=creds)
+        now_utc_dt = datetime.datetime.utcnow()
+        paris_tz_offset_hours = 2 
+
+        time_min_utc_iso = now_utc_dt.isoformat() + 'Z'
+        time_max_utc_iso = (now_utc_dt + datetime.timedelta(days=90)).isoformat() + 'Z'
+
+        events_result = service.events().list(
+            calendarId='primary',
+            timeMin=time_min_utc_iso,
+            timeMax=time_max_utc_iso, 
+            maxResults=250, 
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        all_events = events_result.get('items', [])
+        
+        if not all_events:
+            return "Aucun événement à venir trouvé dans les 90 prochains jours."
+
+        event_summary_hint = entities.get("event_summary_hint", "").lower().strip()
+        specific_datetime_str = entities.get("specific_datetime_str")
+        
+        parsed_specific_datetime_naive_local = None
+        if specific_datetime_str:
+            parsed_specific_datetime_naive_local = parse_french_datetime(specific_datetime_str)
+
+        filtered_events = []
+
+        if event_summary_hint or parsed_specific_datetime_naive_local:
+            for event in all_events:
+                summary_match = False
+                datetime_match = False
+                event_summary_lower = event.get('summary', '').lower()
+                
+                if event_summary_hint and event_summary_hint in event_summary_lower:
+                    summary_match = True
+
+                if parsed_specific_datetime_naive_local:
+                    event_start_str = event['start'].get('dateTime', event['start'].get('date'))
+                    event_end_str = event['end'].get('dateTime', event['end'].get('date'))
+                    try:
+                        if 'Z' in event_start_str: event_start_utc = datetime.datetime.fromisoformat(event_start_str.replace('Z', '+00:00'))
+                        elif '+' in event_start_str[10:] or '-' in event_start_str[10:]: event_start_utc = datetime.datetime.fromisoformat(event_start_str)
+                        elif 'T' in event_start_str: event_start_utc = datetime.datetime.fromisoformat(event_start_str).replace(tzinfo=datetime.timezone.utc)
+                        else: event_start_utc = datetime.datetime.strptime(event_start_str, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+
+                        if 'Z' in event_end_str: event_end_utc = datetime.datetime.fromisoformat(event_end_str.replace('Z', '+00:00'))
+                        elif '+' in event_end_str[10:] or '-' in event_end_str[10:]: event_end_utc = datetime.datetime.fromisoformat(event_end_str)
+                        elif 'T' in event_end_str: event_end_utc = datetime.datetime.fromisoformat(event_end_str).replace(tzinfo=datetime.timezone.utc)
+                        else: event_end_utc = (datetime.datetime.strptime(event_end_str, "%Y-%m-%d") + datetime.timedelta(days=1)).replace(tzinfo=datetime.timezone.utc)
+                       
+                        event_start_local_paris_naive = event_start_utc.astimezone(datetime.timezone(datetime.timedelta(hours=paris_tz_offset_hours))).replace(tzinfo=None)
+                        event_end_local_paris_naive = event_end_utc.astimezone(datetime.timezone(datetime.timedelta(hours=paris_tz_offset_hours))).replace(tzinfo=None)
+                        
+                        query_is_date_only = parsed_specific_datetime_naive_local.time() == datetime.time(0,0) and not (specific_datetime_str and 'h' in specific_datetime_str.lower())
+                        
+                        if query_is_date_only:
+                            if event_start_local_paris_naive.date() == parsed_specific_datetime_naive_local.date(): datetime_match = True
+                        else: 
+                            if event_start_local_paris_naive <= parsed_specific_datetime_naive_local < event_end_local_paris_naive: datetime_match = True
+                            elif event_start_local_paris_naive == parsed_specific_datetime_naive_local: datetime_match = True
+                    except ValueError as ve:
+                        print(f"Error parsing event date for filtering: {ve} for event {event.get('summary')}")
+                        continue 
+                
+                if event_summary_hint and parsed_specific_datetime_naive_local:
+                    if summary_match and datetime_match: filtered_events.append(event)
+                elif event_summary_hint and summary_match: filtered_events.append(event)
+                elif parsed_specific_datetime_naive_local and datetime_match: filtered_events.append(event)
+            
+            if not filtered_events:
+                response_text = "Je n'ai trouvé aucun événement correspondant à "
+                if event_summary_hint: response_text += f"'{entities.get('event_summary_hint')}'"
+                if event_summary_hint and parsed_specific_datetime_naive_local: response_text += " pour "
+                if parsed_specific_datetime_naive_local:
+                    is_specific_time_query = specific_datetime_str and 'h' in specific_datetime_str.lower()
+                    time_format = "%d %B %Y à %Hh%M" if is_specific_time_query else "%d %B %Y"
+                    response_text += f"le {parsed_specific_datetime_naive_local.strftime(time_format)}"
+                response_text += "."
+                return response_text
+            else:
+                response_parts = []
+                if len(filtered_events) == 1:
+                    event = filtered_events[0]
+                    start_formatted = format_event_datetime(event['start'].get('dateTime', event['start'].get('date')))
+                    response_parts.append(f"Oui, vous avez '{event['summary']}' prévu le {start_formatted}.")
+                else:
+                    response_parts.append(f"J'ai trouvé {len(filtered_events)} événements correspondants :")
+                    for event in filtered_events[:3]: 
+                        start_formatted = format_event_datetime(event['start'].get('dateTime', event['start'].get('date')))
+                        response_parts.append(f"- '{event['summary']}' le {start_formatted}")
+                return "\n".join(response_parts)
+
+        response_text = "Voici vos 10 prochains événements :\n"
+        for i, event in enumerate(all_events[:10]):
+            start_formatted = format_event_datetime(event['start'].get('dateTime', event['start'].get('date')))
+            response_text += f"- {event['summary']} (le {start_formatted})\n"
+        return response_text.strip()
+
+    except HttpError as error:
+        error_content = error.content.decode('utf-8') if error.content else "Aucun détail d'erreur."
+        print(f"Erreur API Calendar (liste événements): Status={error.resp.status}, Raison={error.resp.reason}, Détails={error_content}")
+        if error.resp.status == 401 or 'invalid_grant' in str(error).lower():
+            if os.path.exists(TOKEN_PICKLE_FILE): os.remove(TOKEN_PICKLE_FILE)
+            return "Identifiants Calendar invalides/révoqués. Réauthentifiez-vous."
+        return f"Erreur lors de la récupération des événements ({error.resp.status}): {error_content}"
+    except Exception as e:
+        print(f"Erreur inattendue Calendar (liste événements): {e}")
+        traceback.print_exc()
+        return f"Erreur inattendue lors de la récupération des événements: {type(e).__name__}"
+
+# --- Handler functions that were missing or needed correction ---
+def handle_list_emails(entities):
+    # entities might contain max_results in the future, but for now, use default
+    # Or extract max_results from entities if provided by Gemini.
+    # max_r = entities.get("max_results", 10) # Example for future use
+    return list_unread_emails() # Calls with default max_results=10
+
+def handle_list_tasks(entities):
+    # Similar to handle_list_emails, entities could be used for more specific task listing
+    return list_google_tasks() # Calls with default max_results=10
 
 def handle_send_email(entities):
     recipient_name_or_email = entities.get("recipient_name_or_email")
@@ -810,12 +963,8 @@ def handle_send_email(entities):
     else: 
         to_address = get_contact_email(recipient_name_or_email)
         if not to_address:
-            return f"Je n'ai pas trouvé le contact '{recipient_name_or_email}' dans votre carnet d'adresses."
-    
+            return f"Je n'ai pas trouvé le contact '{recipient_name_or_email}' dans votre carnet d'adresses pour envoyer un e-mail."
     return send_email(to_address, subject, body)
-
-def handle_list_emails(entities):
-    return list_unread_emails()
 
 def handle_create_task(entities):
     title = entities.get("title")
@@ -824,9 +973,6 @@ def handle_create_task(entities):
         return create_google_task(title, notes)
     return "Quel est le titre de la tâche que vous souhaitez ajouter ?"
 
-def handle_list_tasks(entities):
-    return list_google_tasks()
-
 def handle_add_contact(entities):
     name = entities.get("name")
     email = entities.get("email")
@@ -834,7 +980,7 @@ def handle_add_contact(entities):
         return add_contact_to_book(name, email)
     return "Pour ajouter un contact, veuillez me donner son nom et son adresse e-mail."
 
-def handle_list_contacts(entities):
+def handle_list_contacts(entities): # Added handler
     return list_contacts_from_book()
 
 def handle_remove_contact(entities):
@@ -847,7 +993,10 @@ def handle_get_contact_email(entities):
     name = entities.get("name")
     if name:
         email_addr = get_contact_email(name)
-        return f"L'adresse e-mail de {name} est {email_addr}." if email_addr else f"Contact '{name}' non trouvé."
+        if email_addr:
+            return f"L'adresse e-mail de {name} est {email_addr}."
+        else:
+            return f"Contact '{name}' non trouvé."
     return "De quel contact souhaitez-vous connaître l'adresse e-mail ?"
 
 def handle_get_directions(entities):
@@ -867,20 +1016,20 @@ def handle_google_keep_info(entities):
     return "Désolé, Google Keep n'a pas d'API publique officielle, je ne peux donc pas gérer vos notes Keep directement."
 
 def handle_get_weather_forecast(entities):
-    # The client fetches weather, backend just acknowledges and provides a trigger phrase for the panel.
-    return "Prévisions météo pour votre localisation." # This will be panel_data
+    return "Prévisions météo pour votre localisation." 
+# --- End of missing handler functions ---
 
 action_dispatcher = {
     "create_calendar_event": handle_create_calendar_event,
-    "list_calendar_events": handle_list_calendar_events,
+    "list_calendar_events": handle_list_calendar_events, 
     "send_email": handle_send_email,
-    "list_emails": handle_list_emails,
+    "list_emails": handle_list_emails, # Corrected to use handler
     "create_task": handle_create_task,
-    "list_tasks": handle_list_tasks,
+    "list_tasks": handle_list_tasks,   # Corrected to use handler
     "add_contact": handle_add_contact,
-    "list_contacts": handle_list_contacts,
+    "list_contacts": handle_list_contacts, # Corrected to use handler
     "remove_contact": handle_remove_contact,
-    "get_contact_email": handle_get_contact_email,
+    "get_contact_email": handle_get_contact_email, 
     "get_directions": handle_get_directions,
     "web_search": handle_web_search,
     "google_keep_info": handle_google_keep_info,
@@ -915,99 +1064,190 @@ def chat_ws(ws):
                     ws.send(json.dumps({"type": "error", "message": "Invalid JSON."}))
                     continue
 
-                user_text = data.get('text', '')
-                image_data_url = data.get('imageData')
-
                 current_user_parts_for_gemini = []
-                if user_text: current_user_parts_for_gemini.append(user_text)
-                if image_data_url:
+                user_text = data.get('text', '')
+
+                if user_text:
+                    current_user_parts_for_gemini.append(user_text)
+
+                file_data_from_client = data.get('fileData')
+                file_name_from_client = data.get('fileName')
+                file_type_from_client = data.get('fileType')
+
+                if file_data_from_client and file_name_from_client and file_type_from_client:
+                    if file_type_from_client == 'image':
+                        try:
+                            header, encoded = file_data_from_client.split(",", 1)
+                            image_bytes = base64.b64decode(encoded)
+                            img = Image.open(io.BytesIO(image_bytes))
+                            current_user_parts_for_gemini.append(f"L'utilisateur a joint une image nommée '{file_name_from_client}'. Voici l'image :")
+                            current_user_parts_for_gemini.append(img)
+                        except Exception as e:
+                            print(f"Erreur lors du décodage de l'image jointe '{file_name_from_client}': {e}")
+                            current_user_parts_for_gemini.append(f"(Erreur: Impossible de traiter l'image jointe '{file_name_from_client}')")
+                    elif file_type_from_client == 'text':
+                        text_content = file_data_from_client 
+                        current_user_parts_for_gemini.append(f"L'utilisateur a joint un fichier texte nommé '{file_name_from_client}'. Voici son contenu :\n```\n{text_content}\n```")
+                    else:
+                        print(f"WARN: Type de fichier joint non supporté '{file_type_from_client}' pour '{file_name_from_client}'.")
+                        current_user_parts_for_gemini.append(f"(Note: Fichier '{file_name_from_client}' de type non supporté '{file_type_from_client}' reçu mais non traité.)")
+                
+                elif data.get('imageData'): 
+                    image_data_url = data.get('imageData')
                     try:
                         header, encoded = image_data_url.split(",", 1)
                         image_bytes = base64.b64decode(encoded)
                         img = Image.open(io.BytesIO(image_bytes))
+                        current_user_parts_for_gemini.append("L'utilisateur a fourni une image via la webcam. Voici l'image :")
                         current_user_parts_for_gemini.append(img)
                     except Exception as e:
-                        print(f"Erreur lors du décodage de l'image: {e}")
+                        print(f"Erreur lors du décodage de l'image webcam: {e}")
+                        current_user_parts_for_gemini.append("(Erreur: Impossible de traiter l'image de la webcam)")
                 
-                final_text_response = None # This will hold the DETAILED response from actions
+                final_text_response_for_action = None 
                 action_taken_by_nlu = False 
-                parsed_command_action = None # To store the action string if NLU identifies one
-
-                if not current_user_parts_for_gemini and not gemini_conversation_history:
-                    final_text_response = "Veuillez fournir une requête ou une image."
-                else:
-                    gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
-                    response_to_parse = gemini_raw_response
-                    if isinstance(gemini_raw_response, str):
-                        temp_response = gemini_raw_response.strip()
-                        if temp_response.startswith("```json"):
-                            temp_response = temp_response[len("```json"):].strip()
-                        elif temp_response.startswith("```"): 
-                             temp_response = temp_response[len("```"):].strip()
-                        if temp_response.endswith("```"):
-                            temp_response = temp_response[:-len("```")].strip()
-                        response_to_parse = temp_response
-                    
-                    try:
-                        parsed_command = json.loads(response_to_parse)
-                        if isinstance(parsed_command, dict) and "action" in parsed_command:
-                            parsed_command_action = parsed_command.get("action")
-                            entities = parsed_command.get("entities", {})
-                            
-                            if parsed_command_action in action_dispatcher:
-                                final_text_response = action_dispatcher[parsed_command_action](entities)
-                                action_taken_by_nlu = True
-                            else:
-                                print(f"WARN [chat_ws] Action NLU JSON non reconnue: {parsed_command_action}")
-                                final_text_response = gemini_raw_response 
-                        else:
-                            final_text_response = gemini_raw_response 
-                    except json.JSONDecodeError:
-                        final_text_response = gemini_raw_response 
-                    except Exception as e_nlu:
-                        print(f"ERREUR [chat_ws] lors du traitement de la réponse NLU de Gemini: {e_nlu}")
-                        traceback.print_exc()
-                        final_text_response = "Une erreur s'est produite lors de l'interprétation de votre demande."
-
-                if final_text_response is None: 
-                    final_text_response = "Je ne suis pas sûr de comprendre votre demande."
-
-                # --- Prepare message for client (chat vs panel) ---
-                chat_display_message = str(final_text_response) # Default: chat shows full/error response
+                parsed_command_action = None 
+                chat_display_message = None
                 panel_data_content = None
                 panel_target_id = None
-                
-                # These actions are simple confirmations, panel_data is not needed or handled by client.
-                simple_confirmation_actions = ["create_calendar_event", "send_email", "create_task", "add_contact", "remove_contact", "get_contact_email", "google_keep_info"]
+                gemini_explanation_text = None 
+                extracted_code_block = None  
 
-                if action_taken_by_nlu and parsed_command_action not in simple_confirmation_actions:
-                    panel_data_content = str(final_text_response) # The detailed content for the panel
+                if not current_user_parts_for_gemini and not gemini_conversation_history:
+                    chat_display_message = "Veuillez fournir une requête ou une image."
+                else:
+                    gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
+                    
+                    extracted_json_command_str = None
+                    gemini_explanation_text = str(gemini_raw_response) 
 
-                    if parsed_command_action == "list_calendar_events":
-                        panel_target_id = "calendarContent"
-                        chat_display_message = "Voici les événements du calendrier." if "Aucun événement" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "list_emails":
-                        panel_target_id = "emailContent"
-                        chat_display_message = "Voici vos e-mails." if "Aucun e-mail non lu" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "list_tasks":
-                        panel_target_id = "taskContent"
-                        chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "list_contacts":
-                        panel_target_id = "searchContent" # Display in search panel for now, or create new
-                        chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "get_directions":
-                        panel_target_id = "mapContent" # For textual directions summary
-                        chat_display_message = "Voici votre itinéraire." if "Impossible de trouver" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "web_search":
-                        panel_target_id = "searchContent"
-                        query_entity = parsed_command.get("entities", {}).get("query", "")
-                        chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in panel_data_content and "non configuré" not in panel_data_content else panel_data_content
-                    elif parsed_command_action == "get_weather_forecast":
-                        panel_target_id = "weatherForecastContent"
-                        chat_display_message = "Voici les prévisions météo."
-                        # panel_data_content is "Prévisions météo pour votre localisation." - client uses this as a trigger.
+                    if isinstance(gemini_raw_response, str):
+                        match_markdown_json = re.search(r"```json\s*(\{.*?\})\s*```", gemini_raw_response, re.DOTALL | re.IGNORECASE)
+                        if match_markdown_json:
+                            extracted_json_command_str = match_markdown_json.group(1).strip()
+                            pre_text = gemini_raw_response[:match_markdown_json.start()].strip()
+                            post_text = gemini_raw_response[match_markdown_json.end():].strip()
+                            gemini_explanation_text = f"{pre_text}\n{post_text}".strip() if (pre_text or post_text) else None
+                        elif gemini_raw_response.strip().startswith("{") and gemini_raw_response.strip().endswith("}"):
+                            try:
+                                test_parse = json.loads(gemini_raw_response.strip())
+                                if isinstance(test_parse, dict) and "action" in test_parse:
+                                    extracted_json_command_str = gemini_raw_response.strip()
+                                    gemini_explanation_text = None 
+                            except json.JSONDecodeError:
+                                pass 
+
+                        if not extracted_json_command_str:
+                            match_code = re.search(r"```(?:\w*\s*\n)?([\s\S]*?)\n```", gemini_raw_response, re.DOTALL)
+                            if match_code:
+                                extracted_code_block = match_code.group(1).strip()
+                                pre_text = gemini_raw_response[:match_code.start()].strip()
+                                post_text = gemini_raw_response[match_code.end():].strip()
+                                if pre_text or post_text:
+                                     gemini_explanation_text = f"{pre_text}\n{post_text}".strip()
+                                else: 
+                                     gemini_explanation_text = "Code généré." 
+                                if not gemini_explanation_text.strip(): 
+                                     gemini_explanation_text = "Code généré et affiché dans l'onglet Code."
+
+                    parsed_command_obj = None
+                    if extracted_json_command_str:
+                        try:
+                            parsed_command_obj = json.loads(extracted_json_command_str)
+                        except json.JSONDecodeError:
+                            print(f"WARN: Extracted JSON string failed to parse: {extracted_json_command_str}")
+                            if gemini_explanation_text is None: gemini_explanation_text = gemini_raw_response 
+
+                    if parsed_command_obj and isinstance(parsed_command_obj, dict) and "action" in parsed_command_obj:
+                        parsed_command_action = parsed_command_obj.get("action", "").strip()
+                        entities = parsed_command_obj.get("entities", {})
+                        if parsed_command_action in action_dispatcher:
+                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities)
+                            action_taken_by_nlu = True
+                            
+                            chat_display_message = str(final_text_response_for_action)
+                            panel_data_content = None 
+                            panel_target_id = None    
+
+                            if parsed_command_action == "list_calendar_events":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "calendarContent"
+                                chat_display_message = "Voici les événements prévus."
+                            elif parsed_command_action == "list_emails":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "emailContent"
+                                chat_display_message = "Voici vos e-mails." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            elif parsed_command_action == "list_tasks":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "taskContent"
+                                chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            elif parsed_command_action == "list_contacts":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "searchContent" 
+                                chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            elif parsed_command_action == "get_directions":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "mapContent"
+                                if gemini_explanation_text and ("point de passage" in gemini_explanation_text):
+                                    chat_display_message = gemini_explanation_text
+                                    if "Impossible de trouver" not in str(final_text_response_for_action) and "erreur" not in str(final_text_response_for_action).lower():
+                                        chat_display_message += "\nL'itinéraire est affiché sur la carte."
+                                    elif "Impossible de trouver" in str(final_text_response_for_action):
+                                        chat_display_message += f"\nDe plus: {final_text_response_for_action}"
+                                else:
+                                    chat_display_message = "Voici votre itinéraire." if "Impossible de trouver" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            elif parsed_command_action == "web_search":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "searchContent"
+                                query_entity = parsed_command_obj.get("entities", {}).get("query", "votre recherche")
+                                chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            elif parsed_command_action == "get_weather_forecast":
+                                panel_data_content = str(final_text_response_for_action) 
+                                panel_target_id = "weatherForecastContent"
+                                chat_display_message = "Voici les prévisions météo."
+                            
+                            if gemini_explanation_text and \
+                               gemini_explanation_text != chat_display_message and \
+                               not (extracted_json_command_str and gemini_explanation_text == str(gemini_raw_response)) and \
+                               parsed_command_action not in ["get_directions","list_calendar_events"]: 
+                                if "erreur" in str(final_text_response_for_action).lower() or \
+                                   "je n'ai pas pu interpréter" in str(final_text_response_for_action).lower() or \
+                                   "authentification google requise" in str(final_text_response_for_action).lower() or \
+                                   "identifiants invalides" in str(final_text_response_for_action).lower():
+                                   pass 
+                                else:
+                                   chat_display_message = gemini_explanation_text 
+
+                        else:
+                            print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
+                            chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
+                            action_taken_by_nlu = False
+                    
+                    elif extracted_code_block:
+                        action_taken_by_nlu = False 
+                        parsed_command_action = "code_generation" 
+                        panel_data_content = extracted_code_block
+                        panel_target_id = "codeDisplayContent"
+                        chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code généré et affiché dans l'onglet Code."
+                        if not chat_display_message.strip():
+                             chat_display_message = "Code généré et affiché dans l'onglet Code."
+                    
+                    else: 
+                        action_taken_by_nlu = False
+                        chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Je n'ai pas compris la demande."
+
+                if chat_display_message is None:
+                    chat_display_message = "Je ne suis pas sûr de pouvoir traiter cette demande."
                 
-                # Construct the message to send to the client
+                chat_display_message = str(chat_display_message)
+                if "```json" in chat_display_message and panel_target_id:
+                    if gemini_explanation_text and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
+                         chat_display_message = gemini_explanation_text if gemini_explanation_text.strip() else "Action effectuée."
+                    elif extracted_code_block : 
+                         chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code affiché dans le panneau dédié."
+                    else:
+                        chat_display_message = f"Action traitée. Contenu affiché dans le panneau dédié."
+
                 message_to_send = {"type": "final_text", "text": chat_display_message}
                 if panel_data_content and panel_target_id:
                     message_to_send["panel_data"] = panel_data_content
@@ -1015,36 +1255,46 @@ def chat_ws(ws):
                 
                 ws.send(json.dumps(message_to_send))
                 
-                # --- Audio Generation Logic (uses chat_display_message) ---
+                # --- TTS Logic ---
                 audio_data_url = None
                 text_for_gtts = chat_display_message 
                 should_speak = True 
                 lower_chat_message = chat_display_message.lower()
-                is_code_response_in_chat = "```" in chat_display_message 
 
-                if is_code_response_in_chat and not panel_data_content : # If chat message is code and not a panel action
+                if panel_target_id == "codeDisplayContent" and extracted_code_block:
                     text_for_gtts = "Voici le code que j'ai généré."
                 elif action_taken_by_nlu:
-                    if parsed_command_action in simple_confirmation_actions:
-                        text_for_gtts = chat_display_message # Speak the confirmation like "Email envoyé"
-                    elif any(kw in chat_display_message for kw in ["Voici les", "Voici vos", "Voici la liste"]):
-                         text_for_gtts = chat_display_message # Speak the short intro
-                    elif any(err_kw in lower_chat_message for err_kw in ["erreur", "non trouvé", "invalide", "pas pu interpréter", "j'ai besoin", "veuillez préciser", "dois-je", "souhaitez-vous"]):
-                        text_for_gtts = chat_display_message # Speak errors/clarifications
-                    else: # Fallback for other NLU actions that might have short chat messages
-                        text_for_gtts = chat_display_message
+                    if parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in lower_chat_message:
+                        text_for_gtts = "événement ajouté au calendrier"
+                    elif parsed_command_action == "web_search" and panel_target_id == "searchContent":
+                        text_for_gtts = "Voici les résultats de recherche."
+                    elif parsed_command_action == "list_contacts" and panel_target_id == "searchContent":
+                        text_for_gtts = "Voici la liste des contacts."
+                    elif parsed_command_action == "list_tasks" and panel_target_id == "taskContent":
+                        text_for_gtts = "Voici la liste des tâches."
+                    elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
+                        if not lower_chat_message.startswith("voici vos 10 prochains événements") and \
+                           not lower_chat_message.startswith("aucun événement à venir trouvé"): 
+                            text_for_gtts = chat_display_message 
+                        else: 
+                            text_for_gtts = "Voici les événements du calendrier."
+                    elif parsed_command_action == "get_contact_email": 
+                        text_for_gtts = chat_display_message 
+                    elif any(err_kw in lower_chat_message for err_kw in ["erreur", "non trouvé", "invalide", "pas pu interpréter", "j'ai besoin", "veuillez préciser", "dois-je", "souhaitez-vous", "authentification google requise", "identifiants invalides"]):
+                        text_for_gtts = chat_display_message 
+                    elif panel_target_id and parsed_command_action in ["list_emails", "get_directions", "get_weather_forecast"]: 
+                        if chat_display_message.startswith("Voici") : 
+                             text_for_gtts = chat_display_message 
                 
                 suppress_audio_keywords = [
-                    "authentification google requise", "identifiants invalides/révoqués",
-                    "erreur api gemini", "client gemini non configuré", "réponse gemini bloquée",
-                    "erreur critique", "erreur serveur", "erreur interne",
-                    "bibliothèque manquante", "non disponible",
-                    "je ne suis pas sûr de comprendre votre demande" 
+                     "client gemini non configuré", "réponse gemini bloquée",
+                     "erreur critique", "erreur serveur", "erreur interne",
+                     "bibliothèque manquante", "non disponible",
+                     "je ne suis pas sûr de comprendre votre demande" ,
                 ]
-                if not is_code_response_in_chat:
-                    if any(keyword in lower_chat_message for keyword in suppress_audio_keywords):
-                        if text_for_gtts == chat_display_message: 
-                             should_speak = False
+                if any(keyword in lower_chat_message for keyword in suppress_audio_keywords):
+                    if text_for_gtts == chat_display_message: 
+                            should_speak = False
                 
                 if chat_display_message.strip() == "" or lower_chat_message == "ok.": 
                     should_speak = False
@@ -1070,17 +1320,17 @@ def chat_ws(ws):
                         raise 
 
     except (ConnectionClosed, ConnectionResetError):
-        pass 
+        print(f"[INFO WebSocket Handler] Connexion fermée avec le client.")
     except Exception as e:
         print(f"[ERREUR WebSocket Handler Critique] /api/chat_ws: {type(e).__name__} - {e}")
         traceback.print_exc()
         try:
-            if hasattr(ws, 'connected') and ws.connected: 
+            if ws and hasattr(ws, 'connected') and ws.connected: 
                  ws.send(json.dumps({"type": "error", "message": f"Erreur serveur: {type(e).__name__}"}))
         except Exception as send_error:
             print(f"Impossible d'envoyer le message d'erreur final au client: {send_error}")
     finally:
-        pass 
+        print(f"[INFO WebSocket Handler] Fin du handler pour un client.")
 
 
 if __name__ == '__main__':
