@@ -122,6 +122,10 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
      puis ouvrez [http://localhost:8080/index.html](http://localhost:8080/index.html)
    * Ou via une extension Live Server (VS Code), Nginx ou NodeJS.
+
+     Note: Si la map ne charge pas, appuyez sur CTRL+F5
+
+     
 8. **Autoriser Google**
 
    * Dans l’UI EVA cliquez sur **“Autoriser l’accès aux services Google”** puis connectez‑vous.
