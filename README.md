@@ -130,7 +130,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
 Ça y est ! Parlez ou tapez votre requête dans EVA 👾.
 
-*Note: Si la map ne charge pas, appuyez sur CTRL+F5*
+*⚠️ Si la map ne charge pas, appuyez sur CTRL+F5*
 
 ---
 
