@@ -1,6 +1,6 @@
 # E.V.A – Enhanced Voice Assistant 
 
-Serveur Flask + Web UI - NodeJS, NGINX, Python, etc...
+Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
 
 Inspiré par le projet ada_app de Nlouis38
 https://github.com/Nlouis38/ada_app 
