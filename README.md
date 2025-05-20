@@ -98,7 +98,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    * Récupérez et utiliser gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
 5. **Frontend : insérez vos clés JS**
 
-   * Ouvrez `index.html` et recherchez :
+   * Ouvrez `index.html` et recherchez, ligne 9 :
 
      ```html
      <script async defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"></script> 
