@@ -272,23 +272,48 @@
         #promptScheduler {
             width: 100%;
         }
+         #promptScheduler label {
+            margin-top: 0.5rem;
+            display: block;
+            color: #D1D5DB;
+            font-size: 0.875rem;
+        }
         #scheduledPromptsList li {
             color: #D1D5DB; 
             display: flex;
+            flex-direction: column; /* Stack items vertically */
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start; /* Align items to the start */
             font-size: 0.875rem; 
+            gap: 0.25rem; /* Space between text and buttons */
         }
-        #scheduledPromptsList button {
+        #scheduledPromptsList .prompt-details {
+            margin-bottom: 0.25rem;
+        }
+        #scheduledPromptsList .prompt-actions button {
             background-color: #EF4444; 
             color: white;
             padding: 0.25rem 0.5rem;
             border-radius: 0.25rem; 
             font-size: 0.75rem; 
+            margin-right: 0.25rem;
         }
-        #scheduledPromptsList button:hover {
+        #scheduledPromptsList .prompt-actions button:hover {
             background-color: #DC2626; 
         }
+        #scheduledPromptsList .prompt-actions .pause-prompt-button {
+            background-color: #F59E0B; /* Amber */
+        }
+        #scheduledPromptsList .prompt-actions .pause-prompt-button:hover {
+            background-color: #D97706; /* Darker Amber */
+        }
+         #scheduledPromptsList .prompt-actions .resume-prompt-button {
+            background-color: #10B981; /* Green */
+        }
+        #scheduledPromptsList .prompt-actions .resume-prompt-button:hover {
+            background-color: #059669; /* Darker Green */
+        }
+
         #filePreview {
             font-size: 0.75rem; /* text-xs */
             color: #9CA3AF; /* text-gray-400 */
@@ -302,6 +327,18 @@
             margin: 0 auto 0.25rem; /* Center and add some bottom margin */
             display: block;
         }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem; /* Space between elements in a group */
+            margin-bottom: 0.5rem;
+        }
+        .input-row {
+            display: flex;
+            gap: 0.5rem; /* Space between inline elements */
+            align-items: center;
+        }
+         .input-row label { margin-top: 0; } /* Reset top margin for inline labels */
 
 
         @media (max-width: 700px) {
@@ -313,6 +350,8 @@
             #infoPanelContentArea { height: 250px; } 
             .info-content-panel { padding: 0.75rem; }
             #codeDisplayContent { padding: 0; }
+            .input-row { flex-direction: column; align-items: stretch;}
+            .input-row input[type="number"], .input-row input[type="checkbox"] { width: 100%;}
         }
     </style>
 </head>
@@ -374,14 +413,40 @@
                 <div id="schedulerContent" class="info-content-panel">
                     <div id="promptScheduler" class="w-full">
                         <h3>Planifier un Prompt</h3>
-                        <div class="flex flex-col sm:flex-row gap-2 mb-2">
-                            <input type="text" id="scheduledPromptText" placeholder="Texte du prompt à planifier..." class="flex-grow p-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400">
-                            <input type="datetime-local" id="scheduledPromptTime" class="p-2 bg-gray-600 border border-gray-500 rounded-md text-white">
-                            <button id="schedulePromptButton" class="p-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white font-semibold">Planifier</button>
+                        <div class="input-group">
+                            <input type="text" id="scheduledPromptText" placeholder="Texte du prompt..." class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md text-white placeholder-gray-400">
                         </div>
-                        <h4>Prompts Planifiés :</h4>
+                        <div class="input-group">
+                            <label for="scheduledPromptTime">Date et heure de début :</label>
+                            <input type="datetime-local" id="scheduledPromptTime" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md text-white">
+                        </div>
+                        
+                        <div class="input-group">
+                            <label for="promptFrequency">Fréquence :</label>
+                            <select id="promptFrequency" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md text-white">
+                                <option value="once">Une fois</option>
+                                <option value="daily">Quotidien</option>
+                                <option value="weekly">Hebdomadaire</option>
+                                <option value="monthly">Mensuel</option>
+                            </select>
+                        </div>
+
+                        <div id="recurrenceOptions" class="hidden">
+                            <div class="input-group">
+                                <label for="promptRepetitions">Nombre de répétitions :</label>
+                                <input type="number" id="promptRepetitions" min="1" value="1" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md text-white">
+                            </div>
+                            <div class="input-row items-center mt-2">
+                                <input type="checkbox" id="promptIndefinite" class="p-2 bg-gray-600 border-gray-500 rounded-md text-white">
+                                <label for="promptIndefinite" class="ml-2 text-sm text-gray-300">Répéter indéfiniment</label>
+                            </div>
+                        </div>
+                        
+                        <button id="schedulePromptButton" class="mt-3 w-full p-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white font-semibold">Planifier</button>
+                        
+                        <h4 class="mt-4">Prompts Planifiés :</h4>
                         <ul id="scheduledPromptsList" class="mt-2 space-y-1">
-                        </ul>
+                           </ul>
                     </div>
                 </div>
             </div>
@@ -461,10 +526,16 @@
         const webcamError = document.getElementById('webcamError');
         const snapshotCanvas = document.getElementById('snapshotCanvas');
         const interruptModeButton = document.getElementById('interruptModeButton'); 
+        // Scheduler DOM Elements
         const scheduledPromptTextInput = document.getElementById('scheduledPromptText');
         const scheduledPromptTimeInput = document.getElementById('scheduledPromptTime');
         const schedulePromptButton = document.getElementById('schedulePromptButton');
         const scheduledPromptsListUI = document.getElementById('scheduledPromptsList');
+        const promptFrequencyInput = document.getElementById('promptFrequency');
+        const recurrenceOptionsDiv = document.getElementById('recurrenceOptions');
+        const promptRepetitionsInput = document.getElementById('promptRepetitions');
+        const promptIndefiniteCheckbox = document.getElementById('promptIndefinite');
+
         const attachFileButton = document.getElementById('attachFileButton');
         const fileInput = document.getElementById('fileInput');
         const filePreviewContainer = document.getElementById('filePreview');
@@ -499,8 +570,8 @@
         const codeCanvasIcon = toggleCodeCanvasButton.querySelector('i');
 
         // --- Backend URL ---
-        const backendHttpUrl = 'http://localhost:5000';
-        const backendWsUrl = 'ws://localhost:5000/api/chat_ws';
+        const backendHttpUrl = 'http://localhost:5000'; // Replace if your backend runs elsewhere
+        const backendWsUrl = 'ws://localhost:5000/api/chat_ws'; // Replace if your backend runs elsewhere
 
         // --- WebSocket ---
         let ws = null;
@@ -511,11 +582,11 @@
         let gMap; 
         let directionsService;
         let directionsRenderer;
-        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; 
+        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; // Default to Paris
         let currentMapCenter = defaultMapCenter;
         let currentMapZoom = 12;
         let activeInfoPanelId = 'mapContent';
-        let userLocatedCity = "Thonon-les-Bains"; 
+        let userLocatedCity = "Thonon-les-Bains"; // Default city
         let userLatitude = null;
         let userLongitude = null;
 
@@ -532,8 +603,7 @@
         let interruptEvaEnabled = false; 
         let evaIsCurrentlySpeaking = false; 
         let scheduledPrompts = []; 
-        let attachedFile = null; // { name: string, type: 'image' | 'text', data: string (base64 or text content) }
-
+        let attachedFile = null; 
 
         // --- OpenWeatherMap API Key (REPLACE with your actual key) ---
         const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
@@ -851,8 +921,11 @@
         // --- Google Maps Functions ---
         window.initMap = function() {
             console.log("Google Maps API chargée.");
-            const apiKey = "YOUR_GOOGLE_MAPS_API_KEY"; 
-            if (apiKey === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKey) { 
+            // Ensure the API key is replaced in the HTML file where it says YOUR_GOOGLE_MAPS_API_KEY
+            const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+            const apiKeyFromScript = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null;
+
+            if (!apiKeyFromScript || apiKeyFromScript === "YOUR_GOOGLE_MAPS_API_KEY") { 
                  console.error("Clé API Google Maps non configurée. Veuillez remplacer YOUR_GOOGLE_MAPS_API_KEY dans le code HTML.");
                  if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps requise.</p>";
                  return;
@@ -1208,17 +1281,17 @@
             
             const requestData = { 
                 text: messageTextToSend, 
-                imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, // Prioritize attached file over webcam if both active
-                fileData: null, // Will be populated if a file is attached
+                imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, 
+                fileData: null, 
                 fileName: null,
-                fileType: null // 'image' or 'text'
+                fileType: null 
             };
 
             if (attachedFile) {
                 requestData.fileData = attachedFile.data;
                 requestData.fileName = attachedFile.name;
                 requestData.fileType = attachedFile.type;
-                if (!messageTextToSend) { // If no text, use filename as placeholder text for chat display
+                if (!messageTextToSend) { 
                     messageTextToSend = `Fichier joint : ${attachedFile.name}`;
                 }
             }
@@ -1226,7 +1299,7 @@
             if (!messageTextToSend && !requestData.imageData && !requestData.fileData) { 
                 statusText.textContent = speechTranscript ? 'Rien compris.' : 'Rien à envoyer.'; 
                 messageInput.value = ''; 
-                if (attachedFile) clearAttachedFile(); // Clear if only file was there and send failed
+                if (attachedFile) clearAttachedFile(); 
                 restartRecognitionAfterEva(); 
                 return; 
             }
@@ -1237,7 +1310,6 @@
                 return; 
             }
             
-            // Add user message to chat (text part only, or filename if only file)
             addMessageToChat(messageTextToSend || `Fichier : ${requestData.fileName}`, 'user');
 
             if (!interruptEvaEnabled) { 
@@ -1257,7 +1329,7 @@
             try { 
                 ws.send(JSON.stringify(requestData)); 
                 messageInput.value = ''; 
-                clearAttachedFile(); // Clear file after sending
+                clearAttachedFile(); 
             } catch (error) { 
                 console.error("Erreur envoi WebSocket:", error); 
                 addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); 
@@ -1373,73 +1445,308 @@
         function schedulePrompt() {
             const text = scheduledPromptTextInput.value.trim();
             const timeString = scheduledPromptTimeInput.value;
+            const frequency = promptFrequencyInput.value;
+            const indefinite = promptIndefiniteCheckbox.checked;
+            let repetitions = parseInt(promptRepetitionsInput.value, 10);
 
             if (!text || !timeString) {
                 addMessageToChat("Veuillez entrer un texte pour le prompt et une heure de planification.", "assistant");
-                setActiveInfoPanel('schedulerContent', true); 
+                setActiveInfoPanel('schedulerContent', true);
                 return;
             }
+            if (frequency !== 'once' && !indefinite && (isNaN(repetitions) || repetitions < 1)) {
+                addMessageToChat("Veuillez entrer un nombre de répétitions valide.", "assistant");
+                setActiveInfoPanel('schedulerContent', true);
+                return;
+            }
+            if (frequency !== 'once' && indefinite) {
+                repetitions = 0; // Sentinel for indefinite
+            }
 
-            const scheduledTime = new Date(timeString).getTime();
+
+            const initialScheduledTime = new Date(timeString).getTime();
             const currentTime = new Date().getTime();
-            const delay = scheduledTime - currentTime;
-
-            if (delay <= 0) {
+            
+            if (initialScheduledTime <= currentTime) {
                 addMessageToChat("L'heure planifiée est déjà passée. Veuillez choisir une heure future.", "assistant");
-                setActiveInfoPanel('schedulerContent', true); 
+                setActiveInfoPanel('schedulerContent', true);
                 return;
             }
 
-            const promptId = `prompt-${Date.now()}`; 
+            const promptId = `prompt-${Date.now()}`;
+            const newPrompt = {
+                id: promptId,
+                text: text,
+                time: initialScheduledTime, // This will be the next execution time
+                originalScheduledTime: initialScheduledTime, // Keep the very first user-defined time
+                frequency: frequency,
+                repetitions: repetitions, // 0 if indefinite
+                indefinite: indefinite,
+                executedCount: 0,
+                isActive: true,
+                timeoutId: null
+            };
 
-            const timeoutId = setTimeout(() => {
-                addMessageToChat(`Exécution du prompt planifié : "${text}"`, "assistant");
-                sendMessageViaWebSocket(text); // Send only text, no attached file for scheduled prompts
-                scheduledPrompts = scheduledPrompts.filter(p => p.id !== promptId);
-                renderScheduledPrompts();
-            }, delay);
-
-            scheduledPrompts.push({ id: promptId, text, time: scheduledTime, timeoutId });
+            scheduledPrompts.push(newPrompt);
+            scheduleNextOccurrence(promptId); // This will set the first timeout
+            
             renderScheduledPrompts();
-            scheduledPromptTextInput.value = ""; 
-            addMessageToChat(`Prompt planifié pour ${new Date(scheduledTime).toLocaleString('fr-FR')}: "${text}"`, "assistant");
-            setActiveInfoPanel('schedulerContent', true); 
+            scheduledPromptTextInput.value = "";
+            // Reset recurrence fields to default
+            promptFrequencyInput.value = 'once';
+            recurrenceOptionsDiv.classList.add('hidden');
+            promptRepetitionsInput.value = "1";
+            promptIndefiniteCheckbox.checked = false;
+            promptRepetitionsInput.disabled = false;
+
+
+            let scheduleMessage = `Prompt "${text}" planifié pour ${new Date(initialScheduledTime).toLocaleString('fr-FR')}`;
+            if (frequency !== 'once') {
+                scheduleMessage += `, fréquence: ${translateFrequency(frequency)}`;
+                if (!indefinite) scheduleMessage += `, ${repetitions} fois`;
+                else scheduleMessage += `, indéfiniment`;
+            }
+            scheduleMessage += ".";
+            addMessageToChat(scheduleMessage, "assistant");
+            setActiveInfoPanel('schedulerContent', true);
         }
+
+        function calculateNextTime(baseTime, frequency) {
+            const nextDate = new Date(baseTime);
+            switch (frequency) {
+                case 'daily':
+                    nextDate.setDate(nextDate.getDate() + 1);
+                    break;
+                case 'weekly':
+                    nextDate.setDate(nextDate.getDate() + 7);
+                    break;
+                case 'monthly':
+                    nextDate.setMonth(nextDate.getMonth() + 1);
+                    break;
+                default: // 'once' or unknown
+                    return null; 
+            }
+            return nextDate;
+        }
+        
+        function scheduleNextOccurrence(promptId) {
+            const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
+            if (promptIndex === -1) return;
+
+            const prompt = scheduledPrompts[promptIndex];
+            if (prompt.timeoutId) clearTimeout(prompt.timeoutId); // Clear existing timeout if any
+
+            if (!prompt.isActive) { // If paused, don't schedule a new timeout
+                console.log(`Prompt ${prompt.id} is paused. Not scheduling next occurrence yet.`);
+                renderScheduledPrompts(); // Update UI to show it's paused
+                return;
+            }
+            
+            let targetTime = prompt.time;
+            const currentTime = Date.now();
+
+            // If the target time is in the past (e.g., computer was off, or resuming a past task)
+            // find the next valid future occurrence based on its original schedule and frequency
+            if (targetTime < currentTime && prompt.frequency !== 'once') {
+                let newCalculatedTime = new Date(prompt.originalScheduledTime); // Start from the original time
+                if (prompt.frequency === 'daily') {
+                    while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) { // prompt.time might be a future time if it was manually set
+                        newCalculatedTime.setDate(newCalculatedTime.getDate() + 1);
+                    }
+                } else if (prompt.frequency === 'weekly') {
+                     while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) {
+                        newCalculatedTime.setDate(newCalculatedTime.getDate() + 7);
+                    }
+                } else if (prompt.frequency === 'monthly') {
+                     while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) {
+                        newCalculatedTime.setMonth(newCalculatedTime.getMonth() + 1);
+                    }
+                }
+                targetTime = newCalculatedTime.getTime();
+                prompt.time = targetTime; // Update prompt's next execution time
+            }
+
+
+            const delay = targetTime - currentTime;
+            if (delay < 0 && prompt.frequency === 'once') { // For 'once' tasks, if in past, maybe run immediately or notify
+                 addMessageToChat(`Prompt unique "${prompt.text}" est dans le passé et ne sera pas exécuté.`, "assistant");
+                 scheduledPrompts.splice(promptIndex, 1); // Remove it
+                 renderScheduledPrompts();
+                 return;
+            }
+             if (delay < 0 && prompt.frequency !== 'once') { // Should have been caught by above adjustment
+                console.warn(`Prompt récurrent ${prompt.id} a un délai négatif après ajustement. Prochaine exécution manquée?`);
+             }
+
+
+            prompt.timeoutId = setTimeout(() => {
+                executeAndReschedule(promptId);
+            }, Math.max(0, delay)); // Ensure delay is not negative
+
+            console.log(`Prompt ${prompt.id} (${prompt.text}) next occurrence scheduled for ${new Date(prompt.time).toLocaleString('fr-FR')} (Timeout ID: ${prompt.timeoutId})`);
+            renderScheduledPrompts(); // Update UI
+        }
+
+
+        function executeAndReschedule(promptId) {
+            const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
+            if (promptIndex === -1) {
+                console.warn(`Prompt ${promptId} not found for execution.`);
+                return;
+            }
+            const prompt = scheduledPrompts[promptIndex];
+
+            if (!prompt.isActive) {
+                console.log(`Prompt ${prompt.id} is paused. Skipping execution, will reschedule.`);
+                // Even if paused, we need to ensure its 'time' is set for the *next* theoretical run
+                // so that when resumed, it picks up correctly.
+                // However, scheduleNextOccurrence is called on resume, so this might not be needed here.
+                // For now, let's just log and not execute. The timeout chain effectively stops here until resume.
+                // On resume, scheduleNextOccurrence will be called.
+                return; 
+            }
+
+            addMessageToChat(`Exécution du prompt planifié : "${prompt.text}"`, "assistant");
+            sendMessageViaWebSocket(prompt.text); 
+            prompt.executedCount++;
+
+            if (prompt.frequency === 'once' || (!prompt.indefinite && prompt.executedCount >= prompt.repetitions)) {
+                // Task is finished
+                addMessageToChat(`Prompt "${prompt.text}" terminé.`, "assistant");
+                if(prompt.timeoutId) clearTimeout(prompt.timeoutId);
+                scheduledPrompts.splice(promptIndex, 1);
+            } else {
+                // Reschedule for next occurrence
+                const nextTime = calculateNextTime(prompt.time, prompt.frequency);
+                if (nextTime) {
+                    prompt.time = nextTime.getTime(); // Update to the new next execution time
+                    scheduleNextOccurrence(promptId); // This will set the new timeout
+                } else {
+                    console.error(`Could not calculate next time for prompt ${prompt.id}`);
+                    if(prompt.timeoutId) clearTimeout(prompt.timeoutId);
+                    scheduledPrompts.splice(promptIndex, 1); // Remove if error
+                }
+            }
+            renderScheduledPrompts();
+        }
+
 
         function cancelScheduledPrompt(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex > -1) {
-                clearTimeout(scheduledPrompts[promptIndex].timeoutId);
-                const canceledPromptText = scheduledPrompts[promptIndex].text;
+                const canceledPrompt = scheduledPrompts[promptIndex];
+                if (canceledPrompt.timeoutId) {
+                    clearTimeout(canceledPrompt.timeoutId);
+                }
+                const canceledPromptText = canceledPrompt.text;
                 scheduledPrompts.splice(promptIndex, 1);
                 renderScheduledPrompts();
                 addMessageToChat(`Prompt planifié annulé : "${canceledPromptText}"`, "assistant");
-                setActiveInfoPanel('schedulerContent', true); 
+                setActiveInfoPanel('schedulerContent', true);
+            }
+        }
+
+        function togglePromptActiveState(promptId) {
+            const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
+            if (promptIndex === -1) return;
+
+            const prompt = scheduledPrompts[promptIndex];
+            prompt.isActive = !prompt.isActive;
+
+            if (prompt.isActive) {
+                // Resuming
+                addMessageToChat(`Prompt "${prompt.text}" repris.`, "assistant");
+                // Recalculate next occurrence if its stored 'time' is in the past
+                if (prompt.time < Date.now() && prompt.frequency !== 'once') {
+                    let newTime = new Date(prompt.originalScheduledTime); // Start from original time
+                    const now = Date.now();
+                    while (newTime.getTime() <= now) { // Find the first occurrence strictly after now
+                        const calculated = calculateNextTime(newTime.getTime(), prompt.frequency);
+                        if (!calculated) break; // Should not happen for recurring
+                        newTime = calculated;
+                    }
+                    prompt.time = newTime.getTime();
+                }
+                scheduleNextOccurrence(promptId);
+            } else {
+                // Pausing
+                addMessageToChat(`Prompt "${prompt.text}" mis en pause.`, "assistant");
+                if (prompt.timeoutId) {
+                    clearTimeout(prompt.timeoutId);
+                    prompt.timeoutId = null;
+                }
+            }
+            renderScheduledPrompts();
+        }
+        
+        function translateFrequency(freq) {
+            switch(freq) {
+                case 'once': return 'Une fois';
+                case 'daily': return 'Quotidien';
+                case 'weekly': return 'Hebdomadaire';
+                case 'monthly': return 'Mensuel';
+                default: return freq;
             }
         }
 
         function renderScheduledPrompts() {
-            scheduledPromptsListUI.innerHTML = ""; 
+            scheduledPromptsListUI.innerHTML = "";
             if (scheduledPrompts.length === 0) {
                 scheduledPromptsListUI.innerHTML = "<li class='text-gray-400'>Aucun prompt planifié.</li>";
                 return;
             }
-            scheduledPrompts.forEach(prompt => {
+
+            // Sort prompts by their next execution time
+            const sortedPrompts = [...scheduledPrompts].sort((a, b) => a.time - b.time);
+
+            sortedPrompts.forEach(prompt => {
                 const listItem = document.createElement('li');
                 const date = new Date(prompt.time);
+                let detailsText = `"${prompt.text}"`;
+                
+                if (prompt.isActive) {
+                    detailsText += ` - Prochaine exécution: ${date.toLocaleString('fr-FR')}`;
+                } else {
+                     detailsText += ` - PAUSE (Prochaine exécution prévue: ${date.toLocaleString('fr-FR')})`;
+                }
+
+
+                if (prompt.frequency !== 'once') {
+                    detailsText += ` (${translateFrequency(prompt.frequency)}`;
+                    if (!prompt.indefinite) {
+                        detailsText += `, ${prompt.executedCount}/${prompt.repetitions} exécuté(s)`;
+                    } else {
+                        detailsText += `, ${prompt.executedCount} exécuté(s) - Indéfini`;
+                    }
+                    detailsText += ')';
+                }
+
+
                 listItem.innerHTML = `
-                    <span>"${prompt.text}" à ${date.toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})} le ${date.toLocaleDateString('fr-FR')}</span>
-                    <button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button>
+                    <div class="prompt-details">${detailsText}</div>
+                    <div class="prompt-actions">
+                        ${prompt.frequency !== 'once' ? 
+                            (prompt.isActive ? 
+                                `<button data-id="${prompt.id}" class="pause-prompt-button">Pause</button>` :
+                                `<button data-id="${prompt.id}" class="resume-prompt-button">Reprendre</button>`
+                            ) : ''}
+                        <button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button>
+                    </div>
                 `;
                 scheduledPromptsListUI.appendChild(listItem);
             });
 
             document.querySelectorAll('.cancel-prompt-button').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    cancelScheduledPrompt(event.target.dataset.id);
-                });
+                button.addEventListener('click', (event) => cancelScheduledPrompt(event.target.dataset.id));
+            });
+            document.querySelectorAll('.pause-prompt-button').forEach(button => {
+                button.addEventListener('click', (event) => togglePromptActiveState(event.target.dataset.id));
+            });
+            document.querySelectorAll('.resume-prompt-button').forEach(button => {
+                button.addEventListener('click', (event) => togglePromptActiveState(event.target.dataset.id));
             });
         }
+
 
         // --- File Handling Functions ---
         function handleFileSelect(event) {
@@ -1465,14 +1772,14 @@
                        fileName.endsWith('.json') || fileName.endsWith('.md')) {
                 reader.onload = (e) => {
                     attachedFile = { name: fileName, type: 'text', data: e.target.result };
-                    displayFilePreview(fileName, null); // No visual preview for text, just name
+                    displayFilePreview(fileName, null); 
                 };
                 reader.readAsText(file);
             } else {
                 addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant");
                 clearAttachedFile();
             }
-            fileInput.value = ''; // Reset file input to allow selecting the same file again
+            fileInput.value = ''; 
         }
 
         function displayFilePreview(fileName, imageSrc = null) {
@@ -1487,9 +1794,8 @@
         function clearAttachedFile() {
             attachedFile = null;
             filePreviewContainer.innerHTML = '';
-            fileInput.value = ''; // Important to allow re-selection of the same file
+            fileInput.value = ''; 
         }
-
 
         // --- Event Listeners ---
         sendButton.addEventListener('click', () => sendMessageViaWebSocket());
@@ -1543,11 +1849,30 @@
         attachFileButton.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileSelect);
 
+        promptFrequencyInput.addEventListener('change', () => {
+            if (promptFrequencyInput.value === 'once') {
+                recurrenceOptionsDiv.classList.add('hidden');
+            } else {
+                recurrenceOptionsDiv.classList.remove('hidden');
+            }
+        });
+
+        promptIndefiniteCheckbox.addEventListener('change', () => {
+            promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
+            if (promptIndefiniteCheckbox.checked) {
+                promptRepetitionsInput.value = ""; // Clear value if indefinite
+            } else {
+                 promptRepetitionsInput.value = "1"; // Reset to 1 if not indefinite
+            }
+        });
+
         
         if (authorizeGoogleButton) { authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; }); }
         
         document.addEventListener('keydown', (e) => {
-            if (document.activeElement === messageInput || document.activeElement === scheduledPromptTextInput || document.activeElement === scheduledPromptTimeInput) return;
+            const activeEl = document.activeElement;
+            if (activeEl === messageInput || activeEl === scheduledPromptTextInput || activeEl === scheduledPromptTimeInput || activeEl === promptRepetitionsInput) return;
+
             if (e.code === 'Space') { 
                 e.preventDefault(); 
                 userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; 
@@ -1560,9 +1885,9 @@
             }
             else if (e.key.toLowerCase() === 'c') { e.preventDefault(); toggleWebcam(); } 
             else if (e.key.toLowerCase() === 'm') { e.preventDefault(); toggleMute(); }
-            else if (e.key.toLowerCase() === 'i') { // MODIFICATION : Ajout de la touche V
+            else if (e.key.toLowerCase() === 'i') { 
                 e.preventDefault();
-                interruptModeButton.click(); // Simule un clic sur le bouton d'interruption
+                interruptModeButton.click(); 
             }
         });
 
@@ -1614,10 +1939,16 @@
             }
             renderScheduledPrompts(); 
 
-            // Mettre à jour le titre du bouton d'interruption pour inclure la touche V
             if (interruptModeButton) {
                 interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
             }
+            // Initialize recurrence options visibility
+            if (promptFrequencyInput.value === 'once') {
+                recurrenceOptionsDiv.classList.add('hidden');
+            } else {
+                recurrenceOptionsDiv.classList.remove('hidden');
+            }
+            promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
 
 
             window.addEventListener('resize', () => { 
