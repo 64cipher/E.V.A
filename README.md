@@ -105,7 +105,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
      ```
 
      Remplacez `GOOGLE_MAPS_API_KEY` par la clé réelle.
-   * Dans le JS (ligne 609), remplacez `const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';` par votre clé OpenWeatherMap.
+   * Ligne 609, remplacez `const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';` par votre clé OpenWeatherMap.
 6. **Lancer le backend**
 
    ```bash
