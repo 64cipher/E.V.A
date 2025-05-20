@@ -101,8 +101,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    * Ouvrez `index.html` et recherchez :
 
      ```html
-     <script async defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"></script>
-     Ligne 779: if (apiKey === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKey) { 
+     <script async defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"></script> 
      ```
 
      Remplacez `GOOGLE_MAPS_API_KEY` par la clé réelle.
