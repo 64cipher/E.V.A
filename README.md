@@ -133,13 +133,16 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
 ---
 
-## Utilisation
+## Utilisation et fonctionnalités
 
 * **Voix continue** : appuyez sur **Espace** pour commencer, Space à nouveau pour arrêter.
 * **Voix ponctuelle** : cliquez sur le micro.
+* **Mode interruption** : Voix continu avec la possibilité d'interrompre E.V.A en parlant dans le micro.
+* **Envoi de fichiers supporté** : jpg, png, doc et txt
 * **Commandes supportées** : « Crée un événement demain à 14 h », « Envoie un e‑mail à Alice … », « Ajoute une tâche … », « Itinéraire jusqu’à Genève », « Recherche Web : les actus sur l'IA ».
 * EVA détecte une commande ➜ renvoie un JSON (voir `SYSTEM_MESSAGE_CONTENT` dans `main.py`) ➜ backend exécute.
 
+* **Raccourcis touches** : Caméra 'C' - Muet 'M' - Mode Interruption 'I' 
 ---
 
 ## Dépendances principales
