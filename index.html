@@ -6,7 +6,7 @@
     <title>Enhanced Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAP_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
             display: flex;
@@ -126,24 +126,28 @@
             width: 100%;
             overflow-y: auto; 
             color: #E5E7EB; 
+            padding: 1rem; /* Default padding */
         }
         .info-content-panel.active-content {
             display: flex; 
             flex-direction: column; 
         }
         
-        #mapContent, #searchContent, #emailContent, #taskContent, #calendarContent, #weatherForecastContent, #schedulerContent {
-            padding: 1rem;
+        /* Remove padding for specific panels if needed */
+        #mapContent, #codeDisplayContent, #calculatorContent {
+            padding: 0; 
         }
+        /* Ensure other panels that need padding retain it explicitly if they were reset by a broader rule */
+        #searchContent, #emailContent, #taskContent, #calendarContent, #weatherForecastContent, #schedulerContent {
+             padding: 1rem;
+        }
+
+
         #mapDiv { 
             height: 100%;
             width: 100%;
         }
         
-        #codeDisplayContent {
-             padding: 0; 
-        }
-
         #searchResultsContent h3, #emailListContent h3, #taskListContent h3, #calendarEventListContent h3, #weatherForecastDisplay h3, #promptScheduler h3 {
             font-size: 1.125rem;
             font-weight: 600;
@@ -152,6 +156,8 @@
             border-bottom: 1px solid #4B5563;
             padding-bottom: 0.5rem;
         }
+        /* No specific h3 for calculatorContent here as its padding is 0, title would be inside calculatorContainer */
+
         #searchResultsContent a, .task-item a, .calendar-event-item a { color: #60A5FA; }
         #searchResultsContent a:hover, .task-item a:hover, .calendar-event-item a:hover { text-decoration: underline; }
         .task-item, .calendar-event-item, #scheduledPromptsList li {
@@ -265,32 +271,28 @@
         }
         #evaCodeCanvasContentCode { color: #d4d4d4; font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; word-break: break-all; display: block; }
 
-        #schedulerContent { 
-            display: flex;
-            flex-direction: column;
-        }
-        #promptScheduler {
+        #schedulerContent #promptScheduler { /* Ensure promptScheduler itself is styled if needed */
             width: 100%;
         }
-         #promptScheduler label {
+         #schedulerContent #promptScheduler label {
             margin-top: 0.5rem;
             display: block;
             color: #D1D5DB;
             font-size: 0.875rem;
         }
-        #scheduledPromptsList li {
+        #schedulerContent #scheduledPromptsList li { /* Specific to scheduler */
             color: #D1D5DB; 
             display: flex;
-            flex-direction: column; /* Stack items vertically */
+            flex-direction: column; 
             justify-content: space-between;
-            align-items: flex-start; /* Align items to the start */
+            align-items: flex-start; 
             font-size: 0.875rem; 
-            gap: 0.25rem; /* Space between text and buttons */
+            gap: 0.25rem; 
         }
-        #scheduledPromptsList .prompt-details {
+        #schedulerContent #scheduledPromptsList .prompt-details {
             margin-bottom: 0.25rem;
         }
-        #scheduledPromptsList .prompt-actions button {
+        #schedulerContent #scheduledPromptsList .prompt-actions button {
             background-color: #EF4444; 
             color: white;
             padding: 0.25rem 0.5rem;
@@ -298,47 +300,129 @@
             font-size: 0.75rem; 
             margin-right: 0.25rem;
         }
-        #scheduledPromptsList .prompt-actions button:hover {
+        #schedulerContent #scheduledPromptsList .prompt-actions button:hover {
             background-color: #DC2626; 
         }
-        #scheduledPromptsList .prompt-actions .pause-prompt-button {
-            background-color: #F59E0B; /* Amber */
+        #schedulerContent #scheduledPromptsList .prompt-actions .pause-prompt-button {
+            background-color: #F59E0B; 
         }
-        #scheduledPromptsList .prompt-actions .pause-prompt-button:hover {
-            background-color: #D97706; /* Darker Amber */
+        #schedulerContent #scheduledPromptsList .prompt-actions .pause-prompt-button:hover {
+            background-color: #D97706; 
         }
-         #scheduledPromptsList .prompt-actions .resume-prompt-button {
-            background-color: #10B981; /* Green */
+         #schedulerContent #scheduledPromptsList .prompt-actions .resume-prompt-button {
+            background-color: #10B981; 
         }
-        #scheduledPromptsList .prompt-actions .resume-prompt-button:hover {
-            background-color: #059669; /* Darker Green */
+        #schedulerContent #scheduledPromptsList .prompt-actions .resume-prompt-button:hover {
+            background-color: #059669; 
         }
 
         #filePreview {
-            font-size: 0.75rem; /* text-xs */
-            color: #9CA3AF; /* text-gray-400 */
-            margin-top: 0.5rem; /* mt-2 */
+            font-size: 0.75rem; 
+            color: #9CA3AF; 
+            margin-top: 0.5rem; 
             text-align: center;
         }
         #filePreview img {
             max-height: 50px;
             max-width: 100px;
-            border-radius: 0.25rem; /* rounded-sm */
-            margin: 0 auto 0.25rem; /* Center and add some bottom margin */
+            border-radius: 0.25rem; 
+            margin: 0 auto 0.25rem; 
             display: block;
         }
         .input-group {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem; /* Space between elements in a group */
+            gap: 0.5rem; 
             margin-bottom: 0.5rem;
         }
         .input-row {
             display: flex;
-            gap: 0.5rem; /* Space between inline elements */
+            gap: 0.5rem; 
             align-items: center;
         }
-         .input-row label { margin-top: 0; } /* Reset top margin for inline labels */
+         .input-row label { margin-top: 0; } 
+
+        /* Calculator Styles */
+        #calculatorContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%; 
+            padding: 1rem; 
+            box-sizing: border-box;
+            background-color: #2D3748; 
+        }
+        #calculatorDisplay {
+            width: 100%;
+            max-width: 320px;
+            background-color: #1A202C; 
+            color: #E2E8F0; 
+            text-align: right;
+            padding: 0.75rem 1rem;
+            font-size: 1.75rem; 
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+            overflow-x: auto; 
+            white-space: nowrap;
+            border: 1px solid #4A5568;
+        }
+        #calculatorButtons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr); 
+            gap: 0.5rem;
+            width: 100%;
+            max-width: 320px;
+        }
+        .calc-button {
+            background-color: #4A5568; 
+            color: #E2E8F0;
+            border: none;
+            border-radius: 0.375rem;
+            padding: 1rem 0.5rem; 
+            font-size: 1rem; 
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .calc-button:hover {
+            background-color: #718096; 
+        }
+        .calc-button.operator {
+            background-color: #2B6CB0; 
+            color: white;
+        }
+        .calc-button.operator:hover {
+            background-color: #3182CE;
+        }
+        .calc-button.function {
+            background-color: #9B2C2C; 
+            color: white;
+        }
+        .calc-button.function:hover {
+            background-color: #C53030;
+        }
+        .calc-button.clear {
+            background-color: #B7791F; 
+            color: white;
+        }
+        .calc-button.clear:hover {
+            background-color: #D69E2E;
+        }
+        .calc-button.equals {
+            background-color: #2F855A; 
+            color: white;
+            grid-column: span 2; 
+        }
+        .calc-button.equals:hover {
+            background-color: #38A169;
+        }
+        .calc-button.zero {
+            grid-column: span 2; 
+        }
 
 
         @media (max-width: 700px) {
@@ -347,11 +431,20 @@
             #infoPanelColumn.collapsed { flex-basis: auto; height: 50px; }
             #infoPanelColumn.collapsed #infoPanelTabs,
             #infoPanelColumn.collapsed #infoPanelContentArea { display: none; }
-            #infoPanelContentArea { height: 250px; } 
+            #infoPanelContentArea { height: 300px; } /* Increased height for better calculator visibility on mobile */
+            
+            /* Ensure consistent padding for panels on mobile, unless overridden */
             .info-content-panel { padding: 0.75rem; }
-            #codeDisplayContent { padding: 0; }
+            #mapContent, #codeDisplayContent, #calculatorContent { padding: 0; } 
+            #schedulerContent { padding: 0.75rem; } /* Explicitly set padding for scheduler on mobile */
+
+
             .input-row { flex-direction: column; align-items: stretch;}
             .input-row input[type="number"], .input-row input[type="checkbox"] { width: 100%;}
+            #calculatorButtons { grid-template-columns: repeat(4, 1fr); max-width: 100%;} 
+            .calc-button.equals { grid-column: span 2;}
+            .calc-button.zero { grid-column: span 2;}
+            .calc-button { padding: 0.75rem 0.25rem; font-size: 0.9rem;}
         }
     </style>
 </head>
@@ -374,22 +467,35 @@
                 <button class="info-tab-button" data-target="weatherForecastContent">Météo</button>
                 <button class="info-tab-button" data-target="codeDisplayContent">Code</button>
                 <button class="info-tab-button" data-target="schedulerContent">Planificateur</button> 
+                <button class="info-tab-button" data-target="calculatorContent">Calculatrice</button> 
             </div>
             <div id="infoPanelContentArea">
                 <div id="mapContent" class="info-content-panel active-content">
                     <div id="mapDiv"></div>
                 </div>
                 <div id="searchContent" class="info-content-panel">
-                    <div id="searchResultsContent"></div>
+                    <div id="searchResultsContent">
+                        <h3>Résultats de recherche</h3>
+                         <p>Effectuez une recherche pour voir les résultats ici.</p>
+                    </div>
                 </div>
                 <div id="emailContent" class="info-content-panel">
-                    <div id="emailListContent"></div>
+                    <div id="emailListContent">
+                        <h3>Emails Non Lus</h3>
+                        <p>Les emails non lus s'afficheront ici.</p>
+                    </div>
                 </div>
                 <div id="taskContent" class="info-content-panel">
-                    <div id="taskListContent"></div>
+                    <div id="taskListContent">
+                        <h3>Liste des Tâches</h3>
+                        <p>Vos tâches s'afficheront ici.</p>
+                    </div>
                 </div>
                 <div id="calendarContent" class="info-content-panel">
-                    <div id="calendarEventListContent"></div>
+                    <div id="calendarEventListContent">
+                        <h3>Événements du Calendrier</h3>
+                        <p>Vos événements de calendrier s'afficheront ici.</p>
+                    </div>
                 </div>
                 <div id="weatherForecastContent" class="info-content-panel">
                     <div id="weatherForecastDisplay">
@@ -398,19 +504,19 @@
                     </div>
                 </div>
                 <div id="codeDisplayContent" class="info-content-panel">
-                    <div id="evaCodeCanvasContainer" class="w-full rounded-lg">
-                        <div class="flex justify-between items-center p-3 bg-gray-800 rounded-t-lg">
-                            <h3 class="text-lg font-semibold text-gray-200">Code généré par EVA</h3>
+                    <div id="evaCodeCanvasContainer" class="w-full h-full rounded-lg">
+                        <div class="flex justify-between items-center p-3 bg-gray-700 rounded-t-lg">
+                            <h3 class="text-lg font-semibold text-gray-200 mb-0 border-b-0 pb-0">Code généré par EVA</h3>
                             <button id="toggleCodeCanvasButton" class="p-2 text-gray-400 hover:text-white rounded-md">
                                 <i class="fas fa-plus"></i>
                             </button>
                         </div>
-                        <div id="evaCodeCanvasContentWrapper" class="rounded-b-lg">
-                            <pre><code id="evaCodeCanvasContentCode" class="text-sm"></code></pre>
+                        <div id="evaCodeCanvasContentWrapper" class="rounded-b-lg h-full">
+                            <pre class="h-full"><code id="evaCodeCanvasContentCode" class="text-sm h-full"></code></pre>
                         </div>
                     </div>
                 </div>
-                <div id="schedulerContent" class="info-content-panel">
+                <div id="schedulerContent" class="info-content-panel"> 
                     <div id="promptScheduler" class="w-full">
                         <h3>Planifier un Prompt</h3>
                         <div class="input-group">
@@ -444,9 +550,45 @@
                         
                         <button id="schedulePromptButton" class="mt-3 w-full p-2 bg-indigo-600 hover:bg-indigo-700 rounded-md text-white font-semibold">Planifier</button>
                         
-                        <h4 class="mt-4">Prompts Planifiés :</h4>
+                        <h4 class="mt-4 text-base font-medium text-gray-300">Prompts Planifiés :</h4>
                         <ul id="scheduledPromptsList" class="mt-2 space-y-1">
                            </ul>
+                    </div>
+                </div>
+                <div id="calculatorContent" class="info-content-panel"> 
+                    <div id="calculatorContainer">
+                        <div id="calculatorDisplay">0</div>
+                        <div id="calculatorButtons">
+                            <button class="calc-button function" data-value="sin">sin</button>
+                            <button class="calc-button function" data-value="cos">cos</button>
+                            <button class="calc-button function" data-value="tan">tan</button>
+                            <button class="calc-button function" data-value="sqrt">√</button>
+                            <button class="calc-button function" data-value="^">xʸ</button>
+                            <button class="calc-button function" data-value="log">log</button>
+                            <button class="calc-button function" data-value="ln">ln</button>
+                            <button class="calc-button function" data-value="(">(</button>
+                            <button class="calc-button function" data-value=")">)</button>
+                            <button class="calc-button clear" data-value="C">C</button>
+                            <button class="calc-button" data-value="7">7</button>
+                            <button class="calc-button" data-value="8">8</button>
+                            <button class="calc-button" data-value="9">9</button>
+                            <button class="calc-button operator" data-value="/">÷</button>
+                            <button class="calc-button function" data-value="pi">π</button>
+                            <button class="calc-button" data-value="4">4</button>
+                            <button class="calc-button" data-value="5">5</button>
+                            <button class="calc-button" data-value="6">6</button>
+                            <button class="calc-button operator" data-value="*">×</button>
+                            <button class="calc-button function" data-value="e">e</button>
+                            <button class="calc-button" data-value="1">1</button>
+                            <button class="calc-button" data-value="2">2</button>
+                            <button class="calc-button" data-value="3">3</button>
+                            <button class="calc-button operator" data-value="-">−</button>
+                            <button class="calc-button function" data-value="!">x!</button>
+                            <button class="calc-button zero" data-value="0">0</button>
+                            <button class="calc-button" data-value=".">.</button>
+                            <button class="calc-button operator" data-value="+">+</button>
+                            <button class="calc-button equals" data-value="=">=</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -554,6 +696,7 @@
         const weatherForecastContentPanel = document.getElementById('weatherForecastContent');
         const codeDisplayContentPanel = document.getElementById('codeDisplayContent');
         const schedulerContentPanel = document.getElementById('schedulerContent'); 
+        const calculatorContentPanel = document.getElementById('calculatorContent'); 
 
 
         const mapElementDiv = document.getElementById('mapDiv'); 
@@ -569,9 +712,18 @@
         const evaCodeCanvasContentCode = document.getElementById('evaCodeCanvasContentCode');
         const codeCanvasIcon = toggleCodeCanvasButton.querySelector('i');
 
+        // Calculator Elements
+        const calculatorDisplay = document.getElementById('calculatorDisplay');
+        const calculatorButtonsContainer = document.getElementById('calculatorButtons'); // Renamed to avoid conflict if any
+        let calculatorCurrentInput = "";
+        let calculatorOperator = null;
+        let calculatorPreviousInput = "";
+        let calculatorResetDisplay = false;
+
+
         // --- Backend URL ---
-        const backendHttpUrl = 'http://localhost:5000'; // Replace if your backend runs elsewhere
-        const backendWsUrl = 'ws://localhost:5000/api/chat_ws'; // Replace if your backend runs elsewhere
+        const backendHttpUrl = 'http://localhost:5000'; 
+        const backendWsUrl = 'ws://localhost:5000/api/chat_ws'; 
 
         // --- WebSocket ---
         let ws = null;
@@ -582,11 +734,11 @@
         let gMap; 
         let directionsService;
         let directionsRenderer;
-        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; // Default to Paris
+        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; 
         let currentMapCenter = defaultMapCenter;
         let currentMapZoom = 12;
         let activeInfoPanelId = 'mapContent';
-        let userLocatedCity = "Thonon-les-Bains"; // Default city
+        let userLocatedCity = "Thonon-les-Bains"; 
         let userLatitude = null;
         let userLongitude = null;
 
@@ -605,7 +757,7 @@
         let scheduledPrompts = []; 
         let attachedFile = null; 
 
-        // --- OpenWeatherMap API Key (REPLACE with your actual key) ---
+        // --- OpenWeatherMap API Key ---
         const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
 
         // --- Dashboard Functions ---
@@ -671,7 +823,6 @@
         }
 
         function getUserLocationAndFetchWeather() {
-            const weatherLocationEl = document.getElementById('weatherLocation');
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
@@ -681,9 +832,7 @@
                             fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${userLatitude}&lon=${userLongitude}&appid=${openWeatherMapApiKey}&lang=fr&units=metric`)
                                 .then(response => response.json())
                                 .then(data => {
-                                    if (data.name) {
-                                        userLocatedCity = data.name;
-                                    }
+                                    if (data.name) userLocatedCity = data.name;
                                     fetchWeatherDashboard(userLatitude, userLongitude);
                                 })
                                 .catch(err => {
@@ -789,9 +938,7 @@
             
             const effectiveContinuous = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
             currentRecognition.continuous = effectiveContinuous; 
-            console.log(`Recognition starting. interruptEvaEnabled: ${interruptEvaEnabled}, userExplicitlyWantsContinuousListen: ${userExplicitlyWantsContinuousListen}, effectiveContinuous: ${effectiveContinuous}`);
-
-
+            
             currentRecognition.onstart = () => {
                 recognitionActive = true; 
                 listeningIndicator.classList.add('active'); 
@@ -800,14 +947,9 @@
                 micButton.innerHTML = '<i class="fas fa-stop"></i>';
                 
                 if (interruptEvaEnabled && evaIsCurrentlySpeaking) {
-                    console.log("Mode interruption: EVA parlait, interruption...");
                     statusText.textContent = "Interruption d'EVA...";
-                    if (audioPlayer && !audioPlayer.paused) {
-                        audioPlayer.pause(); 
-                    }
-                    if (speechSynthesis.speaking) {
-                        speechSynthesis.cancel(); 
-                    }
+                    if (audioPlayer && !audioPlayer.paused) audioPlayer.pause(); 
+                    if (speechSynthesis.speaking) speechSynthesis.cancel(); 
                 } else {
                      statusText.textContent = effectiveContinuous ? 'Écoute continue...' : 'Écoute...';
                 }
@@ -815,25 +957,14 @@
 
             currentRecognition.onresult = (event) => { 
                 const lastResultIndex = event.results.length - 1;
-                if (lastResultIndex < 0) { 
-                    console.warn("onresult called with no results.");
-                    return;
-                }
+                if (lastResultIndex < 0) return;
                 const transcript = event.results[lastResultIndex][0].transcript.trim();
-                console.log(`onresult - continuous: ${currentRecognition.continuous}, transcript: "${transcript}"`, event.results);
-
-                if (transcript) {
-                    sendMessageViaWebSocket(transcript);
-                } else {
-                    console.warn("Empty transcript from onresult");
-                }
+                if (transcript) sendMessageViaWebSocket(transcript);
             };
 
             currentRecognition.onerror = (event) => {
-                console.error('Erreur SpeechRecognition:', event.error, event.message);
                 const wasRecognizingBeforeError = recognitionActive;
                 recognitionActive = false; 
-
                 listeningIndicator.classList.remove('active');
                 micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
@@ -850,7 +981,6 @@
                 
                 const shouldRestart = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
                 if (shouldRestart && wasRecognizingBeforeError && (interruptEvaEnabled || !pausedForEvaOutput)) {
-                     console.log(`Error occurred, but trying to restart. EffectiveContinuous: ${shouldRestart}`);
                      setTimeout(createAndStartRecognition, 250);
                 } else if (!shouldRestart) {
                      statusText.textContent = errorMsg + " Écoute arrêtée.";
@@ -860,28 +990,22 @@
             currentRecognition.onend = () => {
                 const wasRecognizingBeforeEnd = recognitionActive; 
                 recognitionActive = false; 
-
                 listeningIndicator.classList.remove('active');
                 micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
                 micButton.innerHTML = '<i class="fas fa-microphone"></i>';
                 
                 const shouldBeContinuousBasedOnFlags = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
-                console.log(`Recognition ended. interruptEvaEnabled: ${interruptEvaEnabled}, userExplicitlyWantsContinuousListen: ${userExplicitlyWantsContinuousListen}, shouldBeContinuousBasedOnFlags: ${shouldBeContinuousBasedOnFlags}, wasRecognizing: ${wasRecognizingBeforeEnd}, pausedForEvaOutput: ${pausedForEvaOutput}`);
 
                 if (pausedForEvaOutput && !interruptEvaEnabled) { 
-                    console.log("onend: Recognition stopped because EVA is speaking or message sent (interrupt OFF). Waiting for EVA to finish or for explicit user action.");
                     statusText.textContent = "En attente d'EVA...";
                 } else if (shouldBeContinuousBasedOnFlags && wasRecognizingBeforeEnd) {
-                    console.log("onend: Should be continuous and was recognizing (and not paused for EVA). Restarting.");
                     createAndStartRecognition();
                 } else if (!shouldBeContinuousBasedOnFlags) {
                     statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
-                    console.log("onend: Not continuous. Setting default status.");
                 }
             };
             try { currentRecognition.start(); } catch (e) {
-                console.error("Erreur démarrage reco:", e); 
                 recognitionActive = false; 
                 statusText.textContent = "Erreur démarrage reco.";
                 listeningIndicator.classList.remove('active'); 
@@ -891,16 +1015,14 @@
             }
         }
         
-        
-
         // --- Info Panel Management ---
         function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) {
             if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) {
                 infoPanelColumn.classList.remove('collapsed');
                 const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left');
                 const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
-                leftIcon.style.display = 'inline-block';
-                rightIcon.style.display = 'none';
+                if(leftIcon) leftIcon.style.display = 'inline-block';
+                if(rightIcon) rightIcon.style.display = 'none';
             }
 
             document.querySelectorAll('.info-tab-button').forEach(button => {
@@ -913,25 +1035,22 @@
             });
             activeInfoPanelId = targetPanelId;
 
-            if (targetPanelId === 'mapContent' && gMap) { 
-                setTimeout(() => { if (google && google.maps && gMap) { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); } }, 350);
+            if (targetPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { 
+                setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350);
             }
         }
 
         // --- Google Maps Functions ---
         window.initMap = function() {
-            console.log("Google Maps API chargée.");
-            // Ensure the API key is replaced in the HTML file where it says YOUR_GOOGLE_MAPS_API_KEY
             const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
             const apiKeyFromScript = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null;
 
-            if (!apiKeyFromScript || apiKeyFromScript === "YOUR_GOOGLE_MAPS_API_KEY") { 
-                 console.error("Clé API Google Maps non configurée. Veuillez remplacer YOUR_GOOGLE_MAPS_API_KEY dans le code HTML.");
-                 if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps requise.</p>";
+            if (!apiKeyFromScript || apiKeyFromScript === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKeyFromScript.startsWith("AIza")) { 
+                 if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps incorrecte ou manquante.</p>";
                  return;
             }
 
-            if (typeof google === 'undefined' || typeof google.maps === 'undefined') { console.error("API Google Maps non chargée."); addMessageToChat("Erreur: API Google Maps non chargée.", "assistant"); setActiveInfoPanel(null, false); return; }
+            if (typeof google === 'undefined' || typeof google.maps === 'undefined') { addMessageToChat("Erreur: API Google Maps non chargée.", "assistant"); return; }
             try {
                 directionsService = new google.maps.DirectionsService(); 
                 directionsRenderer = new google.maps.DirectionsRenderer();
@@ -942,23 +1061,19 @@
                     styles: [ {elementType:"geometry",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.stroke",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.fill",stylers:[{color:"#746855"}]},{featureType:"administrative.locality",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#263c3f"}]},{featureType:"poi.park",elementType:"labels.text.fill",stylers:[{color:"#6b9a76"}]},{featureType:"road",elementType:"geometry",stylers:[{color:"#38414e"}]},{featureType:"road",elementType:"geometry.stroke",stylers:[{color:"#212a37"}]},{featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#9ca5b3"}]},{featureType:"road.highway",elementType:"geometry",stylers:[{color:"#746855"}]},{featureType:"road.highway",elementType:"geometry.stroke",stylers:[{color:"#1f2835"}]},{featureType:"road.highway",elementType:"labels.text.fill",stylers:[{color:"#f3d19c"}]},{featureType:"transit",elementType:"geometry",stylers:[{color:"#2f3948"}]},{featureType:"transit.station",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"water",elementType:"geometry",stylers:[{color:"#17263c"}]},{featureType:"water",elementType:"labels.text.fill",stylers:[{color:"#515c6d"}]},{featureType:"water",elementType:"labels.text.stroke",stylers:[{color:"#17263c"}]}]
                 });
                 directionsRenderer.setMap(gMap); 
-                gMap.addListener('center_changed', () => { currentMapCenter = gMap.getCenter(); }); 
-                gMap.addListener('zoom_changed', () => { currentMapZoom = gMap.getZoom(); }); 
-                console.log("Carte initialisée.");
+                gMap.addListener('center_changed', () => { if(gMap) currentMapCenter = gMap.getCenter(); }); 
+                gMap.addListener('zoom_changed', () => { if(gMap) currentMapZoom = gMap.getZoom(); }); 
 
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            const userPos = { lat: position.coords.latitude, lng: position.coords.longitude };
-                            gMap.setCenter(userPos); currentMapCenter = userPos;
-                        },
+                        (position) => { if(gMap) { const userPos = { lat: position.coords.latitude, lng: position.coords.longitude }; gMap.setCenter(userPos); currentMapCenter = userPos;} },
                         () => { console.warn("Impossible d'obtenir la position pour centrer la carte."); }
                     );
                 }
-            } catch (e) { console.error("Erreur init Google Maps:", e); addMessageToChat("Erreur init carte.", "assistant"); setActiveInfoPanel(null, false); }
+            } catch (e) { addMessageToChat("Erreur init carte.", "assistant"); }
         }
         function calculateAndDisplayRoute(origin, destination) {
-            if (!directionsService || !directionsRenderer || !gMap) { console.warn("Services carte non init."); addMessageToChat("Services carte non prêts.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
+            if (!directionsService || !directionsRenderer || !gMap) { addMessageToChat("Services carte non prêts.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
             if (!origin || !destination) { addMessageToChat("Origine/destination manquante.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
             
             let originForMap = origin;
@@ -967,7 +1082,7 @@
                      const userCurrentPos = { lat: userLatitude, lng: userLongitude };
                      directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                             if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
-                            else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                            else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); 
                         }
                     );
                     return;
@@ -976,14 +1091,14 @@
                         const userCurrentPos = { lat: position.coords.latitude, lng: position.coords.longitude };
                         directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                                 if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
-                                else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                                else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant");
                             }
                         );
                      }, () => {
                         addMessageToChat("Impossible d'obtenir votre position actuelle. Utilisation de " + userLocatedCity + ".", "assistant");
                         directionsService.route( { origin: userLocatedCity, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                             if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
-                            else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                            else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant");
                         });
                      });
                      return;
@@ -995,7 +1110,7 @@
 
             directionsService.route( { origin: originForMap, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                     if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
-                    else { console.error("Erreur itinéraire: " + status); addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }
+                    else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant");
                 }
             );
         }
@@ -1010,11 +1125,8 @@
             const messageElement = document.createElement('div');
             messageElement.textContent = text;
             messageElement.classList.add('p-2', 'rounded-lg', 'max-w-xs', 'md:max-w-md', 'mb-2', 'break-words');
-            if (sender === 'user') {
-                messageElement.classList.add('user-message');
-            } else { 
-                messageElement.classList.add('assistant-message');
-            }
+            if (sender === 'user') messageElement.classList.add('user-message');
+            else messageElement.classList.add('assistant-message');
             chatbox.appendChild(messageElement);
             chatbox.scrollTop = chatbox.scrollHeight;
         }
@@ -1022,9 +1134,7 @@
         function formatSearchResults(rawText) { 
             let html = `<h3>Résultats de recherche</h3>`;
             const queryMatch = rawText.match(/(?:Résultats web pour|Réponse directe pour|Information pour)\s+'([^']+)'/i);
-            if (queryMatch && queryMatch[1]) {
-                html = `<h3>Résultats pour : <span class="italic">${queryMatch[1]}</span></h3>`;
-            }
+            if (queryMatch && queryMatch[1]) html = `<h3>Résultats pour : <span class="italic">${queryMatch[1]}</span></h3>`;
             const mainContent = queryMatch ? rawText.substring(rawText.indexOf(':') + 1).trim() : rawText;
             const parts = mainContent.split(/\n\s*\n/);
             parts.forEach(part => {
@@ -1112,10 +1222,9 @@
             return html;
         }
 
-
         function getWebcamFrameData() {
             if (!isCamOn || !webcamVideo.srcObject || webcamVideo.readyState < 3) return null;
-            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { console.error("Erreur capture webcam:", error); return null; }
+            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { return null; }
         }
         function extractCodeInfo(markdownText) {
             const infos = []; const regex = /```([a-zA-Z0-9]*)\n([\s\S]*?)\n```/g; let match;
@@ -1125,8 +1234,7 @@
 
         // --- Client-side TTS ---
         function speakClientSideMessage(textToSpeak) {
-            if (!('speechSynthesis' in window)) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; } 
-            if (isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; }
+            if (!('speechSynthesis' in window) || isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; } 
             
             speechSynthesis.cancel(); 
             if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
@@ -1149,7 +1257,6 @@
                 restartRecognitionAfterEva(); 
             };
             utterance.onerror = (event) => { 
-                console.error("Erreur SpeechSynthesis:", event.error); 
                 isSpeakingClientSide = false; 
                 evaIsCurrentlySpeaking = false; 
                 listeningIndicator.classList.remove('speaking'); 
@@ -1168,9 +1275,7 @@
                 try {
                     const serverMessage = JSON.parse(event.data);
                     
-                    if (serverMessage.text) {
-                        addMessageToChat(serverMessage.text, 'assistant');
-                    }
+                    if (serverMessage.text) addMessageToChat(serverMessage.text, 'assistant');
 
                     if (serverMessage.panel_data && serverMessage.panel_target_id) {
                         setActiveInfoPanel(serverMessage.panel_target_id, true); 
@@ -1179,169 +1284,94 @@
                         switch (serverMessage.panel_target_id) {
                             case 'mapContent':
                                 const directionsInfo = parseDirectionsFromText(panelData);
-                                if (directionsInfo) {
-                                    calculateAndDisplayRoute(directionsInfo.origin, directionsInfo.destination);
-                                } else {
-                                    mapElementDiv.innerHTML = `<p class="p-4 text-gray-300">${panelData}</p>`; 
-                                }
+                                if (directionsInfo) calculateAndDisplayRoute(directionsInfo.origin, directionsInfo.destination);
+                                else if(mapElementDiv) mapElementDiv.innerHTML = `<p class="p-4 text-gray-300">${panelData}</p>`; 
                                 break;
                             case 'searchContent':
-                                if (panelData.toLowerCase().startsWith("voici vos contacts") || panelData.toLowerCase().startsWith("votre carnet d'adresses est vide")) {
-                                    searchResultsContentDiv.innerHTML = formatContactList(panelData);
-                                } else {
-                                    searchResultsContentDiv.innerHTML = formatSearchResults(panelData);
-                                }
+                                if(searchResultsContentDiv) searchResultsContentDiv.innerHTML = (panelData.toLowerCase().startsWith("voici vos contacts") || panelData.toLowerCase().startsWith("votre carnet d'adresses est vide")) ? formatContactList(panelData) : formatSearchResults(panelData);
                                 break;
-                            case 'emailContent':
-                                emailListContentDiv.innerHTML = formatEmailList(panelData);
-                                break;
-                            case 'taskContent':
-                                taskListContentDiv.innerHTML = formatTaskList(panelData);
-                                break;
-                            case 'calendarContent':
-                                calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData);
-                                break;
-                            case 'weatherForecastContent':
-                                displayWeatherForecast(); 
-                                break;
+                            case 'emailContent': if(emailListContentDiv) emailListContentDiv.innerHTML = formatEmailList(panelData); break;
+                            case 'taskContent': if(taskListContentDiv) taskListContentDiv.innerHTML = formatTaskList(panelData); break;
+                            case 'calendarContent': if(calendarEventListContentDiv) calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData); break;
+                            case 'weatherForecastContent': displayWeatherForecast(); break;
                             case 'codeDisplayContent':
                                 const codeInfos = extractCodeInfo(panelData); 
-                                if (codeInfos.length > 0) {
-                                     evaCodeCanvasContentCode.textContent = codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n');
-                                } else {
-                                     evaCodeCanvasContentCode.textContent = panelData; 
-                                }
-                                if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                                if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.length > 0 ? codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n') : panelData; 
+                                if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                                     evaCodeCanvasContentWrapper.classList.add('expanded');
-                                    codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
+                                    if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
                                 }
                                 break;
-                            default:
-                                console.warn("Unknown panel_target_id:", serverMessage.panel_target_id);
+                            default: console.warn("Unknown panel_target_id:", serverMessage.panel_target_id);
                         }
                     } else if (serverMessage.type === 'final_text' && serverMessage.text) {
                         const codeInfos = extractCodeInfo(serverMessage.text);
                         if (codeInfos.length > 0 && activeInfoPanelId !== 'codeDisplayContent') { 
                              setActiveInfoPanel('codeDisplayContent', true);
-                             evaCodeCanvasContentCode.textContent = codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n');
-                             if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                             if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n');
+                             if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                                 evaCodeCanvasContentWrapper.classList.add('expanded');
-                                codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
+                                if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
                              }
                              const chatMsgForCode = serverMessage.text.replace(/```(?:[a-zA-Z0-9]*)?\n[\s\S]*?\n```/g, "").trim();
-                             if (chatMsgForCode === "" && chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
-                                 chatbox.lastChild.textContent = "Code généré. (Affiché dans l'onglet Code)";
-                             } else if (chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
-                                 chatbox.lastChild.textContent = chatMsgForCode + "\n\n(Code affiché dans l'onglet dédié.)";
+                             if (chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
+                                 chatbox.lastChild.textContent = chatMsgForCode || "Code généré. (Affiché dans l'onglet Code)";
                              }
-                        } else if (codeInfos.length === 0 && activeInfoPanelId === 'codeDisplayContent' && evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                        } else if (codeInfos.length === 0 && activeInfoPanelId === 'codeDisplayContent' && evaCodeCanvasContentWrapper && evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                             evaCodeCanvasContentWrapper.classList.remove('expanded');
-                            codeCanvasIcon.classList.replace('fa-minus', 'fa-plus');
+                            if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-minus', 'fa-plus');
                         }
                     }
 
-
                     if (serverMessage.type === 'audio_data') {
-                        if (skipNextAudioDueToCode) {
-                            skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva();
-                        } else if (!isMuted && serverMessage.audio) {
-                            playAudio(serverMessage.audio); 
-                        } else {
-                            evaIsCurrentlySpeaking = false; 
-                            restartRecognitionAfterEva();
-                        }
-                    } else if (serverMessage.type === 'no_audio_data') {
-                        if (skipNextAudioDueToCode) { skipNextAudioDueToCode = false; }
-                        evaIsCurrentlySpeaking = false; 
-                        restartRecognitionAfterEva();
-                    } else if (serverMessage.type === 'error') {
-                        skipNextAudioDueToCode = false; 
+                        if (skipNextAudioDueToCode) { skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); } 
+                        else if (!isMuted && serverMessage.audio) playAudio(serverMessage.audio); 
+                        else { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); }
+                    } else if (serverMessage.type === 'no_audio_data' || serverMessage.type === 'error') {
+                        if (skipNextAudioDueToCode) skipNextAudioDueToCode = false;
                         evaIsCurrentlySpeaking = false; 
                         restartRecognitionAfterEva(); 
-                    } else if (serverMessage.type === 'system_ping') {
-                        // Ping, do nothing else
-                    } else if (serverMessage.type !== 'final_text') { 
-                        console.warn("Type message inconnu ou déjà traité:", serverMessage);
-                        skipNextAudioDueToCode = false; 
                     }
 
                 } catch (error) { 
-                    console.error("Erreur WebSocket message:", error, "Data:", event.data); 
                     addMessageToChat("Erreur communication.", "assistant"); 
-                    skipNextAudioDueToCode = false; 
-                    evaIsCurrentlySpeaking = false; 
-                    restartRecognitionAfterEva(); 
+                    skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
                 }
             };
-            ws.onerror = (error) => { console.error("Erreur WebSocket:", error); statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
-            ws.onclose = (event) => { console.log("WebSocket déconnecté:", event.code, event.reason); wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
+            ws.onerror = () => { statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
+            ws.onclose = () => { wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
         }
         function sendMessageViaWebSocket(speechTranscript = null) {
             let messageTextToSend = speechTranscript ? speechTranscript.trim() : messageInput.value.trim();
-            
-            const requestData = { 
-                text: messageTextToSend, 
-                imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, 
-                fileData: null, 
-                fileName: null,
-                fileType: null 
-            };
+            const requestData = { text: messageTextToSend, imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, fileData: null, fileName: null, fileType: null };
 
             if (attachedFile) {
                 requestData.fileData = attachedFile.data;
                 requestData.fileName = attachedFile.name;
                 requestData.fileType = attachedFile.type;
-                if (!messageTextToSend) { 
-                    messageTextToSend = `Fichier joint : ${attachedFile.name}`;
-                }
+                if (!messageTextToSend) messageTextToSend = `Fichier joint : ${attachedFile.name}`;
             }
 
             if (!messageTextToSend && !requestData.imageData && !requestData.fileData) { 
                 statusText.textContent = speechTranscript ? 'Rien compris.' : 'Rien à envoyer.'; 
-                messageInput.value = ''; 
-                if (attachedFile) clearAttachedFile(); 
-                restartRecognitionAfterEva(); 
-                return; 
+                messageInput.value = ''; if (attachedFile) clearAttachedFile(); restartRecognitionAfterEva(); return; 
             }
-
-            if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) { 
-                addMessageToChat("Non connecté. Reconnexion...", "assistant"); 
-                connectWebSocket(); 
-                return; 
-            }
+            if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) { addMessageToChat("Non connecté. Reconnexion...", "assistant"); connectWebSocket(); return; }
             
             addMessageToChat(messageTextToSend || `Fichier : ${requestData.fileName}`, 'user');
 
             if (!interruptEvaEnabled) { 
-                console.log("Normal mode: Message sent. Setting pausedForEvaOutput = true and aborting recognition.");
                 pausedForEvaOutput = true;
-                if (recognitionActive && currentRecognition) {
-                    currentRecognition.abort(); 
-                }
-                 statusText.textContent = 'Traitement...'; 
-            } else { 
-                const currentlyEffectivelyContinuous = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
-                if (!currentlyEffectivelyContinuous || !recognitionActive) { 
-                    if (!speechTranscript) statusText.textContent = 'Traitement...'; 
-                }
+                if (recognitionActive && currentRecognition) currentRecognition.abort(); 
+                statusText.textContent = 'Traitement...'; 
             }
-
-            try { 
-                ws.send(JSON.stringify(requestData)); 
-                messageInput.value = ''; 
-                clearAttachedFile(); 
-            } catch (error) { 
-                console.error("Erreur envoi WebSocket:", error); 
-                addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); 
-                restartRecognitionAfterEva(); 
-            }
+            try { ws.send(JSON.stringify(requestData)); messageInput.value = ''; clearAttachedFile(); } 
+            catch (error) { addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
         }
         function playAudio(audioSource) {
-            if (isSpeakingClientSide) { console.log("playAudio: Client-side TTS active, audio backend ignoré."); evaIsCurrentlySpeaking = false; return; } 
-            
+            if (isSpeakingClientSide) { evaIsCurrentlySpeaking = false; return; } 
             if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
                 pausedForEvaOutput = true; 
-                console.log("playAudio: Normal mode, EVA speaking, aborting recognition and setting pausedForEvaOutput.");
                 currentRecognition.abort(); 
             }
             statusText.textContent = 'EVA parle...' + ((interruptEvaEnabled || userExplicitlyWantsContinuousListen) && (pausedForEvaOutput || interruptEvaEnabled) ? ' (Mode continu en pause)' : '');
@@ -1349,34 +1379,20 @@
             evaIsCurrentlySpeaking = true; 
             audioPlayer.src = audioSource; 
             audioPlayer.play().catch(e => { 
-                console.error("Erreur lecture audio:", e); 
-                listeningIndicator.classList.remove('speaking'); 
-                evaIsCurrentlySpeaking = false; 
-                restartRecognitionAfterEva(); 
+                listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
             });
             listeningIndicator.classList.add('speaking'); 
             audioPlayer.onended = () => { 
-                listeningIndicator.classList.remove('speaking'); 
-                evaIsCurrentlySpeaking = false; 
-                restartRecognitionAfterEva(); 
+                listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
             };
         }
         function restartRecognitionAfterEva() {
-            console.log(`restartRecognitionAfterEva. Interrupt: ${interruptEvaEnabled}, UserExplicitly: ${userExplicitlyWantsContinuousListen}, Paused: ${pausedForEvaOutput}, RecoActive: ${recognitionActive}`);
-            
             if (pausedForEvaOutput && !interruptEvaEnabled) { 
                 pausedForEvaOutput = false; 
-                if (userExplicitlyWantsContinuousListen && !recognitionActive) {
-                    console.log("Restarting (normal continuous) after EVA spoke.");
-                    createAndStartRecognition();
-                } else if (!userExplicitlyWantsContinuousListen && !recognitionActive) {
-                    statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
-                }
-            } else if (interruptEvaEnabled) { 
-                if (!recognitionActive) { 
-                     console.log("Restarting (interrupt context) after EVA spoke/was interrupted and reco is not active.");
-                    createAndStartRecognition();
-                 }
+                if (userExplicitlyWantsContinuousListen && !recognitionActive) createAndStartRecognition();
+                else if (!userExplicitlyWantsContinuousListen && !recognitionActive) statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
+            } else if (interruptEvaEnabled && !recognitionActive) { 
+                createAndStartRecognition();
             }
         }
 
@@ -1388,56 +1404,34 @@
                     mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
                     webcamVideo.srcObject = mediaStream; 
                     webcamVideo.onloadedmetadata = () => { 
-                        webcamVideo.classList.remove('hidden'); 
-                        listeningIndicator.classList.add('hidden'); 
-                        isCamOn = true; 
-                        camButton.textContent = 'Off Cam'; 
-                        camButton.classList.replace('bg-gray-600', 'bg-red-600'); 
-                        camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
+                        webcamVideo.classList.remove('hidden'); listeningIndicator.classList.add('hidden'); isCamOn = true; 
+                        camButton.textContent = 'Off Cam'; camButton.classList.replace('bg-gray-600', 'bg-red-600'); camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
                     }; 
                 } catch (err) { 
-                    console.error("Erreur Webcam:", err); 
-                    webcamError.textContent = `Erreur: ${err.name}`; 
-                    webcamError.classList.remove('hidden'); 
-                    isCamOn = false; 
-                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
-                    webcamVideo.srcObject = null; 
-                    listeningIndicator.classList.remove('hidden'); 
-                    camButton.textContent = 'Cam'; 
-                    camButton.classList.replace('bg-red-600', 'bg-gray-600'); 
-                    camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                    webcamError.textContent = `Erreur: ${err.name}`; webcamError.classList.remove('hidden'); isCamOn = false; 
+                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
+                    listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
+                    camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
                 } 
             } else { 
                 if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
-                webcamVideo.srcObject = null; 
-                webcamVideo.classList.add('hidden'); 
-                listeningIndicator.classList.remove('hidden'); 
-                isCamOn = false; 
-                camButton.textContent = 'Cam'; 
-                camButton.classList.replace('bg-red-600', 'bg-gray-600'); 
-                camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                webcamVideo.srcObject = null; webcamVideo.classList.add('hidden'); listeningIndicator.classList.remove('hidden'); 
+                isCamOn = false; camButton.textContent = 'Cam'; 
+                camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
             }
         }
         function toggleMute() {
             isMuted = !isMuted; 
             muteButton.textContent = isMuted ? 'Son' : 'Muet'; 
-            muteButton.classList.toggle('bg-red-600', isMuted); 
-            muteButton.classList.toggle('hover:bg-red-700', isMuted); 
-            muteButton.classList.toggle('bg-gray-600', !isMuted); 
-            muteButton.classList.toggle('hover:bg-gray-700', !isMuted);
+            muteButton.classList.toggle('bg-red-600', isMuted); muteButton.classList.toggle('hover:bg-red-700', isMuted); 
+            muteButton.classList.toggle('bg-gray-600', !isMuted); muteButton.classList.toggle('hover:bg-gray-700', !isMuted);
             if (isMuted && audioPlayer && !audioPlayer.paused) { 
-                audioPlayer.pause(); 
-                listeningIndicator.classList.remove('speaking'); 
-                evaIsCurrentlySpeaking = false; 
-                if (!pausedForEvaOutput && !interruptEvaEnabled) statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : 'Appuyez sur Espace/Micro.'); 
-                else if (interruptEvaEnabled) statusText.textContent = 'Muet. Mode interruption activé.';
+                audioPlayer.pause(); listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; 
+                statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : 'Appuyez sur Espace/Micro.');
             }
             if (isMuted && isSpeakingClientSide) { 
-                speechSynthesis.cancel(); 
-                isSpeakingClientSide = false; 
-                listeningIndicator.classList.remove('speaking'); 
-                evaIsCurrentlySpeaking = false; 
-                restartRecognitionAfterEva(); 
+                speechSynthesis.cancel(); isSpeakingClientSide = false; listeningIndicator.classList.remove('speaking'); 
+                evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
             }
         }
 
@@ -1449,82 +1443,34 @@
             const indefinite = promptIndefiniteCheckbox.checked;
             let repetitions = parseInt(promptRepetitionsInput.value, 10);
 
-            if (!text || !timeString) {
-                addMessageToChat("Veuillez entrer un texte pour le prompt et une heure de planification.", "assistant");
-                setActiveInfoPanel('schedulerContent', true);
-                return;
-            }
-            if (frequency !== 'once' && !indefinite && (isNaN(repetitions) || repetitions < 1)) {
-                addMessageToChat("Veuillez entrer un nombre de répétitions valide.", "assistant");
-                setActiveInfoPanel('schedulerContent', true);
-                return;
-            }
-            if (frequency !== 'once' && indefinite) {
-                repetitions = 0; // Sentinel for indefinite
-            }
-
+            if (!text || !timeString) { addMessageToChat("Veuillez entrer un texte pour le prompt et une heure de planification.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
+            if (frequency !== 'once' && !indefinite && (isNaN(repetitions) || repetitions < 1)) { addMessageToChat("Veuillez entrer un nombre de répétitions valide.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
+            if (frequency !== 'once' && indefinite) repetitions = 0; 
 
             const initialScheduledTime = new Date(timeString).getTime();
-            const currentTime = new Date().getTime();
-            
-            if (initialScheduledTime <= currentTime) {
-                addMessageToChat("L'heure planifiée est déjà passée. Veuillez choisir une heure future.", "assistant");
-                setActiveInfoPanel('schedulerContent', true);
-                return;
-            }
+            if (initialScheduledTime <= Date.now()) { addMessageToChat("L'heure planifiée est déjà passée. Veuillez choisir une heure future.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
 
             const promptId = `prompt-${Date.now()}`;
-            const newPrompt = {
-                id: promptId,
-                text: text,
-                time: initialScheduledTime, // This will be the next execution time
-                originalScheduledTime: initialScheduledTime, // Keep the very first user-defined time
-                frequency: frequency,
-                repetitions: repetitions, // 0 if indefinite
-                indefinite: indefinite,
-                executedCount: 0,
-                isActive: true,
-                timeoutId: null
-            };
-
+            const newPrompt = { id: promptId, text: text, time: initialScheduledTime, originalScheduledTime: initialScheduledTime, frequency: frequency, repetitions: repetitions, indefinite: indefinite, executedCount: 0, isActive: true, timeoutId: null };
             scheduledPrompts.push(newPrompt);
-            scheduleNextOccurrence(promptId); // This will set the first timeout
-            
+            scheduleNextOccurrence(promptId); 
             renderScheduledPrompts();
-            scheduledPromptTextInput.value = "";
-            // Reset recurrence fields to default
-            promptFrequencyInput.value = 'once';
-            recurrenceOptionsDiv.classList.add('hidden');
-            promptRepetitionsInput.value = "1";
-            promptIndefiniteCheckbox.checked = false;
-            promptRepetitionsInput.disabled = false;
-
+            scheduledPromptTextInput.value = ""; promptFrequencyInput.value = 'once';
+            recurrenceOptionsDiv.classList.add('hidden'); promptRepetitionsInput.value = "1";
+            promptIndefiniteCheckbox.checked = false; promptRepetitionsInput.disabled = false;
 
             let scheduleMessage = `Prompt "${text}" planifié pour ${new Date(initialScheduledTime).toLocaleString('fr-FR')}`;
-            if (frequency !== 'once') {
-                scheduleMessage += `, fréquence: ${translateFrequency(frequency)}`;
-                if (!indefinite) scheduleMessage += `, ${repetitions} fois`;
-                else scheduleMessage += `, indéfiniment`;
-            }
-            scheduleMessage += ".";
-            addMessageToChat(scheduleMessage, "assistant");
-            setActiveInfoPanel('schedulerContent', true);
+            if (frequency !== 'once') scheduleMessage += `, fréquence: ${translateFrequency(frequency)}${!indefinite ? `, ${repetitions} fois` : ', indéfiniment'}`;
+            addMessageToChat(scheduleMessage + ".", "assistant"); setActiveInfoPanel('schedulerContent', true);
         }
 
         function calculateNextTime(baseTime, frequency) {
             const nextDate = new Date(baseTime);
             switch (frequency) {
-                case 'daily':
-                    nextDate.setDate(nextDate.getDate() + 1);
-                    break;
-                case 'weekly':
-                    nextDate.setDate(nextDate.getDate() + 7);
-                    break;
-                case 'monthly':
-                    nextDate.setMonth(nextDate.getMonth() + 1);
-                    break;
-                default: // 'once' or unknown
-                    return null; 
+                case 'daily': nextDate.setDate(nextDate.getDate() + 1); break;
+                case 'weekly': nextDate.setDate(nextDate.getDate() + 7); break;
+                case 'monthly': nextDate.setMonth(nextDate.getMonth() + 1); break;
+                default: return null; 
             }
             return nextDate;
         }
@@ -1532,116 +1478,56 @@
         function scheduleNextOccurrence(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex === -1) return;
-
             const prompt = scheduledPrompts[promptIndex];
-            if (prompt.timeoutId) clearTimeout(prompt.timeoutId); // Clear existing timeout if any
-
-            if (!prompt.isActive) { // If paused, don't schedule a new timeout
-                console.log(`Prompt ${prompt.id} is paused. Not scheduling next occurrence yet.`);
-                renderScheduledPrompts(); // Update UI to show it's paused
-                return;
-            }
+            if (prompt.timeoutId) clearTimeout(prompt.timeoutId); 
+            if (!prompt.isActive) { renderScheduledPrompts(); return; }
             
             let targetTime = prompt.time;
             const currentTime = Date.now();
-
-            // If the target time is in the past (e.g., computer was off, or resuming a past task)
-            // find the next valid future occurrence based on its original schedule and frequency
             if (targetTime < currentTime && prompt.frequency !== 'once') {
-                let newCalculatedTime = new Date(prompt.originalScheduledTime); // Start from the original time
-                if (prompt.frequency === 'daily') {
-                    while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) { // prompt.time might be a future time if it was manually set
-                        newCalculatedTime.setDate(newCalculatedTime.getDate() + 1);
-                    }
-                } else if (prompt.frequency === 'weekly') {
-                     while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) {
-                        newCalculatedTime.setDate(newCalculatedTime.getDate() + 7);
-                    }
-                } else if (prompt.frequency === 'monthly') {
-                     while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) {
-                        newCalculatedTime.setMonth(newCalculatedTime.getMonth() + 1);
-                    }
+                let newCalculatedTime = new Date(prompt.originalScheduledTime); 
+                while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) { 
+                    const next = calculateNextTime(newCalculatedTime.getTime(), prompt.frequency);
+                    if(!next) break; newCalculatedTime = next;
                 }
-                targetTime = newCalculatedTime.getTime();
-                prompt.time = targetTime; // Update prompt's next execution time
+                targetTime = newCalculatedTime.getTime(); prompt.time = targetTime; 
             }
-
-
             const delay = targetTime - currentTime;
-            if (delay < 0 && prompt.frequency === 'once') { // For 'once' tasks, if in past, maybe run immediately or notify
+            if (delay < 0 && prompt.frequency === 'once') { 
                  addMessageToChat(`Prompt unique "${prompt.text}" est dans le passé et ne sera pas exécuté.`, "assistant");
-                 scheduledPrompts.splice(promptIndex, 1); // Remove it
-                 renderScheduledPrompts();
-                 return;
+                 scheduledPrompts.splice(promptIndex, 1); renderScheduledPrompts(); return;
             }
-             if (delay < 0 && prompt.frequency !== 'once') { // Should have been caught by above adjustment
-                console.warn(`Prompt récurrent ${prompt.id} a un délai négatif après ajustement. Prochaine exécution manquée?`);
-             }
-
-
-            prompt.timeoutId = setTimeout(() => {
-                executeAndReschedule(promptId);
-            }, Math.max(0, delay)); // Ensure delay is not negative
-
-            console.log(`Prompt ${prompt.id} (${prompt.text}) next occurrence scheduled for ${new Date(prompt.time).toLocaleString('fr-FR')} (Timeout ID: ${prompt.timeoutId})`);
-            renderScheduledPrompts(); // Update UI
+            prompt.timeoutId = setTimeout(() => executeAndReschedule(promptId), Math.max(0, delay)); 
+            renderScheduledPrompts(); 
         }
-
 
         function executeAndReschedule(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
-            if (promptIndex === -1) {
-                console.warn(`Prompt ${promptId} not found for execution.`);
-                return;
-            }
+            if (promptIndex === -1) return;
             const prompt = scheduledPrompts[promptIndex];
-
-            if (!prompt.isActive) {
-                console.log(`Prompt ${prompt.id} is paused. Skipping execution, will reschedule.`);
-                // Even if paused, we need to ensure its 'time' is set for the *next* theoretical run
-                // so that when resumed, it picks up correctly.
-                // However, scheduleNextOccurrence is called on resume, so this might not be needed here.
-                // For now, let's just log and not execute. The timeout chain effectively stops here until resume.
-                // On resume, scheduleNextOccurrence will be called.
-                return; 
-            }
+            if (!prompt.isActive) return; 
 
             addMessageToChat(`Exécution du prompt planifié : "${prompt.text}"`, "assistant");
-            sendMessageViaWebSocket(prompt.text); 
-            prompt.executedCount++;
+            sendMessageViaWebSocket(prompt.text); prompt.executedCount++;
 
             if (prompt.frequency === 'once' || (!prompt.indefinite && prompt.executedCount >= prompt.repetitions)) {
-                // Task is finished
                 addMessageToChat(`Prompt "${prompt.text}" terminé.`, "assistant");
-                if(prompt.timeoutId) clearTimeout(prompt.timeoutId);
-                scheduledPrompts.splice(promptIndex, 1);
+                if(prompt.timeoutId) clearTimeout(prompt.timeoutId); scheduledPrompts.splice(promptIndex, 1);
             } else {
-                // Reschedule for next occurrence
                 const nextTime = calculateNextTime(prompt.time, prompt.frequency);
-                if (nextTime) {
-                    prompt.time = nextTime.getTime(); // Update to the new next execution time
-                    scheduleNextOccurrence(promptId); // This will set the new timeout
-                } else {
-                    console.error(`Could not calculate next time for prompt ${prompt.id}`);
-                    if(prompt.timeoutId) clearTimeout(prompt.timeoutId);
-                    scheduledPrompts.splice(promptIndex, 1); // Remove if error
-                }
+                if (nextTime) { prompt.time = nextTime.getTime(); scheduleNextOccurrence(promptId); } 
+                else { if(prompt.timeoutId) clearTimeout(prompt.timeoutId); scheduledPrompts.splice(promptIndex, 1); }
             }
             renderScheduledPrompts();
         }
-
 
         function cancelScheduledPrompt(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex > -1) {
                 const canceledPrompt = scheduledPrompts[promptIndex];
-                if (canceledPrompt.timeoutId) {
-                    clearTimeout(canceledPrompt.timeoutId);
-                }
-                const canceledPromptText = canceledPrompt.text;
-                scheduledPrompts.splice(promptIndex, 1);
-                renderScheduledPrompts();
-                addMessageToChat(`Prompt planifié annulé : "${canceledPromptText}"`, "assistant");
+                if (canceledPrompt.timeoutId) clearTimeout(canceledPrompt.timeoutId);
+                scheduledPrompts.splice(promptIndex, 1); renderScheduledPrompts();
+                addMessageToChat(`Prompt planifié annulé : "${canceledPrompt.text}"`, "assistant");
                 setActiveInfoPanel('schedulerContent', true);
             }
         }
@@ -1649,152 +1535,143 @@
         function togglePromptActiveState(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex === -1) return;
-
             const prompt = scheduledPrompts[promptIndex];
             prompt.isActive = !prompt.isActive;
 
             if (prompt.isActive) {
-                // Resuming
                 addMessageToChat(`Prompt "${prompt.text}" repris.`, "assistant");
-                // Recalculate next occurrence if its stored 'time' is in the past
                 if (prompt.time < Date.now() && prompt.frequency !== 'once') {
-                    let newTime = new Date(prompt.originalScheduledTime); // Start from original time
-                    const now = Date.now();
-                    while (newTime.getTime() <= now) { // Find the first occurrence strictly after now
+                    let newTime = new Date(prompt.originalScheduledTime); 
+                    while (newTime.getTime() <= Date.now()) { 
                         const calculated = calculateNextTime(newTime.getTime(), prompt.frequency);
-                        if (!calculated) break; // Should not happen for recurring
-                        newTime = calculated;
+                        if (!calculated) break; newTime = calculated;
                     }
                     prompt.time = newTime.getTime();
                 }
                 scheduleNextOccurrence(promptId);
             } else {
-                // Pausing
                 addMessageToChat(`Prompt "${prompt.text}" mis en pause.`, "assistant");
-                if (prompt.timeoutId) {
-                    clearTimeout(prompt.timeoutId);
-                    prompt.timeoutId = null;
-                }
+                if (prompt.timeoutId) { clearTimeout(prompt.timeoutId); prompt.timeoutId = null; }
             }
             renderScheduledPrompts();
         }
         
         function translateFrequency(freq) {
-            switch(freq) {
-                case 'once': return 'Une fois';
-                case 'daily': return 'Quotidien';
-                case 'weekly': return 'Hebdomadaire';
-                case 'monthly': return 'Mensuel';
-                default: return freq;
-            }
+            const map = {'once': 'Une fois', 'daily': 'Quotidien', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'};
+            return map[freq] || freq;
         }
 
         function renderScheduledPrompts() {
-            scheduledPromptsListUI.innerHTML = "";
-            if (scheduledPrompts.length === 0) {
-                scheduledPromptsListUI.innerHTML = "<li class='text-gray-400'>Aucun prompt planifié.</li>";
-                return;
-            }
+            scheduledPromptsListUI.innerHTML = scheduledPrompts.length === 0 ? "<li class='text-gray-400'>Aucun prompt planifié.</li>" : "";
+            if(scheduledPrompts.length === 0) return;
 
-            // Sort prompts by their next execution time
-            const sortedPrompts = [...scheduledPrompts].sort((a, b) => a.time - b.time);
-
-            sortedPrompts.forEach(prompt => {
+            [...scheduledPrompts].sort((a, b) => a.time - b.time).forEach(prompt => {
                 const listItem = document.createElement('li');
                 const date = new Date(prompt.time);
-                let detailsText = `"${prompt.text}"`;
-                
-                if (prompt.isActive) {
-                    detailsText += ` - Prochaine exécution: ${date.toLocaleString('fr-FR')}`;
-                } else {
-                     detailsText += ` - PAUSE (Prochaine exécution prévue: ${date.toLocaleString('fr-FR')})`;
-                }
-
-
-                if (prompt.frequency !== 'once') {
-                    detailsText += ` (${translateFrequency(prompt.frequency)}`;
-                    if (!prompt.indefinite) {
-                        detailsText += `, ${prompt.executedCount}/${prompt.repetitions} exécuté(s)`;
-                    } else {
-                        detailsText += `, ${prompt.executedCount} exécuté(s) - Indéfini`;
-                    }
-                    detailsText += ')';
-                }
-
-
-                listItem.innerHTML = `
-                    <div class="prompt-details">${detailsText}</div>
-                    <div class="prompt-actions">
-                        ${prompt.frequency !== 'once' ? 
-                            (prompt.isActive ? 
-                                `<button data-id="${prompt.id}" class="pause-prompt-button">Pause</button>` :
-                                `<button data-id="${prompt.id}" class="resume-prompt-button">Reprendre</button>`
-                            ) : ''}
-                        <button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button>
-                    </div>
-                `;
+                let detailsText = `"${prompt.text}" - ${prompt.isActive ? 'Prochaine exécution' : 'PAUSE (Prévu'}: ${date.toLocaleString('fr-FR')})`;
+                if (prompt.frequency !== 'once') detailsText += ` (${translateFrequency(prompt.frequency)}${!prompt.indefinite ? `, ${prompt.executedCount}/${prompt.repetitions}ex` : `, ${prompt.executedCount}ex - Indéfini`})`;
+                listItem.innerHTML = `<div class="prompt-details">${detailsText}</div><div class="prompt-actions">${prompt.frequency !== 'once' ? `<button data-id="${prompt.id}" class="${prompt.isActive ? 'pause' : 'resume'}-prompt-button">${prompt.isActive ? 'Pause' : 'Reprendre'}</button>` : ''}<button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button></div>`;
                 scheduledPromptsListUI.appendChild(listItem);
             });
-
-            document.querySelectorAll('.cancel-prompt-button').forEach(button => {
-                button.addEventListener('click', (event) => cancelScheduledPrompt(event.target.dataset.id));
-            });
-            document.querySelectorAll('.pause-prompt-button').forEach(button => {
-                button.addEventListener('click', (event) => togglePromptActiveState(event.target.dataset.id));
-            });
-            document.querySelectorAll('.resume-prompt-button').forEach(button => {
-                button.addEventListener('click', (event) => togglePromptActiveState(event.target.dataset.id));
+            document.querySelectorAll('.cancel-prompt-button, .pause-prompt-button, .resume-prompt-button').forEach(button => {
+                button.addEventListener('click', (event) => {
+                    const id = event.target.dataset.id;
+                    if(event.target.classList.contains('cancel-prompt-button')) cancelScheduledPrompt(id);
+                    else togglePromptActiveState(id);
+                });
             });
         }
-
 
         // --- File Handling Functions ---
         function handleFileSelect(event) {
             const file = event.target.files[0];
-            if (!file) {
-                clearAttachedFile();
-                return;
-            }
-
+            if (!file) { clearAttachedFile(); return; }
             const reader = new FileReader();
-            const fileName = file.name;
-            const fileType = file.type;
+            const fileName = file.name; const fileType = file.type;
 
             if (fileType.startsWith('image/')) {
-                reader.onload = (e) => {
-                    attachedFile = { name: fileName, type: 'image', data: e.target.result };
-                    displayFilePreview(fileName, e.target.result);
-                };
+                reader.onload = (e) => { attachedFile = { name: fileName, type: 'image', data: e.target.result }; displayFilePreview(fileName, e.target.result); };
                 reader.readAsDataURL(file);
-            } else if (fileType.startsWith('text/') || 
-                       fileName.endsWith('.py') || fileName.endsWith('.js') || 
-                       fileName.endsWith('.html') || fileName.endsWith('.css') ||
-                       fileName.endsWith('.json') || fileName.endsWith('.md')) {
-                reader.onload = (e) => {
-                    attachedFile = { name: fileName, type: 'text', data: e.target.result };
-                    displayFilePreview(fileName, null); 
-                };
+            } else if (fileType.startsWith('text/') || ['.py','.js','.html','.css','.json','.md'].some(ext => fileName.endsWith(ext))) {
+                reader.onload = (e) => { attachedFile = { name: fileName, type: 'text', data: e.target.result }; displayFilePreview(fileName, null); };
                 reader.readAsText(file);
-            } else {
-                addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant");
-                clearAttachedFile();
-            }
+            } else { addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant"); clearAttachedFile(); }
             fileInput.value = ''; 
         }
-
         function displayFilePreview(fileName, imageSrc = null) {
-            let previewHTML = `<span class="mr-2">${fileName}</span> <button id="removeFileButton" class="text-red-500 hover:text-red-700 text-xs">&times;</button>`;
-            if (imageSrc) {
-                previewHTML = `<img src="${imageSrc}" alt="Aperçu de ${fileName}"><br>` + previewHTML;
-            }
-            filePreviewContainer.innerHTML = previewHTML;
+            filePreviewContainer.innerHTML = `${imageSrc ? `<img src="${imageSrc}" alt="Aperçu de ${fileName}"><br>` : ''}<span class="mr-2">${fileName}</span> <button id="removeFileButton" class="text-red-500 hover:text-red-700 text-xs">&times;</button>`;
             document.getElementById('removeFileButton').addEventListener('click', clearAttachedFile);
         }
+        function clearAttachedFile() { attachedFile = null; filePreviewContainer.innerHTML = ''; fileInput.value = ''; }
 
-        function clearAttachedFile() {
-            attachedFile = null;
-            filePreviewContainer.innerHTML = '';
-            fileInput.value = ''; 
+        // --- Calculator Logic ---
+        function updateCalculatorDisplay() {
+            if(calculatorDisplay) calculatorDisplay.textContent = calculatorCurrentInput || calculatorPreviousInput || "0";
+        }
+
+        function handleCalculatorInput(value) {
+            if (calculatorResetDisplay) { calculatorCurrentInput = ""; calculatorResetDisplay = false; }
+
+            if (value >= '0' && value <= '9') calculatorCurrentInput += value;
+            else if (value === '.') { if (!calculatorCurrentInput.includes('.')) calculatorCurrentInput += '.'; } 
+            else if (value === 'C') { calculatorCurrentInput = ""; calculatorPreviousInput = ""; calculatorOperator = null; } 
+            else if (value === '=') {
+                if (calculatorOperator && calculatorPreviousInput !== "" && calculatorCurrentInput !== "") {
+                    try {
+                        let expression = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput;
+                        if (calculatorOperator === '^') expression = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`;
+                        
+                        // Basic arithmetic evaluation using Function constructor (use with caution for complex inputs)
+                        // For a production app, a proper math expression parser is safer.
+                        const F = new Function('return ' + expression.replace(/[^-()\d/*+.]/g, ''));
+                        calculatorCurrentInput = F().toString();
+                        calculatorOperator = null; calculatorPreviousInput = ""; calculatorResetDisplay = true;
+                    } catch (e) { calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true; }
+                }
+            } else if (['+', '-', '*', '/', '^'].includes(value)) {
+                if (calculatorCurrentInput !== "") {
+                    if (calculatorPreviousInput === "") {
+                        calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; calculatorOperator = value;
+                    } else if (calculatorOperator) { 
+                        handleCalculatorInput('='); 
+                        calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; 
+                        calculatorOperator = value; calculatorResetDisplay = false; 
+                    }
+                } else if (calculatorPreviousInput !== "" && value === "-") calculatorCurrentInput = "-";
+            } else { // Scientific functions
+                const num = parseFloat(calculatorCurrentInput);
+                if (calculatorCurrentInput !== "" && !isNaN(num) || ['pi', 'e'].includes(value)) {
+                     try {
+                        switch(value) {
+                            case 'sin': calculatorCurrentInput = Math.sin(num * Math.PI / 180).toString(); break;
+                            case 'cos': calculatorCurrentInput = Math.cos(num * Math.PI / 180).toString(); break;
+                            case 'tan': calculatorCurrentInput = Math.tan(num * Math.PI / 180).toString(); break;
+                            case 'sqrt': calculatorCurrentInput = Math.sqrt(num).toString(); break;
+                            case 'log': calculatorCurrentInput = Math.log10(num).toString(); break;
+                            case 'ln': calculatorCurrentInput = Math.log(num).toString(); break;
+                            case '!': 
+                                if (num < 0 || !Number.isInteger(num)) { calculatorCurrentInput = "Erreur"; break;}
+                                let fact = 1; for (let i = 2; i <= num; i++) fact *= i;
+                                calculatorCurrentInput = fact.toString(); break;
+                            case 'pi': calculatorCurrentInput = Math.PI.toString(); break;
+                            case 'e': calculatorCurrentInput = Math.E.toString(); break;
+                            case '(': calculatorCurrentInput += '('; calculatorResetDisplay = false; return; // Don't reset display for parenthesis
+                            case ')': calculatorCurrentInput += ')'; calculatorResetDisplay = false; return; // Don't reset display for parenthesis
+                        }
+                        if (value !== '(' && value !== ')') calculatorResetDisplay = true;
+                    } catch (e) { calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true;}
+                } else if (['pi', 'e', '(', ')'].includes(value)) { // Allow these even if currentInput is empty
+                     switch(value) {
+                        case 'pi': calculatorCurrentInput = Math.PI.toString(); calculatorResetDisplay = true; break;
+                        case 'e': calculatorCurrentInput = Math.E.toString(); calculatorResetDisplay = true; break;
+                        case '(': calculatorCurrentInput += '('; break;
+                        case ')': calculatorCurrentInput += ')'; break;
+                     }
+                } else {
+                    calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true;
+                }
+            }
+            updateCalculatorDisplay();
         }
 
         // --- Event Listeners ---
@@ -1803,44 +1680,20 @@
         
         micButton.addEventListener('click', () => {
             if (!SpeechRecognitionAPI) return;
-            if (recognitionActive) { 
-                userExplicitlyWantsContinuousListen = false; 
-                if (currentRecognition) currentRecognition.abort(); 
-            } else { 
-                userExplicitlyWantsContinuousListen = true; 
-                createAndStartRecognition();
-            }
+            if (recognitionActive) { userExplicitlyWantsContinuousListen = false; if (currentRecognition) currentRecognition.abort(); } 
+            else { userExplicitlyWantsContinuousListen = true; createAndStartRecognition(); }
         });
         
         interruptModeButton.addEventListener('click', () => {
             interruptEvaEnabled = !interruptEvaEnabled; 
-            
-            if (interruptEvaEnabled) {
-                interruptModeButton.classList.replace('bg-yellow-500', 'bg-orange-500');
-                interruptModeButton.classList.replace('hover:bg-yellow-600', 'hover:bg-orange-600');
-                interruptModeButton.title = "Désactiver l'interruption d'EVA (Activé) (ou touche 'i')";
-                statusText.textContent = "Mode interruption : Activé. Écoute...";
-                
-                if (!recognitionActive) {
-                    createAndStartRecognition(); 
-                } else if (currentRecognition && currentRecognition.continuous !== (interruptEvaEnabled || userExplicitlyWantsContinuousListen) ) {
-                    currentRecognition.abort(); 
-                }
-            } else { 
-                interruptModeButton.classList.replace('bg-orange-500', 'bg-yellow-500');
-                interruptModeButton.classList.replace('hover:bg-orange-600', 'hover:bg-yellow-600');
-                interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
-                statusText.textContent = "Mode interruption : Désactivé.";
-                
-                if (recognitionActive && currentRecognition) {
-                    console.log("Interrupt OFF: Aborting recognition. onend will check explicit continuous flag.");
-                    currentRecognition.abort(); 
-                } else {
-                     statusText.textContent = userExplicitlyWantsContinuousListen ? 
-                                              "Mode continu explicite actif." : 
-                                              "Mode interruption : Désactivé. Appuyez Micro/Espace.";
-                }
-            }
+            interruptModeButton.classList.toggle('bg-orange-500', interruptEvaEnabled);
+            interruptModeButton.classList.toggle('hover:bg-orange-600', interruptEvaEnabled);
+            interruptModeButton.classList.toggle('bg-yellow-500', !interruptEvaEnabled);
+            interruptModeButton.classList.toggle('hover:bg-yellow-600', !interruptEvaEnabled);
+            interruptModeButton.title = `Interruption EVA (${interruptEvaEnabled ? 'Activé' : 'Désactivé'}) (i)`;
+            statusText.textContent = `Mode interruption: ${interruptEvaEnabled ? 'Activé. Écoute...' : 'Désactivé.'}`;
+            if (interruptEvaEnabled && !recognitionActive) createAndStartRecognition();
+            else if (recognitionActive && currentRecognition) currentRecognition.abort();
         });
 
         muteButton.addEventListener('click', toggleMute); 
@@ -1850,45 +1703,23 @@
         fileInput.addEventListener('change', handleFileSelect);
 
         promptFrequencyInput.addEventListener('change', () => {
-            if (promptFrequencyInput.value === 'once') {
-                recurrenceOptionsDiv.classList.add('hidden');
-            } else {
-                recurrenceOptionsDiv.classList.remove('hidden');
-            }
+            recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
         });
-
         promptIndefiniteCheckbox.addEventListener('change', () => {
             promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
-            if (promptIndefiniteCheckbox.checked) {
-                promptRepetitionsInput.value = ""; // Clear value if indefinite
-            } else {
-                 promptRepetitionsInput.value = "1"; // Reset to 1 if not indefinite
-            }
+            if (promptIndefiniteCheckbox.checked) promptRepetitionsInput.value = ""; 
+            else promptRepetitionsInput.value = "1"; 
         });
-
         
-        if (authorizeGoogleButton) { authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; }); }
+        if (authorizeGoogleButton) authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; });
         
         document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
-            if (activeEl === messageInput || activeEl === scheduledPromptTextInput || activeEl === scheduledPromptTimeInput || activeEl === promptRepetitionsInput) return;
-
-            if (e.code === 'Space') { 
-                e.preventDefault(); 
-                userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; 
-                console.log(`Space toggled userExplicitlyWantsContinuousListen to: ${userExplicitlyWantsContinuousListen}`);
-                if (recognitionActive && currentRecognition) {
-                    currentRecognition.abort(); 
-                } else if (userExplicitlyWantsContinuousListen && !recognitionActive) { 
-                    createAndStartRecognition(); 
-                }
-            }
+            if ([messageInput, scheduledPromptTextInput, scheduledPromptTimeInput, promptRepetitionsInput].includes(activeEl)) return;
+            if (e.code === 'Space') { e.preventDefault(); userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; if (recognitionActive && currentRecognition) currentRecognition.abort(); else if (userExplicitlyWantsContinuousListen && !recognitionActive) createAndStartRecognition(); }
             else if (e.key.toLowerCase() === 'c') { e.preventDefault(); toggleWebcam(); } 
             else if (e.key.toLowerCase() === 'm') { e.preventDefault(); toggleMute(); }
-            else if (e.key.toLowerCase() === 'i') { 
-                e.preventDefault();
-                interruptModeButton.click(); 
-            }
+            else if (e.key.toLowerCase() === 'i') { e.preventDefault(); interruptModeButton.click(); }
         });
 
         toggleInfoPanelButton.addEventListener('click', () => {
@@ -1896,68 +1727,61 @@
             const isCollapsed = infoPanelColumn.classList.contains('collapsed');
             const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
             const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
-            leftIcon.style.display = isCollapsed ? 'none' : 'inline-block'; 
-            rightIcon.style.display = isCollapsed ? 'inline-block' : 'none';
-            if (!isCollapsed && activeInfoPanelId === 'mapContent' && gMap) { 
-                setTimeout(() => { if (google && google.maps && gMap) { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); } }, 350); 
+            if(leftIcon) leftIcon.style.display = isCollapsed ? 'none' : 'inline-block'; 
+            if(rightIcon) rightIcon.style.display = isCollapsed ? 'inline-block' : 'none';
+            if (!isCollapsed && activeInfoPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { 
+                setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350); 
             }
         });
         infoPanelTabsContainer.addEventListener('click', (event) => {
             if (event.target.classList.contains('info-tab-button')) { 
-                const targetPanelId = event.target.dataset.target; 
-                setActiveInfoPanel(targetPanelId, false); 
+                setActiveInfoPanel(event.target.dataset.target, false); 
             }
         });
         toggleCodeCanvasButton.addEventListener('click', () => {
             evaCodeCanvasContentWrapper.classList.toggle('expanded');
-            codeCanvasIcon.classList.toggle('fa-plus');
-            codeCanvasIcon.classList.toggle('fa-minus');
+            if(codeCanvasIcon) codeCanvasIcon.classList.toggle('fa-plus');
+            if(codeCanvasIcon) codeCanvasIcon.classList.toggle('fa-minus');
         });
+
+        if (calculatorButtonsContainer) { // Use the renamed variable
+            calculatorButtonsContainer.addEventListener('click', (event) => {
+                if (event.target.classList.contains('calc-button')) {
+                    handleCalculatorInput(event.target.dataset.value);
+                }
+            });
+        }
 
         // --- Initialisation ---
         document.addEventListener('DOMContentLoaded', () => {
-            updateDateTimeDashboard(); 
-            setInterval(updateDateTimeDashboard, 1000);
-            getUserLocationAndFetchWeather();
-            setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); 
-
+            updateDateTimeDashboard(); setInterval(updateDateTimeDashboard, 1000);
+            getUserLocationAndFetchWeather(); setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); 
             if (statusText) statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
             connectWebSocket();
             addMessageToChat("Si vous souhaitez utiliser les fonctionnalités Google (Agenda, Gmail, etc.), cliquez sur le bouton 'Autoriser l'accès aux services Google' ci-dessous.", "assistant");
-            setActiveInfoPanel('mapContent', false); 
-            infoPanelColumn.classList.add('collapsed');
+            
+            infoPanelColumn.classList.add('collapsed'); // Start collapsed
             const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
             const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
-            leftIcon.style.display = 'none'; 
-            rightIcon.style.display = 'inline-block';
-            if (!evaCodeCanvasContentWrapper.classList.contains('expanded')) {
-                 codeCanvasIcon.classList.remove('fa-minus');
-                 codeCanvasIcon.classList.add('fa-plus');
+            if(leftIcon) leftIcon.style.display = 'none'; 
+            if(rightIcon) rightIcon.style.display = 'inline-block';
+            setActiveInfoPanel('mapContent', false); // Set map as default but don't force open
+
+            if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
+                 if(codeCanvasIcon) { codeCanvasIcon.classList.remove('fa-minus'); codeCanvasIcon.classList.add('fa-plus');}
             } else {
-                 codeCanvasIcon.classList.remove('fa-plus');
-                 codeCanvasIcon.classList.add('fa-minus');
+                 if(codeCanvasIcon) { codeCanvasIcon.classList.remove('fa-plus'); codeCanvasIcon.classList.add('fa-minus');}
             }
             renderScheduledPrompts(); 
+            updateCalculatorDisplay(); 
 
-            if (interruptModeButton) {
-                interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
-            }
-            // Initialize recurrence options visibility
-            if (promptFrequencyInput.value === 'once') {
-                recurrenceOptionsDiv.classList.add('hidden');
-            } else {
-                recurrenceOptionsDiv.classList.remove('hidden');
-            }
-            promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
-
+            if (interruptModeButton) interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
+            if(promptFrequencyInput) recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
+            if(promptIndefiniteCheckbox) promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
 
             window.addEventListener('resize', () => { 
-                if (gMap && activeInfoPanelId === 'mapContent' && !infoPanelColumn.classList.contains('collapsed')) { 
-                    if (google && google.maps && gMap) { 
-                        google.maps.event.trigger(gMap, 'resize'); 
-                        gMap.setCenter(currentMapCenter); 
-                        gMap.setZoom(currentMapZoom); 
-                    } 
+                if (typeof google !== 'undefined' && google.maps && gMap && activeInfoPanelId === 'mapContent' && !infoPanelColumn.classList.contains('collapsed')) { 
+                    google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); 
                 } 
             });
         });
