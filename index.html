@@ -6,7 +6,7 @@
     <title>Enhanced Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAP_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
             display: flex;
@@ -156,7 +156,6 @@
             border-bottom: 1px solid #4B5563;
             padding-bottom: 0.5rem;
         }
-        /* No specific h3 for calculatorContent here as its padding is 0, title would be inside calculatorContainer */
 
         #searchResultsContent a, .task-item a, .calendar-event-item a { color: #60A5FA; }
         #searchResultsContent a:hover, .task-item a:hover, .calendar-event-item a:hover { text-decoration: underline; }
@@ -271,7 +270,7 @@
         }
         #evaCodeCanvasContentCode { color: #d4d4d4; font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; word-break: break-all; display: block; }
 
-        #schedulerContent #promptScheduler { /* Ensure promptScheduler itself is styled if needed */
+        #schedulerContent #promptScheduler { 
             width: 100%;
         }
          #schedulerContent #promptScheduler label {
@@ -280,7 +279,7 @@
             color: #D1D5DB;
             font-size: 0.875rem;
         }
-        #schedulerContent #scheduledPromptsList li { /* Specific to scheduler */
+        #schedulerContent #scheduledPromptsList li { 
             color: #D1D5DB; 
             display: flex;
             flex-direction: column; 
@@ -367,6 +366,7 @@
             overflow-x: auto; 
             white-space: nowrap;
             border: 1px solid #4A5568;
+            min-height: 2.5em; /* Ensure display has some height */
         }
         #calculatorButtons {
             display: grid;
@@ -431,12 +431,11 @@
             #infoPanelColumn.collapsed { flex-basis: auto; height: 50px; }
             #infoPanelColumn.collapsed #infoPanelTabs,
             #infoPanelColumn.collapsed #infoPanelContentArea { display: none; }
-            #infoPanelContentArea { height: 300px; } /* Increased height for better calculator visibility on mobile */
+            #infoPanelContentArea { height: 300px; } 
             
-            /* Ensure consistent padding for panels on mobile, unless overridden */
             .info-content-panel { padding: 0.75rem; }
             #mapContent, #codeDisplayContent, #calculatorContent { padding: 0; } 
-            #schedulerContent { padding: 0.75rem; } /* Explicitly set padding for scheduler on mobile */
+            #schedulerContent { padding: 0.75rem; } 
 
 
             .input-row { flex-direction: column; align-items: stretch;}
@@ -714,11 +713,12 @@
 
         // Calculator Elements
         const calculatorDisplay = document.getElementById('calculatorDisplay');
-        const calculatorButtonsContainer = document.getElementById('calculatorButtons'); // Renamed to avoid conflict if any
+        const calculatorButtonsContainer = document.getElementById('calculatorButtons'); 
         let calculatorCurrentInput = "";
         let calculatorOperator = null;
         let calculatorPreviousInput = "";
         let calculatorResetDisplay = false;
+        const MAX_INPUT_LENGTH = 20; // Maximum length for calculator input
 
 
         // --- Backend URL ---
@@ -817,7 +817,7 @@
                 "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️", 
                 "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️", 
                 "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️", 
-                "50d": "🌫️", "50n": "🌫️" 
+                "50d": "🌫️", "50n": "�️" 
             };
             return emojiMap[iconCode] || "❓";
         }
@@ -1606,73 +1606,155 @@
 
         // --- Calculator Logic ---
         function updateCalculatorDisplay() {
-            if(calculatorDisplay) calculatorDisplay.textContent = calculatorCurrentInput || calculatorPreviousInput || "0";
+            if(calculatorDisplay) {
+                let displayValue = calculatorCurrentInput || calculatorPreviousInput || "0";
+                // Truncate long display values for better presentation
+                if (displayValue.length > MAX_INPUT_LENGTH) {
+                    displayValue = displayValue.substring(0, MAX_INPUT_LENGTH) + "...";
+                }
+                calculatorDisplay.textContent = displayValue;
+            }
         }
 
         function handleCalculatorInput(value) {
-            if (calculatorResetDisplay) { calculatorCurrentInput = ""; calculatorResetDisplay = false; }
+            if (calculatorResetDisplay && !['(', ')'].includes(value)) { // Don't reset for parentheses if we are building an expression
+                calculatorCurrentInput = "";
+                calculatorResetDisplay = false;
+            }
 
-            if (value >= '0' && value <= '9') calculatorCurrentInput += value;
-            else if (value === '.') { if (!calculatorCurrentInput.includes('.')) calculatorCurrentInput += '.'; } 
-            else if (value === 'C') { calculatorCurrentInput = ""; calculatorPreviousInput = ""; calculatorOperator = null; } 
-            else if (value === '=') {
+            if (calculatorCurrentInput.length >= MAX_INPUT_LENGTH && !['C', '=', 'sin', 'cos', 'tan', 'sqrt', 'log', 'ln', '!'].includes(value)) {
+                // If input is too long, only allow control/function keys or equals
+                return;
+            }
+            
+            if (value >= '0' && value <= '9') {
+                calculatorCurrentInput += value;
+            } else if (value === '.') {
+                if (!calculatorCurrentInput.includes('.')) {
+                    calculatorCurrentInput += '.';
+                }
+            } else if (value === 'C') {
+                calculatorCurrentInput = "";
+                calculatorPreviousInput = "";
+                calculatorOperator = null;
+            } else if (value === '=') {
                 if (calculatorOperator && calculatorPreviousInput !== "" && calculatorCurrentInput !== "") {
                     try {
-                        let expression = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput;
-                        if (calculatorOperator === '^') expression = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`;
-                        
-                        // Basic arithmetic evaluation using Function constructor (use with caution for complex inputs)
-                        // For a production app, a proper math expression parser is safer.
-                        const F = new Function('return ' + expression.replace(/[^-()\d/*+.]/g, ''));
-                        calculatorCurrentInput = F().toString();
-                        calculatorOperator = null; calculatorPreviousInput = ""; calculatorResetDisplay = true;
-                    } catch (e) { calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true; }
-                }
-            } else if (['+', '-', '*', '/', '^'].includes(value)) {
-                if (calculatorCurrentInput !== "") {
-                    if (calculatorPreviousInput === "") {
-                        calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; calculatorOperator = value;
-                    } else if (calculatorOperator) { 
-                        handleCalculatorInput('='); 
-                        calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; 
-                        calculatorOperator = value; calculatorResetDisplay = false; 
-                    }
-                } else if (calculatorPreviousInput !== "" && value === "-") calculatorCurrentInput = "-";
-            } else { // Scientific functions
-                const num = parseFloat(calculatorCurrentInput);
-                if (calculatorCurrentInput !== "" && !isNaN(num) || ['pi', 'e'].includes(value)) {
-                     try {
-                        switch(value) {
-                            case 'sin': calculatorCurrentInput = Math.sin(num * Math.PI / 180).toString(); break;
-                            case 'cos': calculatorCurrentInput = Math.cos(num * Math.PI / 180).toString(); break;
-                            case 'tan': calculatorCurrentInput = Math.tan(num * Math.PI / 180).toString(); break;
-                            case 'sqrt': calculatorCurrentInput = Math.sqrt(num).toString(); break;
-                            case 'log': calculatorCurrentInput = Math.log10(num).toString(); break;
-                            case 'ln': calculatorCurrentInput = Math.log(num).toString(); break;
-                            case '!': 
-                                if (num < 0 || !Number.isInteger(num)) { calculatorCurrentInput = "Erreur"; break;}
-                                let fact = 1; for (let i = 2; i <= num; i++) fact *= i;
-                                calculatorCurrentInput = fact.toString(); break;
-                            case 'pi': calculatorCurrentInput = Math.PI.toString(); break;
-                            case 'e': calculatorCurrentInput = Math.E.toString(); break;
-                            case '(': calculatorCurrentInput += '('; calculatorResetDisplay = false; return; // Don't reset display for parenthesis
-                            case ')': calculatorCurrentInput += ')'; calculatorResetDisplay = false; return; // Don't reset display for parenthesis
+                        // Replace ^ with Math.pow for evaluation
+                        // IMPORTANT: The direct use of new Function() is a security risk in production if input is not strictly controlled.
+                        // A proper math expression parser (e.g., based on Shunting-yard algorithm) is recommended for safe and robust evaluation.
+                        // This example uses it for simplicity but with known limitations and risks.
+                        let expressionToEvaluate = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput;
+                        if (calculatorOperator === '^') {
+                             expressionToEvaluate = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`;
                         }
-                        if (value !== '(' && value !== ')') calculatorResetDisplay = true;
-                    } catch (e) { calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true;}
-                } else if (['pi', 'e', '(', ')'].includes(value)) { // Allow these even if currentInput is empty
-                     switch(value) {
-                        case 'pi': calculatorCurrentInput = Math.PI.toString(); calculatorResetDisplay = true; break;
-                        case 'e': calculatorCurrentInput = Math.E.toString(); calculatorResetDisplay = true; break;
-                        case '(': calculatorCurrentInput += '('; break;
-                        case ')': calculatorCurrentInput += ')'; break;
-                     }
-                } else {
-                    calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true;
+                        
+                        // Basic sanitization - still not fully secure for arbitrary input with new Function()
+                        const sanitizedExpression = expressionToEvaluate.replace(/[^-()\d/*+.]/g, '');
+                        
+                        let result = new Function('return ' + sanitizedExpression)();
+
+                        if (!isFinite(result)) {
+                            calculatorCurrentInput = "Dépassement"; // Overflow or invalid operation (e.g., div by zero)
+                        } else {
+                            calculatorCurrentInput = result.toString();
+                        }
+                        calculatorOperator = null;
+                        calculatorPreviousInput = "";
+                        calculatorResetDisplay = true;
+                    } catch (e) {
+                        console.error("Calculator evaluation error:", e);
+                        calculatorCurrentInput = "Erreur";
+                        calculatorResetDisplay = true;
+                    }
+                }
+            } else if (['+', '-', '*', '/', '^'].includes(value)) { // Operators
+                if (calculatorCurrentInput !== "") {
+                    if (calculatorPreviousInput === "") { // First number and operator
+                        calculatorPreviousInput = calculatorCurrentInput;
+                        calculatorCurrentInput = "";
+                        calculatorOperator = value;
+                    } else if (calculatorOperator) { // Chaining operations: 1 + 2 + ...
+                        handleCalculatorInput('='); // Calculate previous part
+                        if (calculatorCurrentInput !== "Erreur" && calculatorCurrentInput !== "Dépassement") {
+                            calculatorPreviousInput = calculatorCurrentInput; // Result becomes new previousInput
+                            calculatorCurrentInput = "";
+                            calculatorOperator = value;
+                            calculatorResetDisplay = false; 
+                        } else { // If previous calculation resulted in error, stop
+                            calculatorPreviousInput = "";
+                            calculatorOperator = null;
+                        }
+                    }
+                } else if (calculatorPreviousInput !== "" && value === "-" && calculatorOperator && calculatorCurrentInput === "") { 
+                    // Allow negative sign for the second number: e.g., 5 * -2
+                    calculatorCurrentInput = "-";
+                } else if (calculatorPreviousInput !== "" && !calculatorOperator) {
+                    // An operator is pressed after a result was shown (e.g. after '=' or a function)
+                    calculatorOperator = value;
+                    // calculatorPreviousInput is already set to the result
+                    calculatorCurrentInput = "";
+                    calculatorResetDisplay = false;
+                }
+            } else { // Scientific functions and parentheses
+                // Note: Parentheses handling is very basic here and won't support complex nested expressions
+                // without a full parser. They are treated as string appends.
+                if (value === '(') {
+                    calculatorCurrentInput += '(';
+                    calculatorResetDisplay = false; // Allow further input after '('
+                } else if (value === ')') {
+                    calculatorCurrentInput += ')';
+                    calculatorResetDisplay = false; // Allow further input after ')'
+                } else if (calculatorCurrentInput !== "" || ['pi', 'e'].includes(value)) { // Functions need an input or are constants
+                    const num = parseFloat(calculatorCurrentInput); // This will be NaN if currentInput is just '(' or similar
+                    
+                    if (isNaN(num) && !['pi', 'e'].includes(value) && !calculatorCurrentInput.endsWith(')')) {
+                        // If num is NaN and it's not pi or e, and not ending a parenthesis group, it's likely an error
+                        // unless we are building a more complex expression (which this simple calc doesn't fully support)
+                        // For now, let's assume direct function application on a valid number or constant.
+                        // calculatorCurrentInput = "Erreur"; // Or do nothing, let user correct
+                    } else {
+                        try {
+                            let result;
+                            switch(value) {
+                                case 'sin': result = Math.sin(num * Math.PI / 180); break; 
+                                case 'cos': result = Math.cos(num * Math.PI / 180); break; 
+                                case 'tan': result = Math.tan(num * Math.PI / 180); break; 
+                                case 'sqrt': result = Math.sqrt(num); break;
+                                case 'log': result = Math.log10(num); break;
+                                case 'ln': result = Math.log(num); break;
+                                case '!': 
+                                    if (num < 0 || !Number.isInteger(num) || num > 170) { // Factorial limit for JS numbers
+                                        result = Infinity; // Or "Erreur"
+                                        break;
+                                    }
+                                    let fact = 1; for (let i = 2; i <= num; i++) fact *= i;
+                                    result = fact; break;
+                                case 'pi': result = Math.PI; break;
+                                case 'e': result = Math.E; break;
+                                default: result = num; // Should not happen if value is a known function
+                            }
+
+                            if (!isFinite(result)) {
+                                calculatorCurrentInput = "Dépassement";
+                            } else {
+                                calculatorCurrentInput = result.toString();
+                            }
+                            calculatorResetDisplay = true; // After a function, next number input should reset
+                        } catch (e) {
+                            console.error("Calculator function error:", e);
+                            calculatorCurrentInput = "Erreur";
+                            calculatorResetDisplay = true;
+                        }
+                    }
+                } else if (['pi', 'e'].includes(value)) { // Constants can be entered on their own
+                     calculatorCurrentInput = (value === 'pi' ? Math.PI : Math.E).toString();
+                     calculatorResetDisplay = true;
                 }
             }
             updateCalculatorDisplay();
         }
+
 
         // --- Event Listeners ---
         sendButton.addEventListener('click', () => sendMessageViaWebSocket());
@@ -1738,13 +1820,18 @@
                 setActiveInfoPanel(event.target.dataset.target, false); 
             }
         });
-        toggleCodeCanvasButton.addEventListener('click', () => {
-            evaCodeCanvasContentWrapper.classList.toggle('expanded');
-            if(codeCanvasIcon) codeCanvasIcon.classList.toggle('fa-plus');
-            if(codeCanvasIcon) codeCanvasIcon.classList.toggle('fa-minus');
-        });
+        if (toggleCodeCanvasButton) { // Check if button exists
+            toggleCodeCanvasButton.addEventListener('click', () => {
+                if (evaCodeCanvasContentWrapper) evaCodeCanvasContentWrapper.classList.toggle('expanded');
+                if (codeCanvasIcon) {
+                    codeCanvasIcon.classList.toggle('fa-plus');
+                    codeCanvasIcon.classList.toggle('fa-minus');
+                }
+            });
+        }
 
-        if (calculatorButtonsContainer) { // Use the renamed variable
+
+        if (calculatorButtonsContainer) { 
             calculatorButtonsContainer.addEventListener('click', (event) => {
                 if (event.target.classList.contains('calc-button')) {
                     handleCalculatorInput(event.target.dataset.value);
@@ -1760,12 +1847,12 @@
             connectWebSocket();
             addMessageToChat("Si vous souhaitez utiliser les fonctionnalités Google (Agenda, Gmail, etc.), cliquez sur le bouton 'Autoriser l'accès aux services Google' ci-dessous.", "assistant");
             
-            infoPanelColumn.classList.add('collapsed'); // Start collapsed
+            if (infoPanelColumn) infoPanelColumn.classList.add('collapsed'); 
             const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
             const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
             if(leftIcon) leftIcon.style.display = 'none'; 
             if(rightIcon) rightIcon.style.display = 'inline-block';
-            setActiveInfoPanel('mapContent', false); // Set map as default but don't force open
+            setActiveInfoPanel('mapContent', false); 
 
             if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                  if(codeCanvasIcon) { codeCanvasIcon.classList.remove('fa-minus'); codeCanvasIcon.classList.add('fa-plus');}
@@ -1776,11 +1863,11 @@
             updateCalculatorDisplay(); 
 
             if (interruptModeButton) interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
-            if(promptFrequencyInput) recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
-            if(promptIndefiniteCheckbox) promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
+            if(promptFrequencyInput && recurrenceOptionsDiv) recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
+            if(promptIndefiniteCheckbox && promptRepetitionsInput) promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
 
             window.addEventListener('resize', () => { 
-                if (typeof google !== 'undefined' && google.maps && gMap && activeInfoPanelId === 'mapContent' && !infoPanelColumn.classList.contains('collapsed')) { 
+                if (typeof google !== 'undefined' && google.maps && gMap && activeInfoPanelId === 'mapContent' && infoPanelColumn && !infoPanelColumn.classList.contains('collapsed')) { 
                     google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); 
                 } 
             });
