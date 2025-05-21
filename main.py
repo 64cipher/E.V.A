@@ -723,8 +723,13 @@ def list_google_tasks(max_results=10): # Added default value
 def get_directions_from_google_maps_api(origin, destination):
     global google_maps_api_key
     if not google_maps_api_key:
-         print("ERREUR: Clé API Google Maps non configurée.")
-         return "Clé API Google Maps non configurée sur le serveur."
+        print("ERREUR: Clé API Google Maps non configurée.")
+        return {
+            "status": "error",
+            "summary": "Clé API Google Maps non configurée sur le serveur.",
+            "origin": origin,
+            "destination": destination
+        }
     try:
         import googlemaps # Make sure this is installed: pip install googlemaps
         gmaps_client = googlemaps.Client(key=google_maps_api_key)
@@ -733,8 +738,11 @@ def get_directions_from_google_maps_api(origin, destination):
 
         if directions_result and len(directions_result) > 0:
             leg = directions_result[0]['legs'][0] # Assuming one leg for simplicity
+            distance_text = leg['distance']['text']
+            duration_text = leg['duration']['text']
+            
             route_summary = f"Itinéraire de {origin} à {destination}:\n"
-            route_summary += f"  Distance: {leg['distance']['text']}, Durée: {leg['duration']['text']}\n"
+            route_summary += f"  Distance: {distance_text}, Durée: {duration_text}\n"
             if len(leg['steps']) > 0:
                 route_summary += "  Étapes:\n"
                 for i, step in enumerate(leg['steps'][:5]): # Show first 5 steps
@@ -742,16 +750,38 @@ def get_directions_from_google_maps_api(origin, destination):
                     route_summary += f"    {i+1}. {clean_instructions} ({step['distance']['text']})\n"
                 if len(leg['steps']) > 5:
                     route_summary += "    Et plus...\n"
-            return route_summary
+            return {
+                "status": "success",
+                "summary": route_summary,
+                "distance": distance_text,
+                "duration": duration_text,
+                "origin": origin,
+                "destination": destination
+            }
         else:
-            return f"Impossible de trouver un itinéraire de {origin} à {destination}."
+            return {
+                "status": "not_found",
+                "summary": f"Impossible de trouver un itinéraire de {origin} à {destination}.",
+                "origin": origin,
+                "destination": destination
+            }
     except ImportError:
         print("ERREUR CRITIQUE: Bibliothèque 'googlemaps' non trouvée. Pour l'installer: pip install googlemaps")
-        return "Erreur serveur: bibliothèque 'googlemaps' manquante."
+        return {
+            "status": "error",
+            "summary": "Erreur serveur: bibliothèque 'googlemaps' manquante.",
+            "origin": origin,
+            "destination": destination
+        }
     except Exception as e:
         print(f"Erreur lors du calcul de l'itinéraire: {e}")
         traceback.print_exc()
-        return f"Erreur lors du calcul de l'itinéraire: {type(e).__name__}"
+        return {
+            "status": "error",
+            "summary": f"Erreur lors du calcul de l'itinéraire: {type(e).__name__}",
+            "origin": origin,
+            "destination": destination
+        }
 
 def perform_web_search(query, num_results=6): # Default to 6 results
     global serpapi_client_available, serpapi_api_key
@@ -1253,8 +1283,15 @@ def handle_get_directions(entities):
     origin = entities.get("origin", "Thonon-les-Bains") # Default origin if not specified
     destination = entities.get("destination")
     if destination:
+        # La fonction get_directions_from_google_maps_api retourne maintenant un dictionnaire
         return get_directions_from_google_maps_api(origin, destination)
-    return "Veuillez préciser la destination pour l'itinéraire."
+    return { # Retourne un dictionnaire même en cas d'erreur de validation initiale
+        "status": "error",
+        "summary": "Veuillez préciser la destination pour l'itinéraire.",
+        "origin": origin,
+        "destination": destination
+    }
+
 
 def handle_web_search(entities):
     query = entities.get("query")
@@ -1435,7 +1472,13 @@ def chat_ws(ws):
                             final_text_response_for_action = action_dispatcher[parsed_command_action](entities)
                             action_taken_by_nlu = True
                             
-                            chat_display_message = str(final_text_response_for_action) # Default chat message is the action result
+                            # Default chat message (can be overridden by panel-specific logic)
+                            # If the action returns a dict (like get_directions), use its 'summary'
+                            if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
+                                chat_display_message = final_text_response_for_action["summary"]
+                            else:
+                                chat_display_message = str(final_text_response_for_action)
+
                             panel_data_content = None # Reset panel data for this turn
                             panel_target_id = None    # Reset panel target
 
@@ -1444,12 +1487,11 @@ def chat_ws(ws):
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "calendarContent"
                                 chat_display_message = "Voici vos événements prévus."
-                                # More specific chat message if needed, e.g., "Voici les événements correspondants."
-                            elif parsed_command_action == "list_emails": # General unread emails
+                            elif parsed_command_action == "list_emails": 
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
                                 chat_display_message = "Voici vos e-mails non lus." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
-                            elif parsed_command_action == "get_contact_emails": # Specific contact emails
+                            elif parsed_command_action == "get_contact_emails": 
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
                                 mode = entities.get("retrieve_mode", "summary")
@@ -1458,36 +1500,51 @@ def chat_ws(ws):
                                     chat_display_message = panel_data_content
                                 elif mode == "full_last":
                                     chat_display_message = f"Voici le dernier email de {contact_id}."
-                                else: # summary
+                                else: 
                                     chat_display_message = f"Voici les emails pour {contact_id}."
-
                             elif parsed_command_action == "list_tasks":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "taskContent"
                                 chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
-                                panel_target_id = "searchContent" # Display contacts in search panel
+                                panel_target_id = "searchContent" 
                                 chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                            
                             elif parsed_command_action == "get_directions":
-                                panel_data_content = str(final_text_response_for_action)
-                                panel_target_id = "mapContent"
-                                if gemini_explanation_text and ("point de passage" in gemini_explanation_text): # If Gemini provided context
-                                    chat_display_message = gemini_explanation_text
-                                    if "Impossible de trouver" not in str(final_text_response_for_action) and "erreur" not in str(final_text_response_for_action).lower():
-                                        chat_display_message += "\nL'itinéraire est affiché sur la carte."
-                                    elif "Impossible de trouver" in str(final_text_response_for_action): # Append error if route failed
-                                        chat_display_message += f"\nDe plus: {final_text_response_for_action}"
-                                else: # Default message
-                                    chat_display_message = "Voici votre itinéraire." if "Impossible de trouver" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                # final_text_response_for_action is the dict from handle_get_directions
+                                if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
+                                    panel_data_content = final_text_response_for_action["summary"]
+                                    panel_target_id = "mapContent"
+                                    route_status_summary = final_text_response_for_action["summary"]
+
+                                    if final_text_response_for_action.get("status") == "success":
+                                        distance = final_text_response_for_action.get("distance", "distance inconnue")
+                                        duration = final_text_response_for_action.get("duration", "durée inconnue")
+                                        chat_display_message = f"Voici votre itinéraire. Le trajet est de {distance} et durera environ {duration}."
+                                    else: # Error or not found
+                                        chat_display_message = route_status_summary
+                                
+                                    
+                                    # Allow Gemini's explanation to override if very specific (e.g., mentioning waypoints)
+                                    if gemini_explanation_text and ("point de passage" in gemini_explanation_text.lower()):
+                                        chat_display_message = gemini_explanation_text
+                                        if final_text_response_for_action.get("status") == "success":
+                                            chat_display_message += "\nL'itinéraire est affiché sur la carte."
+                                elif isinstance(final_text_response_for_action, str): # Fallback if it's just a string (e.g. initial validation error)
+                                    panel_data_content = final_text_response_for_action
+                                    panel_target_id = "mapContent"
+                                    chat_display_message = final_text_response_for_action
+
+
                             elif parsed_command_action == "web_search":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
                                 query_entity = parsed_command_obj.get("entities", {}).get("query", "votre recherche")
                                 chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "get_weather_forecast":
-                                panel_data_content = str(final_text_response_for_action) # Usually "Prévisions météo..."
-                                panel_target_id = "weatherForecastContent" # Target the weather panel
+                                panel_data_content = str(final_text_response_for_action) 
+                                panel_target_id = "weatherForecastContent" 
                                 chat_display_message = "Voici les prévisions météo."
                             
                             # If Gemini provided an explanation alongside the JSON command, and it's different from the action result,
@@ -1495,48 +1552,46 @@ def chat_ws(ws):
                             if gemini_explanation_text and \
                                gemini_explanation_text != chat_display_message and \
                                not (extracted_json_command_str and gemini_explanation_text == str(gemini_raw_response)) and \
-                               parsed_command_action not in ["get_directions","list_calendar_events", "get_contact_emails"]: # For these, custom messages are better
-                                # Don't override if the action result is an error or a request for clarification
-                                if "erreur" in str(final_text_response_for_action).lower() or \
-                                   "je n'ai pas pu interpréter" in str(final_text_response_for_action).lower() or \
-                                   "authentification google requise" in str(final_text_response_for_action).lower() or \
-                                   "identifiants invalides" in str(final_text_response_for_action).lower():
-                                   pass # Keep the action's direct feedback
+                               parsed_command_action not in ["get_directions","list_calendar_events", "get_contact_emails"]: 
+                                current_action_result_str = final_text_response_for_action.get("summary") if isinstance(final_text_response_for_action, dict) else str(final_text_response_for_action)
+                                if "erreur" in current_action_result_str.lower() or \
+                                   "je n'ai pas pu interpréter" in current_action_result_str.lower() or \
+                                   "authentification google requise" in current_action_result_str.lower() or \
+                                   "identifiants invalides" in current_action_result_str.lower():
+                                   pass 
                                 else:
-                                   chat_display_message = gemini_explanation_text # Use Gemini's conversational text
+                                   chat_display_message = gemini_explanation_text 
 
-                        else: # Action in JSON not found in dispatcher
+                        else: 
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
-                            action_taken_by_nlu = False # Not successfully dispatched
+                            action_taken_by_nlu = False 
                     
-                    elif extracted_code_block: # Code generation was identified
-                        action_taken_by_nlu = False # Not a standard NLU command, but a special case
-                        parsed_command_action = "code_generation" # Internal type for logging/TTS
-                        panel_data_content = extracted_code_block # The code itself
-                        panel_target_id = "codeDisplayContent"   # Target the code panel
+                    elif extracted_code_block: 
+                        action_taken_by_nlu = False 
+                        parsed_command_action = "code_generation" 
+                        panel_data_content = extracted_code_block 
+                        panel_target_id = "codeDisplayContent"   
                         chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code généré et affiché dans l'onglet Code."
-                        if not chat_display_message.strip(): # Ensure some message
+                        if not chat_display_message.strip(): 
                              chat_display_message = "Code généré et affiché dans l'onglet Code."
                     
-                    else: # No JSON command, no code block, just plain text from Gemini
+                    else: 
                         action_taken_by_nlu = False
                         chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Je n'ai pas compris la demande."
 
 
                 # --- Prepare and Send Response to Client ---
-                if chat_display_message is None: # Should not happen if logic above is complete
+                if chat_display_message is None: 
                     chat_display_message = "Je ne suis pas sûr de pouvoir traiter cette demande."
                 
-                chat_display_message = str(chat_display_message) # Ensure it's a string
-                # Clean up chat message if it still contains raw JSON and a panel is being updated
+                chat_display_message = str(chat_display_message) 
                 if "```json" in chat_display_message and panel_target_id:
                     if gemini_explanation_text and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
-                         # If there was surrounding text, use that
                          chat_display_message = gemini_explanation_text if gemini_explanation_text.strip() else "Action effectuée."
-                    elif extracted_code_block : # If it was code
+                    elif extracted_code_block : 
                          chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code affiché dans le panneau dédié."
-                    else: # Generic fallback
+                    else: 
                         chat_display_message = f"Action traitée. Contenu affiché dans le panneau dédié."
 
 
@@ -1549,16 +1604,23 @@ def chat_ws(ws):
                 
                 # --- TTS Logic ---
                 audio_data_url = None
-                text_for_gtts = chat_display_message # Default text to speak
-                should_speak = True # Assume we should speak unless conditions met
+                text_for_gtts = chat_display_message 
+                should_speak = True 
                 lower_chat_message = chat_display_message.lower()
 
-                # Customize TTS for certain actions or if content is displayed in a panel
-                if panel_target_id == "codeDisplayContent" and extracted_code_block:
-                    text_for_gtts = "Voici le code que j'ai généré."
-                elif action_taken_by_nlu:
-                    if parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in lower_chat_message:
-                        text_for_gtts = "événement ajouté au calendrier"
+                if action_taken_by_nlu:
+                    if parsed_command_action == "get_directions":
+                        # final_text_response_for_action is the dict from handle_get_directions
+                        if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
+                            distance = final_text_response_for_action.get("distance", "distance inconnue")
+                            duration = final_text_response_for_action.get("duration", "durée inconnue")
+                            text_for_gtts = f"Voici votre itinéraire. Le trajet est de {distance} et durera environ {duration}."
+                        elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("summary"):
+                            text_for_gtts = final_text_response_for_action["summary"] # Speak the error or "not found"
+                        else: # Fallback if structure is unexpected or not a dict (e.g. initial validation error string)
+                            text_for_gtts = chat_display_message 
+                    elif parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in lower_chat_message:
+                        text_for_gtts = "Événement ajouté au calendrier." # More concise
                     elif parsed_command_action == "web_search" and panel_target_id == "searchContent":
                         text_for_gtts = "Voici les résultats de recherche."
                     elif parsed_command_action == "list_contacts" and panel_target_id == "searchContent":
@@ -1566,34 +1628,32 @@ def chat_ws(ws):
                     elif parsed_command_action == "list_tasks" and panel_target_id == "taskContent":
                         text_for_gtts = "Voici la liste des tâches."
                     elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
-                        # If the message is not the generic "Voici vos 10 prochains..." speak it fully
                         if not lower_chat_message.startswith("voici vos 10 prochains événements") and \
                            not lower_chat_message.startswith("aucun événement à venir trouvé"): 
-                            text_for_gtts = chat_display_message # Speak the specific finding
-                        else: # Generic list
+                            text_for_gtts = chat_display_message 
+                        else: 
                             text_for_gtts = "Voici les événements du calendrier."
-                    elif parsed_command_action == "get_contact_email": # Speak the email address directly
+                    elif parsed_command_action == "get_contact_email": 
                         text_for_gtts = chat_display_message 
-                    # If the response is an error or clarification, speak it fully
                     elif any(err_kw in lower_chat_message for err_kw in ["erreur", "non trouvé", "invalide", "pas pu interpréter", "j'ai besoin", "veuillez préciser", "dois-je", "souhaitez-vous", "authentification google requise", "identifiants invalides"]):
-                        text_for_gtts = chat_display_message # Speak the full error/clarification
-                    # For other panel updates, if the chat message is generic "Voici...", speak that
-                    elif panel_target_id and parsed_command_action in ["list_emails", "get_directions", "get_weather_forecast", "get_contact_emails"]: 
-                        if chat_display_message.startswith("Voici") : # e.g. "Voici vos emails."
-                             text_for_gtts = chat_display_message # Speak the generic intro
+                        text_for_gtts = chat_display_message
+                    elif panel_target_id and parsed_command_action in ["list_emails", "get_weather_forecast", "get_contact_emails"]: 
+                        if chat_display_message.startswith("Voici") : 
+                             text_for_gtts = chat_display_message 
+                elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
+                     text_for_gtts = "Voici le code que j'ai généré."
                 
-                # Suppress audio for critical system errors or non-informative messages
                 suppress_audio_keywords = [
                      "client gemini non configuré", "réponse gemini bloquée",
                      "erreur critique", "erreur serveur", "erreur interne",
                      "bibliothèque manquante", "non disponible",
-                     "je ne suis pas sûr de comprendre votre demande" , # Example of a generic "I don't understand"
+                     "je ne suis pas sûr de comprendre votre demande" , 
                 ]
                 if any(keyword in lower_chat_message for keyword in suppress_audio_keywords):
-                    if text_for_gtts == chat_display_message: # Only suppress if it's the main message
+                    if text_for_gtts == chat_display_message: 
                             should_speak = False
                 
-                if chat_display_message.strip() == "" or lower_chat_message == "ok.": # Don't speak empty or just "ok"
+                if chat_display_message.strip() == "" or lower_chat_message == "ok.": 
                     should_speak = False
 
 
@@ -1603,24 +1663,22 @@ def chat_ws(ws):
                 if audio_data_url:
                     ws.send(json.dumps({"type": "audio_data", "audio": audio_data_url}))
                 else:
-                    # Send a specific type if no audio, so client knows audio processing is done
                     ws.send(json.dumps({"type": "no_audio_data"}))
 
 
-            else: # No data received from client, check for server ping
+            else: 
                 if current_time - last_activity_time > server_ping_interval:
                     try:
                         # print(f"DEBUG: Server PING to client at {current_time}")
                         ws.send(json.dumps({"type": "system_ping", "timestamp": current_time}))
-                        last_activity_time = current_time # Reset activity time after pinging
+                        last_activity_time = current_time 
                     except (ConnectionClosed, ConnectionResetError):
                         # print("[INFO WebSocket Handler] Connection closed by client during ping (expected).")
-                        raise # Re-raise to exit handler
+                        raise 
                     except Exception as e_ping:
                         print(f"ERREUR lors de l'envoi du ping serveur: {type(e_ping).__name__} - {e_ping}")
                         traceback.print_exc()
-                        raise # Assume connection is problematic, exit handler
-
+                        raise 
 
     except (ConnectionClosed, ConnectionResetError):
         print(f"[INFO WebSocket Handler] Connexion fermée avec le client.")
@@ -1628,13 +1686,11 @@ def chat_ws(ws):
         print(f"[ERREUR WebSocket Handler Critique] /api/chat_ws: {type(e).__name__} - {e}")
         traceback.print_exc()
         try:
-            # Attempt to send a final error message to the client if the WebSocket is still somewhat open
-            if ws and hasattr(ws, 'connected') and ws.connected: # Check if ws object exists and seems connected
+            if ws and hasattr(ws, 'connected') and ws.connected: 
                  ws.send(json.dumps({"type": "error", "message": f"Erreur serveur: {type(e).__name__}"}))
         except Exception as send_error:
             print(f"Impossible d'envoyer le message d'erreur final au client: {send_error}")
     finally:
-        # Cleanup or logging when a client handler exits
         print(f"[INFO WebSocket Handler] Fin du handler pour un client.")
 
 
@@ -1647,7 +1703,7 @@ if __name__ == '__main__':
     print("-------------------------------------------")
     print(f"Démarrage du serveur Flask sur http://localhost:5000")
     print(f"Endpoint WebSocket: ws://localhost:5000/api/chat_ws")
-    print(f"Mode debug Flask: {'Activé' if app.debug else 'Désactivé'}") # Check app.debug state
+    print(f"Mode debug Flask: {'Activé' if app.debug else 'Désactivé'}") 
     print(f"Modèle Gemini: {gemini_model_name}")
     print(f"gTTS: {'Oui' if gtts_enabled else 'Non'}")
     print(f"SerpAPI: {'Oui' if serpapi_client_available and serpapi_api_key else 'Non'}")
@@ -1656,5 +1712,4 @@ if __name__ == '__main__':
     print(f"Fichier de tokens OAuth: {TOKEN_PICKLE_FILE}")
     print(f"Fichier de contacts: {CONTACTS_FILE}")
     print("-------------------------------------------")
-    # use_reloader=False is important for WebSocket stability with Flask-Sock in debug mode
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
