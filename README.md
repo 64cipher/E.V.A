@@ -93,9 +93,15 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
    * Allez sur [console.cloud.google.com](https://console.cloud.google.com)
    * Créez un projet ▶ “API & Services” ▶ “Identifiants” ▶ **“ID client OAuth 2.0 (Desktop)”**.
-   * Téléchargez `client_secret_<id>.json`, renommez‑le `client_secret.json`, placez‑le à la racine.
    * Dans l’écran de consentement, ajoutez `http://localhost:5000/oauth2callback_google` comme URI de redirection.
-   * Récupérez et utiliser gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
+
+   ![image](https://github.com/user-attachments/assets/b9303036-4940-4d35-a052-3caac4190b03)
+
+   * Téléchargez `client_secret_<id>.json`, renommez‑le `client_secret.json`, placez‑le à la racine.
+
+   ![image](https://github.com/user-attachments/assets/1d135297-9062-4256-a6c1-b4c85c06f5e0)
+
+   * Récupérez et utilisez gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
    * Générer une clé api [OpenWeatherMap](https://openweathermap.org/api)
    * Activez Directions API pour afficher les itinéraires sur la map dans "API et service" de Console Cloud.
 
