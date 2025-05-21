@@ -99,7 +99,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
    * Téléchargez `client_secret_<id>.json`, renommez‑le `client_secret.json`, placez‑le à la racine.
 
-   ![image](https://github.com/user-attachments/assets/1d135297-9062-4256-a6c1-b4c85c06f5e0)
+   ![Capture d’écran 2025-05-21 123055](https://github.com/user-attachments/assets/6529a5c5-5dd6-4642-b71a-1c37640e3753)
 
    * Récupérez et utilisez gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
    * Générer une clé api [OpenWeatherMap](https://openweathermap.org/api)
