@@ -101,6 +101,8 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
      ![image](https://github.com/user-attachments/assets/653019d5-3db4-4e6e-86ea-08345b6055b1)
 
+     ![image](https://github.com/user-attachments/assets/83ba0604-9069-4685-ab57-1bb913b8f329)
+
      ![image](https://github.com/user-attachments/assets/a2c8d592-d9d9-4d88-9647-3a59a97a0261)
 
 6. **Frontend : insérez vos clés JS**
