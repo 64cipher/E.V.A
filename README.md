@@ -99,7 +99,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    * Générer une clé api [OpenWeatherMap](https://openweathermap.org/api)
    * Activez Directions API pour afficher les itinéraires sur la map dans "API et service" de Console Cloud.
 
-     ![image](https://github.com/user-attachments/assets/3f30c358-309a-4a5d-94c4-e7dc1a862f8e)
+     ![image](https://github.com/user-attachments/assets/653019d5-3db4-4e6e-86ea-08345b6055b1)
 
      ![image](https://github.com/user-attachments/assets/a2c8d592-d9d9-4d88-9647-3a59a97a0261)
 
