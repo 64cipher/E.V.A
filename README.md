@@ -96,7 +96,14 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    * Téléchargez `client_secret_<id>.json`, renommez‑le `client_secret.json`, placez‑le à la racine.
    * Dans l’écran de consentement, ajoutez `http://localhost:5000/oauth2callback_google` comme URI de redirection.
    * Récupérez et utiliser gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
-5. **Frontend : insérez vos clés JS**
+   * Générer une clé api [OpenWeatherMap](https://openweathermap.org/api)
+   * Activez Directions API pour afficher les itinéraires sur la map dans "API et service" de Console Cloud.
+
+     ![image](https://github.com/user-attachments/assets/3f30c358-309a-4a5d-94c4-e7dc1a862f8e)
+
+     ![image](https://github.com/user-attachments/assets/a2c8d592-d9d9-4d88-9647-3a59a97a0261)
+
+6. **Frontend : insérez vos clés JS**
 
    * Ouvrez `index.html` et recherchez, ligne 9 :
 
@@ -106,12 +113,12 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
      Remplacez `GOOGLE_MAPS_API_KEY` par la clé réelle.
    * Ligne 609, remplacez `const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';` par votre clé OpenWeatherMap.
-6. **Lancer le backend**
+7. **Lancer le backend**
 
    ```bash
    python main.py              # écoute sur http://localhost:5000
    ```
-7. **Servir le frontend** (au choix)
+8. **Servir le frontend** (au choix)
 
    * Mode rapide :
 
@@ -123,7 +130,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
    * Ou via une extension Live Server (VS Code), Nginx ou NodeJS.
 
      
-8. **Autoriser Google**
+9. **Autoriser Google**
 
    * Dans l’UI EVA cliquez sur **“Autoriser l’accès aux services Google”** puis connectez‑vous.
 
