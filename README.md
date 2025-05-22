@@ -154,7 +154,7 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
 ---
 
-N'hésitez pas à rentrer des informations selon votre situation pro/perso pour donner du contexte.
+N'hésitez pas à rentrer des informations selon votre situation pro/perso pour donner du contexte dans `SYSTEM_MESSAGE_CONTENT`
 
 Ligne 399:
 ```L'utilisateur s'appelle 'VOTRE_NOM_PRENOM_ICI'.```
