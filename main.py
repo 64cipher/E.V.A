@@ -393,13 +393,19 @@ def format_event_datetime(start_str):
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Enhanced Voice Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
-Tu peux tenir des conversations sur tout les sujets en plus de tes capacité d'assistant
-Tu es amicale, agréable, drôle et un peu séductrice.
-Tu privilégie les réponses brèves et claires. Quand je demande une info ou définition, tu donnes une réponse courte.
+Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
+Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. Tu es connue pour tes commentaires concis et pleins d'esprit.
+Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
+L'utilisateur s'appelle 'VOTRE_NOM_PRENOM_ICI'.
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, ou obtenir des détails sur les emails d'un contact), tu DOIS la reformuler en un objet JSON structuré.
 Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
+TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases. Ce commentaire doit :
+1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+2. Être concis, spirituel et professionnel.
+3. Ce commentaire textuel doit être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
 
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
@@ -420,7 +426,7 @@ Exemples d'entités attendues pour chaque action :
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
 Si la requête est une QUESTION GÉNÉRALE, une salutation, ou une conversation qui NE correspond PAS à une commande spécifique listée ci-dessus, tu DOIS répondre directement en langage naturel ET NE PAS générer de JSON.
-Si une question générale PEUT être résolue par une commande (par exemple, 'quel temps fait-il?' peut utiliser 'get_weather_forecast', 'comment aller à Paris?' peut utiliser 'get_directions', 'quelles sont les nouvelles sur X?' peut utiliser 'web_search'), alors tu DOIS prioriser la génération du JSON de la commande correspondante.
+Si une question générale PEUT être résolue par une commande (par exemple, 'quel temps fait-il?' peut utiliser 'get_weather_forecast', 'comment aller à Paris?' peut utiliser 'get_directions', 'quelles sont les nouvelles sur X?' peut utiliser 'web_search'), alors tu DOIS prioriser la génération du JSON de la commande correspondante, suivi de ton commentaire spirituel.
 
 Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et intègre tes observations dans ta réponse si c'est pertinent. Si l'utilisateur joint un fichier texte, son contenu te sera fourni précédé d'une note indiquant son nom. Utilise ce contenu textuel comme partie intégrante de la requête de l'utilisateur. Pour les commandes, les images ou fichiers ne sont généralement pas utilisés directement pour remplir les entités, mais peuvent fournir un contexte.
 
@@ -1402,14 +1408,14 @@ def chat_ws(ws):
                         current_user_parts_for_gemini.append("(Erreur: Impossible de traiter l'image de la webcam)")
                 
                 # --- Initialize response variables ---
-                final_text_response_for_action = None # Result from action dispatcher
-                action_taken_by_nlu = False # Flag if NLU command was processed
-                parsed_command_action = None # The 'action' string from Gemini JSON
-                chat_display_message = None # What EVA says in chat
-                panel_data_content = None # Content for the info panel
-                panel_target_id = None # Which panel to update
-                gemini_explanation_text = None # Text from Gemini if it's not a pure command
-                extracted_code_block = None  # For code generation
+                final_text_response_for_action = None # Result from action dispatcher (data for panel)
+                action_taken_by_nlu = False 
+                parsed_command_action = None 
+                chat_display_message = None # What EVA says in chat (witty summary or general response)
+                panel_data_content = None 
+                panel_target_id = None 
+                gemini_explanation_text = None # Text from Gemini (potentially the witty summary)
+                extracted_code_block = None  
 
                 # --- Process with Gemini ---
                 if not current_user_parts_for_gemini and not gemini_conversation_history:
@@ -1418,30 +1424,26 @@ def chat_ws(ws):
                     gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
                     
                     extracted_json_command_str = None
-                    gemini_explanation_text = str(gemini_raw_response) # Default to raw response as explanation
+                    # Default gemini_explanation_text to the full response, it will be refined if JSON is found
+                    gemini_explanation_text = str(gemini_raw_response) 
 
-                    # Try to extract JSON command block if present (```json ... ```)
                     if isinstance(gemini_raw_response, str):
                         match_markdown_json = re.search(r"```json\s*(\{.*?\})\s*```", gemini_raw_response, re.DOTALL | re.IGNORECASE)
                         if match_markdown_json:
                             extracted_json_command_str = match_markdown_json.group(1).strip()
-                            # Get text before and after the JSON block as potential explanation
                             pre_text = gemini_raw_response[:match_markdown_json.start()].strip()
                             post_text = gemini_raw_response[match_markdown_json.end():].strip()
                             gemini_explanation_text = f"{pre_text}\n{post_text}".strip() if (pre_text or post_text) else None
-                        # If not in markdown, check if the whole response is a JSON string
                         elif gemini_raw_response.strip().startswith("{") and gemini_raw_response.strip().endswith("}"):
                             try:
                                 test_parse = json.loads(gemini_raw_response.strip())
-                                if isinstance(test_parse, dict) and "action" in test_parse: # Basic validation
+                                if isinstance(test_parse, dict) and "action" in test_parse: 
                                     extracted_json_command_str = gemini_raw_response.strip()
-                                    gemini_explanation_text = None # Pure command, no surrounding text
+                                    gemini_explanation_text = None 
                             except json.JSONDecodeError:
-                                pass # Not a valid JSON, treat as plain text
+                                pass 
 
-                        # If no JSON command, check for code blocks (```python ... ``` etc.)
                         if not extracted_json_command_str:
-                            # Regex to find code blocks, optionally with language specified
                             match_code = re.search(r"```(?:\w*\s*\n)?([\s\S]*?)\n```", gemini_raw_response, re.DOTALL)
                             if match_code:
                                 extracted_code_block = match_code.group(1).strip()
@@ -1449,9 +1451,8 @@ def chat_ws(ws):
                                 post_text = gemini_raw_response[match_code.end():].strip()
                                 if pre_text or post_text:
                                      gemini_explanation_text = f"{pre_text}\n{post_text}".strip()
-                                else: # Only code was returned
-                                     gemini_explanation_text = "Code généré." # Default message
-                                # Ensure there's always some explanation if code is generated
+                                else: 
+                                     gemini_explanation_text = "Code généré." 
                                 if not gemini_explanation_text.strip(): 
                                      gemini_explanation_text = "Code généré et affiché dans l'onglet Code."
 
@@ -1463,106 +1464,108 @@ def chat_ws(ws):
                             parsed_command_obj = json.loads(extracted_json_command_str)
                         except json.JSONDecodeError:
                             print(f"WARN: Extracted JSON string failed to parse: {extracted_json_command_str}")
-                            if gemini_explanation_text is None: gemini_explanation_text = gemini_raw_response # Fallback to raw if parse fails
+                            # If JSON parsing fails, gemini_explanation_text (the full raw response) will be used as chat_display_message later
+                            if gemini_explanation_text is None : gemini_explanation_text = str(gemini_raw_response)
+
 
                     if parsed_command_obj and isinstance(parsed_command_obj, dict) and "action" in parsed_command_obj:
                         parsed_command_action = parsed_command_obj.get("action", "").strip()
                         entities = parsed_command_obj.get("entities", {})
                         
                         if parsed_command_action in action_dispatcher:
-                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities)
+                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities) # This is data for the panel or a direct status message
                             action_taken_by_nlu = True
                             
-                            # Default chat message (can be overridden by panel-specific logic)
-                            # If the action returns a dict (like get_directions), use its 'summary'
-                            if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
-                                chat_display_message = final_text_response_for_action["summary"]
-                            else:
-                                chat_display_message = str(final_text_response_for_action)
+                            # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary
+                            if gemini_explanation_text and gemini_explanation_text.strip():
+                                chat_display_message = gemini_explanation_text.strip()
+                            else: # Fallback if Gemini provides no separate explanation
+                                if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
+                                    chat_display_message = final_text_response_for_action["summary"] # e.g. directions summary
+                                else:
+                                    chat_display_message = str(final_text_response_for_action) # e.g. "Tâche ajoutée"
 
-                            panel_data_content = None # Reset panel data for this turn
-                            panel_target_id = None    # Reset panel target
+                            # PANEL DATA LOGIC: Always use final_text_response_for_action for panel content
+                            panel_data_content = None 
+                            panel_target_id = None    
 
-                            # --- Panel-specific logic ---
                             if parsed_command_action == "list_calendar_events":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "calendarContent"
-                                chat_display_message = "Voici vos événements prévus."
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()): # Fallback chat message if no wit
+                                    chat_display_message = "Voici vos événements." if "Aucun événement" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "list_emails": 
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
-                                chat_display_message = "Voici vos e-mails non lus." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Voici vos e-mails non lus." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "get_contact_emails": 
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
-                                mode = entities.get("retrieve_mode", "summary")
-                                contact_id = entities.get("contact_identifier", "le contact")
-                                if "Aucun email trouvé" in panel_data_content or "non trouvé" in panel_data_content.lower():
-                                    chat_display_message = panel_data_content
-                                elif mode == "full_last":
-                                    chat_display_message = f"Voici le dernier email de {contact_id}."
-                                else: 
-                                    chat_display_message = f"Voici les emails pour {contact_id}."
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    mode = entities.get("retrieve_mode", "summary")
+                                    contact_id = entities.get("contact_identifier", "le contact")
+                                    if "Aucun email trouvé" in panel_data_content or "non trouvé" in panel_data_content.lower():
+                                        chat_display_message = panel_data_content
+                                    elif mode == "full_last":
+                                        chat_display_message = f"Voici le dernier email de {contact_id}."
+                                    else: 
+                                        chat_display_message = f"Voici les emails pour {contact_id}."
                             elif parsed_command_action == "list_tasks":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "taskContent"
-                                chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent" 
-                                chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             
                             elif parsed_command_action == "get_directions":
-                                # final_text_response_for_action is the dict from handle_get_directions
-                                if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
-                                    panel_data_content = final_text_response_for_action["summary"]
+                                if isinstance(final_text_response_for_action, dict): # Expected structure
+                                    panel_data_content = final_text_response_for_action.get("summary", "Détails de l'itinéraire non disponibles.")
                                     panel_target_id = "mapContent"
-                                    route_status_summary = final_text_response_for_action["summary"]
-
+                                    
+                                    # Format chat_display_message for directions
                                     if final_text_response_for_action.get("status") == "success":
                                         distance = final_text_response_for_action.get("distance", "distance inconnue")
                                         duration = final_text_response_for_action.get("duration", "durée inconnue")
-                                        chat_display_message = f"Voici votre itinéraire. Le trajet est de {distance} et durera environ {duration}."
-                                    else: # Error or not found
-                                        chat_display_message = route_status_summary
+                                        destination_entity = entities.get("destination", "votre destination")
+                                        
+                                        # If chat_display_message came from Gemini's explanation (already set), try to format it
+                                        if chat_display_message and "{destination}" in chat_display_message: # Check for placeholder
+                                            try:
+                                                chat_display_message = chat_display_message.format(distance=distance, duration=duration, destination=destination_entity)
+                                            except KeyError:
+                                                print(f"WARN: Placeholders non trouvés ou incorrects dans chat_display_message (venant de Gemini) pour get_directions. Message: '{chat_display_message}'")
+                                                # Fallback: append details to Gemini's text if formatting failed
+                                                chat_display_message = f"{chat_display_message.strip()} (Trajet vers {destination_entity}: {distance}, environ {duration})."
+                                        else: # No Gemini explanation with placeholders, or it was an error message. Create/use default.
+                                            if gemini_explanation_text and gemini_explanation_text.strip(): # Gemini provided text, but not with placeholders for formatting
+                                                chat_display_message = f"{gemini_explanation_text.strip()} Le trajet vers {destination_entity} est de {distance} et durera environ {duration}."
+                                            else: # No Gemini explanation at all, create a default formatted message
+                                                chat_display_message = f"Voici l'itinéraire pour {destination_entity}. Le trajet est de {distance} et durera environ {duration}."
+                                    # else: chat_display_message is already an error summary from Gemini or fallback
                                 
-                                    
-                                    # Allow Gemini's explanation to override if very specific (e.g., mentioning waypoints)
-                                    if gemini_explanation_text and ("point de passage" in gemini_explanation_text.lower()):
-                                        chat_display_message = gemini_explanation_text
-                                        if final_text_response_for_action.get("status") == "success":
-                                            chat_display_message += "\nL'itinéraire est affiché sur la carte."
-                                elif isinstance(final_text_response_for_action, str): # Fallback if it's just a string (e.g. initial validation error)
+                                elif isinstance(final_text_response_for_action, str): # Error string from handler
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
-                                    chat_display_message = final_text_response_for_action
-
-
+                                    # chat_display_message would have been set to this string if no gemini_explanation_text
+                                    if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                        chat_display_message = final_text_response_for_action
+                            
                             elif parsed_command_action == "web_search":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
-                                query_entity = parsed_command_obj.get("entities", {}).get("query", "votre recherche")
-                                chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    query_entity = parsed_command_obj.get("entities", {}).get("query", "votre recherche")
+                                    chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "get_weather_forecast":
                                 panel_data_content = str(final_text_response_for_action) 
                                 panel_target_id = "weatherForecastContent" 
-                                chat_display_message = "Voici les prévisions météo."
-                            
-                            # If Gemini provided an explanation alongside the JSON command, and it's different from the action result,
-                            # prefer Gemini's explanation for the chat, unless the action resulted in a clear error/request for info.
-                            if gemini_explanation_text and \
-                               gemini_explanation_text != chat_display_message and \
-                               not (extracted_json_command_str and gemini_explanation_text == str(gemini_raw_response)) and \
-                               parsed_command_action not in ["get_directions","list_calendar_events", "get_contact_emails"]: 
-                                current_action_result_str = final_text_response_for_action.get("summary") if isinstance(final_text_response_for_action, dict) else str(final_text_response_for_action)
-                                if "erreur" in current_action_result_str.lower() or \
-                                   "je n'ai pas pu interpréter" in current_action_result_str.lower() or \
-                                   "authentification google requise" in current_action_result_str.lower() or \
-                                   "identifiants invalides" in current_action_result_str.lower():
-                                   pass 
-                                else:
-                                   chat_display_message = gemini_explanation_text 
-
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Voici les prévisions météo."
                         else: 
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
@@ -1574,10 +1577,8 @@ def chat_ws(ws):
                         panel_data_content = extracted_code_block 
                         panel_target_id = "codeDisplayContent"   
                         chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code généré et affiché dans l'onglet Code."
-                        if not chat_display_message.strip(): 
-                             chat_display_message = "Code généré et affiché dans l'onglet Code."
                     
-                    else: 
+                    else: # No command, no code -> general conversation or Gemini failed to provide JSON + text as instructed
                         action_taken_by_nlu = False
                         chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Je n'ai pas compris la demande."
 
@@ -1587,9 +1588,10 @@ def chat_ws(ws):
                     chat_display_message = "Je ne suis pas sûr de pouvoir traiter cette demande."
                 
                 chat_display_message = str(chat_display_message) 
+                # Clean up potential JSON remnants in chat_display_message if it was supposed to be panel content
                 if "```json" in chat_display_message and panel_target_id:
-                    if gemini_explanation_text and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
-                         chat_display_message = gemini_explanation_text if gemini_explanation_text.strip() else "Action effectuée."
+                    if gemini_explanation_text and gemini_explanation_text.strip() and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
+                         chat_display_message = gemini_explanation_text.strip() if gemini_explanation_text.strip() else "Action effectuée."
                     elif extracted_code_block : 
                          chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code affiché dans le panneau dédié."
                     else: 
@@ -1605,56 +1607,58 @@ def chat_ws(ws):
                 
                 # --- TTS Logic ---
                 audio_data_url = None
-                text_for_gtts = chat_display_message 
-                should_speak = True 
-                lower_chat_message = chat_display_message.lower()
+                text_for_gtts = chat_display_message # Base: speak what's in the chat
 
-                if action_taken_by_nlu:
+                if action_taken_by_nlu: # Uniquement si une action NLU a été exécutée
                     if parsed_command_action == "get_directions":
-                        # final_text_response_for_action is the dict from handle_get_directions
                         if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
                             distance = final_text_response_for_action.get("distance", "distance inconnue")
                             duration = final_text_response_for_action.get("duration", "durée inconnue")
-                            text_for_gtts = f"Voici votre itinéraire. Le trajet est de {distance} et durera environ {duration}."
+                            destination_entity = entities.get("destination", "votre destination") 
+
+                            # text_for_gtts is already chat_display_message (which should now be formatted)
+                            # If chat_display_message was formatted, TTS will use it.
+                            # If formatting failed for chat_display_message and it still contains placeholders,
+                            # this TTS specific formatting acts as a final fallback for voice.
+                            if "{destination}" in text_for_gtts: # Check if formatting is still needed for TTS
+                                try:
+                                    text_for_gtts = text_for_gtts.format(distance=distance, duration=duration, destination=destination_entity)
+                                except KeyError:
+                                    print(f"WARN: Placeholders non trouvés ou incorrects dans text_for_gtts pour get_directions. Message: '{text_for_gtts}'")
+                                    # Fallback for TTS if chat_display_message formatting also failed
+                                    text_for_gtts = f"Pour aller à {destination_entity}, le trajet est de {distance} et durera environ {duration}."
                         elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("summary"):
-                            text_for_gtts = final_text_response_for_action["summary"] # Speak the error or "not found"
-                        else: # Fallback if structure is unexpected or not a dict (e.g. initial validation error string)
-                            text_for_gtts = chat_display_message 
-                    elif parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in lower_chat_message:
-                        text_for_gtts = "Événement ajouté au calendrier." # More concise
-                    elif parsed_command_action == "web_search" and panel_target_id == "searchContent":
-                        text_for_gtts = "Voici les résultats de recherche."
-                    elif parsed_command_action == "list_contacts" and panel_target_id == "searchContent":
-                        text_for_gtts = "Voici la liste des contacts."
-                    elif parsed_command_action == "list_tasks" and panel_target_id == "taskContent":
-                        text_for_gtts = "Voici la liste des tâches."
-                    elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
-                        if not lower_chat_message.startswith("voici vos 10 prochains événements") and \
-                           not lower_chat_message.startswith("aucun événement à venir trouvé"): 
-                            text_for_gtts = chat_display_message 
-                        else: 
-                            text_for_gtts = "Voici les événements du calendrier."
-                    elif parsed_command_action == "get_contact_email": 
-                        text_for_gtts = chat_display_message 
-                    elif any(err_kw in lower_chat_message for err_kw in ["erreur", "non trouvé", "invalide", "pas pu interpréter", "j'ai besoin", "veuillez préciser", "dois-je", "souhaitez-vous", "authentification google requise", "identifiants invalides"]):
-                        text_for_gtts = chat_display_message
-                    elif panel_target_id and parsed_command_action in ["list_emails", "get_weather_forecast", "get_contact_emails"]: 
-                        if chat_display_message.startswith("Voici") : 
-                             text_for_gtts = chat_display_message 
+                            text_for_gtts = final_text_response_for_action["summary"] # Error or not_found summary for TTS
+
+                    elif not (gemini_explanation_text and gemini_explanation_text.strip()):
+                        if parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in chat_display_message.lower():
+                            text_for_gtts = "Événement ajouté au calendrier." 
+                        elif parsed_command_action == "web_search" and panel_target_id == "searchContent":
+                            text_for_gtts = "Voici les résultats de recherche."
+                        elif parsed_command_action == "list_contacts" and panel_target_id == "searchContent":
+                            text_for_gtts = "Voici la liste des contacts."
+                        elif parsed_command_action == "list_tasks" and panel_target_id == "taskContent":
+                            text_for_gtts = "Voici la liste des tâches."
+                        elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
+                             text_for_gtts = "Voici les événements du calendrier."
+
                 elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
-                     text_for_gtts = "Voici le code que j'ai généré."
+                     text_for_gtts = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici le code que j'ai généré."
                 
+                should_speak = True 
+                lower_chat_message_for_tts_check = text_for_gtts.lower()
+
                 suppress_audio_keywords = [
                      "client gemini non configuré", "réponse gemini bloquée",
                      "erreur critique", "erreur serveur", "erreur interne",
                      "bibliothèque manquante", "non disponible",
                      "je ne suis pas sûr de comprendre votre demande" , 
                 ]
-                if any(keyword in lower_chat_message for keyword in suppress_audio_keywords):
+                if any(keyword in lower_chat_message_for_tts_check for keyword in suppress_audio_keywords):
                     if text_for_gtts == chat_display_message: 
                             should_speak = False
                 
-                if chat_display_message.strip() == "" or lower_chat_message == "ok.": 
+                if text_for_gtts.strip() == "" or lower_chat_message_for_tts_check == "ok.": 
                     should_speak = False
 
 
@@ -1687,7 +1691,7 @@ def chat_ws(ws):
         print(f"[ERREUR WebSocket Handler Critique] /api/chat_ws: {type(e).__name__} - {e}")
         traceback.print_exc()
         try:
-            if ws and hasattr(ws, 'connected') and ws.connected: 
+            if ws and hasattr(ws, 'connected') and ws.connected: # Check if ws is defined and connected
                  ws.send(json.dumps({"type": "error", "message": f"Erreur serveur: {type(e).__name__}"}))
         except Exception as send_error:
             print(f"Impossible d'envoyer le message d'erreur final au client: {send_error}")
