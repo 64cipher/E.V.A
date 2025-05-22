@@ -154,6 +154,13 @@ EVA (Enhanced Voice Assistant) est un assistant personnel vocal et textuel fran�
 
 ---
 
+N'hésitez pas à rentrer des informations selon votre situation pro/perso pour donner du contexte.
+
+Ligne 399:
+```L'utilisateur s'appelle 'VOTRE_NOM_PRENOM_ICI'.```
+
+---
+
 ## Utilisation et fonctionnalités
 
 * **Voix continue** : appuyez sur **Espace** pour commencer, Space à nouveau pour arrêter.
