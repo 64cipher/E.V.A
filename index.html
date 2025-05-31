@@ -6,7 +6,7 @@
     <title>Enhanced Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDBMIm84uCXi797d2WB8i9pHsZcv6Tqvg&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
             display: flex;
@@ -621,7 +621,7 @@
             </div>
 
             <div class="w-full flex items-center space-x-2 mb-4">
-                <button id="micButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white focus:outline-none" title="Activer/Désactiver le microphone (ou touche 'ESPACE' pour continu)">
+                <button id="micButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white focus:outline-none" title="Activer le microphone (ou dire 'Eva', ou touche 'ESPACE' pour continu)">
                     <i class="fas fa-microphone"></i>
                 </button>
                 <input type="text" id="messageInput" placeholder="Écrivez votre message ou utilisez le micro..." class="flex-grow p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400">
@@ -745,10 +745,16 @@
         // --- Application State ---
         let isMuted = false;
         let isCamOn = false;
-        let currentRecognition = null;
+        
+        let commandRecognizer = null; 
+        let wakeWordRecognizer = null;
+        
         let mediaStream = null;
         let userExplicitlyWantsContinuousListen = false; 
-        let recognitionActive = false;
+        let recognitionActive = false; // Tracks if commandRecognizer is active
+        let wakeWordRecognitionActive = false; // Tracks if wakeWordRecognizer is active
+        let isEvaActivatedListening = false; // True if listening after "Eva" was detected
+
         let pausedForEvaOutput = false; 
         let skipNextAudioDueToCode = false;
         let isSpeakingClientSide = false; 
@@ -758,7 +764,56 @@
         let attachedFile = null; 
 
         // --- OpenWeatherMap API Key ---
-        const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
+        const openWeatherMapApiKey = 'c3fd3de675361cff4e3e449db7c64993'; 
+
+        // --- Audio Context for Sounds ---
+        let audioCtx;
+        function initAudioContext() {
+            if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playBeep(frequency = 440, duration = 100, type = 'sine', volume = 0.05) { // Added volume parameter
+            if (isMuted) return;
+            if (!audioCtx) initAudioContext();
+            if (!audioCtx) { console.warn("AudioContext non supporté ou non initialisé."); return; }
+
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    console.log("AudioContext resumed successfully for beep.");
+                    actuallyPlayBeep(frequency, duration, type, volume);
+                }).catch(e => console.error("Error resuming AudioContext for beep:", e));
+            } else {
+                actuallyPlayBeep(frequency, duration, type, volume);
+            }
+        }
+        
+        function actuallyPlayBeep(frequency, duration, type, volume) {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+            
+            // Apply a short fade-in and fade-out to make it smoother
+            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + duration * 0.0001); // Quick fade in (10% of duration)
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime + duration * 0.0008); // Hold volume (80% of duration)
+            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration * 0.001); // Quick fade out (10% of duration)
+
+
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + duration / 1000);
+        }
+
+        // Adjusted sound profiles for softer, more "design" feel
+        const evaActivationSound = () => playBeep(880, 100, 'sine', 0.03); // Higher pitch, shorter, sine wave, softer volume
+        const cameraToggleSound = () => playBeep(440, 150, 'sine', 0.04);  // Lower pitch, slightly longer, sine wave, slightly softer volume
+
 
         // --- Dashboard Functions ---
         function updateDateTimeDashboard() {
@@ -817,7 +872,7 @@
                 "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️", 
                 "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️", 
                 "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️", 
-                "50d": "🌫️", "50n": "�️" 
+                "50d": "🌫️", "50n": "🌫️" 
             };
             return emojiMap[iconCode] || "❓";
         }
@@ -927,94 +982,257 @@
 
         // --- Speech Recognition ---
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-        function createAndStartRecognition() {
-            if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
-            if (recognitionActive) { console.warn("Reconnaissance déjà active. Annulation."); return; } 
-            
-            currentRecognition = new SpeechRecognitionAPI(); 
-            currentRecognition.lang = 'fr-FR'; 
-            currentRecognition.interimResults = false; 
-            currentRecognition.maxAlternatives = 1; 
-            
-            const effectiveContinuous = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
-            currentRecognition.continuous = effectiveContinuous; 
-            
-            currentRecognition.onstart = () => {
-                recognitionActive = true; 
-                listeningIndicator.classList.add('active'); 
-                micButton.classList.add('bg-red-600', 'hover:bg-red-700'); 
-                micButton.classList.remove('bg-blue-600', 'hover:bg-blue-700'); 
+
+        function updateMicButtonState(isListening) {
+            if (isListening) {
+                micButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                micButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
                 micButton.innerHTML = '<i class="fas fa-stop"></i>';
-                
-                if (interruptEvaEnabled && evaIsCurrentlySpeaking) {
-                    statusText.textContent = "Interruption d'EVA...";
-                    if (audioPlayer && !audioPlayer.paused) audioPlayer.pause(); 
-                    if (speechSynthesis.speaking) speechSynthesis.cancel(); 
-                } else {
-                     statusText.textContent = effectiveContinuous ? 'Écoute continue...' : 'Écoute...';
-                }
-            };
-
-            currentRecognition.onresult = (event) => { 
-                const lastResultIndex = event.results.length - 1;
-                if (lastResultIndex < 0) return;
-                const transcript = event.results[lastResultIndex][0].transcript.trim();
-                if (transcript) sendMessageViaWebSocket(transcript);
-            };
-
-            currentRecognition.onerror = (event) => {
-                const wasRecognizingBeforeError = recognitionActive;
-                recognitionActive = false; 
-                listeningIndicator.classList.remove('active');
+                listeningIndicator.classList.add('active');
+            } else {
                 micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
                 micButton.innerHTML = '<i class="fas fa-microphone"></i>';
-
-                let errorMsg = `Erreur reco: ${event.error}`;
-                if (event.error === 'no-speech') errorMsg = 'Aucune parole détectée.';
-                else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio.';
-                else if (event.error === 'not-allowed') {
-                    errorMsg = 'Accès micro refusé.';
-                    userExplicitlyWantsContinuousListen = false; 
-                }
-                statusText.textContent = errorMsg;
-                
-                const shouldRestart = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
-                if (shouldRestart && wasRecognizingBeforeError && (interruptEvaEnabled || !pausedForEvaOutput)) {
-                     setTimeout(createAndStartRecognition, 250);
-                } else if (!shouldRestart) {
-                     statusText.textContent = errorMsg + " Écoute arrêtée.";
-                }
-            };
-
-            currentRecognition.onend = () => {
-                const wasRecognizingBeforeEnd = recognitionActive; 
-                recognitionActive = false; 
                 listeningIndicator.classList.remove('active');
-                micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
-                micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
-                
-                const shouldBeContinuousBasedOnFlags = interruptEvaEnabled || userExplicitlyWantsContinuousListen;
-
-                if (pausedForEvaOutput && !interruptEvaEnabled) { 
-                    statusText.textContent = "En attente d'EVA...";
-                } else if (shouldBeContinuousBasedOnFlags && wasRecognizingBeforeEnd) {
-                    createAndStartRecognition();
-                } else if (!shouldBeContinuousBasedOnFlags) {
-                    statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
-                }
-            };
-            try { currentRecognition.start(); } catch (e) {
-                recognitionActive = false; 
-                statusText.textContent = "Erreur démarrage reco.";
-                listeningIndicator.classList.remove('active'); 
-                micButton.classList.remove('bg-red-600', 'hover:bg-red-700'); 
-                micButton.classList.add('bg-blue-600', 'hover:bg-blue-700'); 
-                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
             }
         }
         
+        function stopAllRecognitions() {
+            if (wakeWordRecognizer && wakeWordRecognitionActive) {
+                wakeWordRecognizer.abort(); 
+                wakeWordRecognitionActive = false;
+            }
+            if (commandRecognizer && recognitionActive) {
+                commandRecognizer.abort();
+                recognitionActive = false;
+            }
+            updateMicButtonState(false);
+        }
+
+
+        function startWakeWordRecognition() {
+            if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
+            if (wakeWordRecognitionActive || recognitionActive) return; 
+
+            stopAllRecognitions(); 
+
+            wakeWordRecognizer = new SpeechRecognitionAPI();
+            wakeWordRecognizer.lang = 'fr-FR';
+            wakeWordRecognizer.continuous = true; 
+            wakeWordRecognizer.interimResults = true; 
+
+            wakeWordRecognizer.onstart = () => {
+                wakeWordRecognitionActive = true;
+                updateMicButtonState(false); 
+                statusText.textContent = "Dites 'Eva' pour activer, ou Espace pour continu.";
+                console.log("Wake word recognition started.");
+            };
+
+            wakeWordRecognizer.onresult = (event) => {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                    if (event.results[i].isFinal || transcript.includes("eva")) { 
+                        if (transcript.includes("eva")) {
+                            console.log("Wake word 'Eva' detected.");
+                            evaActivationSound();
+                            stopWakeWordRecognition(); 
+                            isEvaActivatedListening = true;
+                            userExplicitlyWantsContinuousListen = false; 
+                            startCommandRecognition(false); 
+                            return; 
+                        }
+                    }
+                }
+            };
+
+            wakeWordRecognizer.onerror = (event) => {
+                wakeWordRecognitionActive = false;
+                updateMicButtonState(false);
+                let errorMsg = `Erreur reco. mot-clé: ${event.error}`;
+                if (event.error === 'no-speech') errorMsg = 'Aucune parole (mot-clé).';
+                else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio (mot-clé).';
+                else if (event.error === 'not-allowed') errorMsg = 'Accès micro refusé (mot-clé).';
+                
+                statusText.textContent = errorMsg;
+                console.error("Wake word recognition error:", event.error);
+                if (event.error !== 'not-allowed' && event.error !== 'aborted' && !recognitionActive) {
+                    setTimeout(startWakeWordRecognition, 250); 
+                } else {
+                    statusText.textContent = errorMsg + " Réessayez ou vérifiez permissions.";
+                }
+            };
+
+            wakeWordRecognizer.onend = () => {
+                const wasActive = wakeWordRecognitionActive;
+                wakeWordRecognitionActive = false;
+                console.log("Wake word recognition ended.");
+                if (wasActive && !recognitionActive && !isEvaActivatedListening) {
+                     console.log("Restarting wake word recognition due to natural end.");
+                     setTimeout(startWakeWordRecognition, 50); 
+                } else {
+                    updateMicButtonState(recognitionActive); 
+                }
+            };
+            
+            try {
+                wakeWordRecognizer.start();
+            } catch (e) {
+                wakeWordRecognitionActive = false;
+                updateMicButtonState(false);
+                statusText.textContent = "Erreur démarrage reco. mot-clé.";
+                console.error("Error starting wake word recognition:", e);
+            }
+        }
+
+        function stopWakeWordRecognition() {
+            if (wakeWordRecognizer && wakeWordRecognitionActive) {
+                wakeWordRecognizer.abort(); 
+            }
+            wakeWordRecognitionActive = false;
+        }
+
+
+        function startCommandRecognition(isContinuous) {
+            if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
+            if (recognitionActive) { console.warn("Reconnaissance de commande déjà active."); return; }
+
+            stopWakeWordRecognition(); 
+
+            commandRecognizer = new SpeechRecognitionAPI();
+            commandRecognizer.lang = 'fr-FR';
+            commandRecognizer.interimResults = false;
+            commandRecognizer.maxAlternatives = 1;
+            commandRecognizer.continuous = isContinuous || interruptEvaEnabled;
+
+            commandRecognizer.onstart = () => {
+                recognitionActive = true;
+                updateMicButtonState(true); 
+
+                if (isEvaActivatedListening) {
+                    statusText.textContent = "Eva activée. Écoute de la commande...";
+                } else if (commandRecognizer.continuous) {
+                    statusText.textContent = interruptEvaEnabled ? "Interruption d'EVA..." : 'Écoute continue...';
+                } else {
+                    statusText.textContent = 'Écoute...';
+                }
+                 console.log("Command recognition started. Continuous:", commandRecognizer.continuous, "EvaActivated:", isEvaActivatedListening);
+
+                if (interruptEvaEnabled && evaIsCurrentlySpeaking) {
+                    if (audioPlayer && !audioPlayer.paused) audioPlayer.pause(); 
+                    if (speechSynthesis.speaking) speechSynthesis.cancel();
+                }
+            };
+
+            commandRecognizer.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+                console.log("Command recognized:", transcript);
+
+                let commandProcessedLocally = false;
+
+                if (transcript === "allume la caméra") {
+                    if (!isCamOn) {
+                        toggleWebcam(); 
+                    } else {
+                        addMessageToChat("La caméra est déjà allumée.", "assistant");
+                    }
+                    commandProcessedLocally = true;
+                } else if (transcript === "éteins la caméra") {
+                    if (isCamOn) {
+                        toggleWebcam(); 
+                    } else {
+                        addMessageToChat("La caméra est déjà éteinte.", "assistant");
+                    }
+                    commandProcessedLocally = true;
+                }
+
+                if (!commandProcessedLocally) {
+                    sendMessageViaWebSocket(event.results[event.results.length - 1][0].transcript.trim());
+                }
+                
+                if (isEvaActivatedListening && !commandRecognizer.continuous) {
+                    // Handled by onend
+                }
+            };
+
+            commandRecognizer.onerror = (event) => {
+                const wasRecognizingBeforeError = recognitionActive;
+                recognitionActive = false;
+                updateMicButtonState(false);
+
+                let errorMsg = `Erreur reco. cmd: ${event.error}`;
+                if (event.error === 'no-speech') errorMsg = 'Aucune parole (commande).';
+                else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio (commande).';
+                else if (event.error === 'not-allowed') {
+                     errorMsg = 'Accès micro refusé (commande).';
+                     userExplicitlyWantsContinuousListen = false; 
+                     isEvaActivatedListening = false;
+                }
+                statusText.textContent = errorMsg;
+                console.error("Command recognition error:", event.error, " EvaActivated:", isEvaActivatedListening, " Continuous:", userExplicitlyWantsContinuousListen);
+
+                if (isEvaActivatedListening) { 
+                    isEvaActivatedListening = false;
+                    if (event.error !== 'not-allowed') setTimeout(startWakeWordRecognition, 100);
+                } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasRecognizingBeforeError && event.error !== 'not-allowed' && event.error !== 'aborted') {
+                    setTimeout(() => startCommandRecognition(true), 250);
+                } else {
+                     if (event.error !== 'not-allowed' && !userExplicitlyWantsContinuousListen && !interruptEvaEnabled) {
+                        setTimeout(startWakeWordRecognition, 100);
+                     } else if (event.error === 'not-allowed') {
+                         statusText.textContent = errorMsg + " Vérifiez les permissions.";
+                     }
+                }
+            };
+
+            commandRecognizer.onend = () => {
+                const wasActive = recognitionActive;
+                recognitionActive = false;
+                console.log("Command recognition ended. EvaActivated:", isEvaActivatedListening, "Continuous:", userExplicitlyWantsContinuousListen, "Interrupt:", interruptEvaEnabled);
+                
+                if (pausedForEvaOutput && !interruptEvaEnabled) {
+                    statusText.textContent = "En attente d'EVA...";
+                } else if (isEvaActivatedListening) {
+                    isEvaActivatedListening = false;
+                    updateMicButtonState(false); 
+                    startWakeWordRecognition(); 
+                } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasActive) {
+                    if (userExplicitlyWantsContinuousListen || interruptEvaEnabled) { 
+                         console.log("Restarting continuous command recognition.");
+                         startCommandRecognition(true);
+                    } else {
+                         updateMicButtonState(false);
+                         startWakeWordRecognition();
+                    }
+                } else { 
+                    updateMicButtonState(false);
+                    if (!userExplicitlyWantsContinuousListen && !interruptEvaEnabled) { 
+                        startWakeWordRecognition();
+                    }
+                }
+            };
+            
+            try {
+                commandRecognizer.start();
+            } catch (e) {
+                recognitionActive = false;
+                updateMicButtonState(false);
+                statusText.textContent = "Erreur démarrage reco. commande.";
+                console.error("Error starting command recognition:", e);
+                if (isEvaActivatedListening) isEvaActivatedListening = false;
+                startWakeWordRecognition(); 
+            }
+        }
+        
+        function stopCommandRecognition() {
+            if (commandRecognizer && recognitionActive) {
+                commandRecognizer.abort(); 
+            }
+            recognitionActive = false;
+            isEvaActivatedListening = false; 
+            updateMicButtonState(false);
+        }
+
+
         // --- Info Panel Management ---
         function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) {
             if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) {
@@ -1237,9 +1455,9 @@
             if (!('speechSynthesis' in window) || isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; } 
             
             speechSynthesis.cancel(); 
-            if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
+            if (recognitionActive && commandRecognizer && !interruptEvaEnabled) { 
                 pausedForEvaOutput = true; 
-                currentRecognition.abort(); 
+                commandRecognizer.abort(); 
             }
             
             isSpeakingClientSide = true; 
@@ -1362,17 +1580,18 @@
 
             if (!interruptEvaEnabled) { 
                 pausedForEvaOutput = true;
-                if (recognitionActive && currentRecognition) currentRecognition.abort(); 
+                if (recognitionActive && commandRecognizer) commandRecognizer.abort(); 
                 statusText.textContent = 'Traitement...'; 
             }
             try { ws.send(JSON.stringify(requestData)); messageInput.value = ''; clearAttachedFile(); } 
             catch (error) { addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
         }
         function playAudio(audioSource) {
+            if (isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; }
             if (isSpeakingClientSide) { evaIsCurrentlySpeaking = false; return; } 
-            if (recognitionActive && currentRecognition && !interruptEvaEnabled) { 
+            if (recognitionActive && commandRecognizer && !interruptEvaEnabled) { 
                 pausedForEvaOutput = true; 
-                currentRecognition.abort(); 
+                commandRecognizer.abort(); 
             }
             statusText.textContent = 'EVA parle...' + ((interruptEvaEnabled || userExplicitlyWantsContinuousListen) && (pausedForEvaOutput || interruptEvaEnabled) ? ' (Mode continu en pause)' : '');
             
@@ -1387,39 +1606,66 @@
             };
         }
         function restartRecognitionAfterEva() {
-            if (pausedForEvaOutput && !interruptEvaEnabled) { 
-                pausedForEvaOutput = false; 
-                if (userExplicitlyWantsContinuousListen && !recognitionActive) createAndStartRecognition();
-                else if (!userExplicitlyWantsContinuousListen && !recognitionActive) statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
-            } else if (interruptEvaEnabled && !recognitionActive) { 
-                createAndStartRecognition();
+            console.log("Restarting recognition after EVA. PausedForEvaOutput:", pausedForEvaOutput, "Interrupt:", interruptEvaEnabled, "ContinuousListen:", userExplicitlyWantsContinuousListen, "EvaActivated:", isEvaActivatedListening);
+            pausedForEvaOutput = false; 
+
+            if (interruptEvaEnabled) {
+                if (!recognitionActive) startCommandRecognition(true);
+            } else if (userExplicitlyWantsContinuousListen) {
+                if (!recognitionActive) startCommandRecognition(true);
+            } else if (isEvaActivatedListening) {
+                isEvaActivatedListening = false;
+                if (!wakeWordRecognitionActive && !recognitionActive) startWakeWordRecognition();
+            } else {
+                if (!wakeWordRecognitionActive && !recognitionActive) startWakeWordRecognition();
             }
         }
 
+
         // --- Webcam & Mute ---
-        async function toggleWebcam() {
+        async function toggleWebcam(playSound = true) { 
             webcamError.classList.add('hidden'); 
-            if (!isCamOn) { 
-                try { 
-                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
-                    webcamVideo.srcObject = mediaStream; 
-                    webcamVideo.onloadedmetadata = () => { 
-                        webcamVideo.classList.remove('hidden'); listeningIndicator.classList.add('hidden'); isCamOn = true; 
-                        camButton.textContent = 'Off Cam'; camButton.classList.replace('bg-gray-600', 'bg-red-600'); camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
-                    }; 
-                } catch (err) { 
-                    webcamError.textContent = `Erreur: ${err.name}`; webcamError.classList.remove('hidden'); isCamOn = false; 
-                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
-                    listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
+            const camActionPromise = new Promise(async (resolve, reject) => {
+                if (!isCamOn) { 
+                    try { 
+                        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
+                        webcamVideo.srcObject = mediaStream; 
+                        webcamVideo.onloadedmetadata = () => { 
+                            webcamVideo.classList.remove('hidden'); listeningIndicator.classList.add('hidden'); isCamOn = true; 
+                            camButton.textContent = 'Off Cam'; camButton.classList.replace('bg-gray-600', 'bg-red-600'); camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
+                            resolve(true); 
+                        }; 
+                        webcamVideo.onerror = (e) => { 
+                             webcamError.textContent = `Erreur video: ${e.message || 'Inconnue'}`; webcamError.classList.remove('hidden'); isCamOn = false; 
+                             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
+                             listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
+                             camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                             reject(new Error('Erreur élément vidéo'));
+                        }
+                    } catch (err) { 
+                        webcamError.textContent = `Erreur: ${err.name || err.message}`; webcamError.classList.remove('hidden'); isCamOn = false; 
+                        if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
+                        listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
+                        camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                        reject(err); 
+                    } 
+                } else { 
+                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
+                    webcamVideo.srcObject = null; webcamVideo.classList.add('hidden'); listeningIndicator.classList.remove('hidden'); 
+                    isCamOn = false; camButton.textContent = 'Cam'; 
                     camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
-                } 
-            } else { 
-                if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
-                webcamVideo.srcObject = null; webcamVideo.classList.add('hidden'); listeningIndicator.classList.remove('hidden'); 
-                isCamOn = false; camButton.textContent = 'Cam'; 
-                camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
+                    resolve(false); 
+                }
+            });
+
+            try {
+                await camActionPromise;
+                if (playSound) cameraToggleSound(); 
+            } catch (error) {
+                console.error("Erreur lors du basculement de la webcam:", error);
             }
         }
+
         function toggleMute() {
             isMuted = !isMuted; 
             muteButton.textContent = isMuted ? 'Son' : 'Muet'; 
@@ -1427,7 +1673,7 @@
             muteButton.classList.toggle('bg-gray-600', !isMuted); muteButton.classList.toggle('hover:bg-gray-700', !isMuted);
             if (isMuted && audioPlayer && !audioPlayer.paused) { 
                 audioPlayer.pause(); listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; 
-                statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : 'Appuyez sur Espace/Micro.');
+                 statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : (wakeWordRecognitionActive ? "Dites 'Eva'..." : 'Appuyez sur Espace/Micro.'));
             }
             if (isMuted && isSpeakingClientSide) { 
                 speechSynthesis.cancel(); isSpeakingClientSide = false; listeningIndicator.classList.remove('speaking'); 
@@ -1608,7 +1854,6 @@
         function updateCalculatorDisplay() {
             if(calculatorDisplay) {
                 let displayValue = calculatorCurrentInput || calculatorPreviousInput || "0";
-                // Truncate long display values for better presentation
                 if (displayValue.length > MAX_INPUT_LENGTH) {
                     displayValue = displayValue.substring(0, MAX_INPUT_LENGTH) + "...";
                 }
@@ -1617,13 +1862,12 @@
         }
 
         function handleCalculatorInput(value) {
-            if (calculatorResetDisplay && !['(', ')'].includes(value)) { // Don't reset for parentheses if we are building an expression
+            if (calculatorResetDisplay && !['(', ')'].includes(value)) { 
                 calculatorCurrentInput = "";
                 calculatorResetDisplay = false;
             }
 
             if (calculatorCurrentInput.length >= MAX_INPUT_LENGTH && !['C', '=', 'sin', 'cos', 'tan', 'sqrt', 'log', 'ln', '!'].includes(value)) {
-                // If input is too long, only allow control/function keys or equals
                 return;
             }
             
@@ -1640,22 +1884,17 @@
             } else if (value === '=') {
                 if (calculatorOperator && calculatorPreviousInput !== "" && calculatorCurrentInput !== "") {
                     try {
-                        // Replace ^ with Math.pow for evaluation
-                        // IMPORTANT: The direct use of new Function() is a security risk in production if input is not strictly controlled.
-                        // A proper math expression parser (e.g., based on Shunting-yard algorithm) is recommended for safe and robust evaluation.
-                        // This example uses it for simplicity but with known limitations and risks.
                         let expressionToEvaluate = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput;
                         if (calculatorOperator === '^') {
                              expressionToEvaluate = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`;
                         }
                         
-                        // Basic sanitization - still not fully secure for arbitrary input with new Function()
                         const sanitizedExpression = expressionToEvaluate.replace(/[^-()\d/*+.]/g, '');
                         
                         let result = new Function('return ' + sanitizedExpression)();
 
                         if (!isFinite(result)) {
-                            calculatorCurrentInput = "Dépassement"; // Overflow or invalid operation (e.g., div by zero)
+                            calculatorCurrentInput = "Dépassement"; 
                         } else {
                             calculatorCurrentInput = result.toString();
                         }
@@ -1668,51 +1907,43 @@
                         calculatorResetDisplay = true;
                     }
                 }
-            } else if (['+', '-', '*', '/', '^'].includes(value)) { // Operators
+            } else if (['+', '-', '*', '/', '^'].includes(value)) { 
                 if (calculatorCurrentInput !== "") {
-                    if (calculatorPreviousInput === "") { // First number and operator
+                    if (calculatorPreviousInput === "") { 
                         calculatorPreviousInput = calculatorCurrentInput;
                         calculatorCurrentInput = "";
                         calculatorOperator = value;
-                    } else if (calculatorOperator) { // Chaining operations: 1 + 2 + ...
-                        handleCalculatorInput('='); // Calculate previous part
+                    } else if (calculatorOperator) { 
+                        handleCalculatorInput('='); 
                         if (calculatorCurrentInput !== "Erreur" && calculatorCurrentInput !== "Dépassement") {
-                            calculatorPreviousInput = calculatorCurrentInput; // Result becomes new previousInput
+                            calculatorPreviousInput = calculatorCurrentInput; 
                             calculatorCurrentInput = "";
                             calculatorOperator = value;
                             calculatorResetDisplay = false; 
-                        } else { // If previous calculation resulted in error, stop
+                        } else { 
                             calculatorPreviousInput = "";
                             calculatorOperator = null;
                         }
                     }
                 } else if (calculatorPreviousInput !== "" && value === "-" && calculatorOperator && calculatorCurrentInput === "") { 
-                    // Allow negative sign for the second number: e.g., 5 * -2
                     calculatorCurrentInput = "-";
                 } else if (calculatorPreviousInput !== "" && !calculatorOperator) {
-                    // An operator is pressed after a result was shown (e.g. after '=' or a function)
                     calculatorOperator = value;
-                    // calculatorPreviousInput is already set to the result
                     calculatorCurrentInput = "";
                     calculatorResetDisplay = false;
                 }
-            } else { // Scientific functions and parentheses
-                // Note: Parentheses handling is very basic here and won't support complex nested expressions
-                // without a full parser. They are treated as string appends.
+            } else { 
                 if (value === '(') {
                     calculatorCurrentInput += '(';
-                    calculatorResetDisplay = false; // Allow further input after '('
+                    calculatorResetDisplay = false; 
                 } else if (value === ')') {
                     calculatorCurrentInput += ')';
-                    calculatorResetDisplay = false; // Allow further input after ')'
-                } else if (calculatorCurrentInput !== "" || ['pi', 'e'].includes(value)) { // Functions need an input or are constants
-                    const num = parseFloat(calculatorCurrentInput); // This will be NaN if currentInput is just '(' or similar
+                    calculatorResetDisplay = false; 
+                } else if (calculatorCurrentInput !== "" || ['pi', 'e'].includes(value)) { 
+                    const num = parseFloat(calculatorCurrentInput); 
                     
                     if (isNaN(num) && !['pi', 'e'].includes(value) && !calculatorCurrentInput.endsWith(')')) {
-                        // If num is NaN and it's not pi or e, and not ending a parenthesis group, it's likely an error
-                        // unless we are building a more complex expression (which this simple calc doesn't fully support)
-                        // For now, let's assume direct function application on a valid number or constant.
-                        // calculatorCurrentInput = "Erreur"; // Or do nothing, let user correct
+                        // Potentially do nothing or set error
                     } else {
                         try {
                             let result;
@@ -1724,15 +1955,15 @@
                                 case 'log': result = Math.log10(num); break;
                                 case 'ln': result = Math.log(num); break;
                                 case '!': 
-                                    if (num < 0 || !Number.isInteger(num) || num > 170) { // Factorial limit for JS numbers
-                                        result = Infinity; // Or "Erreur"
+                                    if (num < 0 || !Number.isInteger(num) || num > 170) { 
+                                        result = Infinity; 
                                         break;
                                     }
                                     let fact = 1; for (let i = 2; i <= num; i++) fact *= i;
                                     result = fact; break;
                                 case 'pi': result = Math.PI; break;
                                 case 'e': result = Math.E; break;
-                                default: result = num; // Should not happen if value is a known function
+                                default: result = num; 
                             }
 
                             if (!isFinite(result)) {
@@ -1740,14 +1971,14 @@
                             } else {
                                 calculatorCurrentInput = result.toString();
                             }
-                            calculatorResetDisplay = true; // After a function, next number input should reset
+                            calculatorResetDisplay = true; 
                         } catch (e) {
                             console.error("Calculator function error:", e);
                             calculatorCurrentInput = "Erreur";
                             calculatorResetDisplay = true;
                         }
                     }
-                } else if (['pi', 'e'].includes(value)) { // Constants can be entered on their own
+                } else if (['pi', 'e'].includes(value)) { 
                      calculatorCurrentInput = (value === 'pi' ? Math.PI : Math.E).toString();
                      calculatorResetDisplay = true;
                 }
@@ -1762,24 +1993,45 @@
         
         micButton.addEventListener('click', () => {
             if (!SpeechRecognitionAPI) return;
-            if (recognitionActive) { userExplicitlyWantsContinuousListen = false; if (currentRecognition) currentRecognition.abort(); } 
-            else { userExplicitlyWantsContinuousListen = true; createAndStartRecognition(); }
+            initAudioContext(); 
+            if (recognitionActive) { 
+                userExplicitlyWantsContinuousListen = false; 
+                isEvaActivatedListening = false;
+                stopCommandRecognition();
+                startWakeWordRecognition(); 
+            } else { 
+                userExplicitlyWantsContinuousListen = false; 
+                isEvaActivatedListening = false;
+                stopWakeWordRecognition(); 
+                startCommandRecognition(false); 
+            }
         });
         
         interruptModeButton.addEventListener('click', () => {
+            initAudioContext();
             interruptEvaEnabled = !interruptEvaEnabled; 
             interruptModeButton.classList.toggle('bg-orange-500', interruptEvaEnabled);
             interruptModeButton.classList.toggle('hover:bg-orange-600', interruptEvaEnabled);
             interruptModeButton.classList.toggle('bg-yellow-500', !interruptEvaEnabled);
             interruptModeButton.classList.toggle('hover:bg-yellow-600', !interruptEvaEnabled);
             interruptModeButton.title = `Interruption EVA (${interruptEvaEnabled ? 'Activé' : 'Désactivé'}) (i)`;
-            statusText.textContent = `Mode interruption: ${interruptEvaEnabled ? 'Activé. Écoute...' : 'Désactivé.'}`;
-            if (interruptEvaEnabled && !recognitionActive) createAndStartRecognition();
-            else if (recognitionActive && currentRecognition) currentRecognition.abort();
+            
+            if (interruptEvaEnabled) {
+                userExplicitlyWantsContinuousListen = true; 
+                isEvaActivatedListening = false;
+                stopWakeWordRecognition();
+                if (!recognitionActive) startCommandRecognition(true);
+                statusText.textContent = "Mode interruption: Activé. Écoute...";
+            } else {
+                userExplicitlyWantsContinuousListen = false;
+                stopCommandRecognition();
+                startWakeWordRecognition(); 
+                statusText.textContent = "Mode interruption: Désactivé.";
+            }
         });
 
         muteButton.addEventListener('click', toggleMute); 
-        camButton.addEventListener('click', toggleWebcam);
+        camButton.addEventListener('click', () => { initAudioContext(); toggleWebcam(); }); 
         schedulePromptButton.addEventListener('click', schedulePrompt);
         attachFileButton.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', handleFileSelect);
@@ -1798,10 +2050,25 @@
         document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
             if ([messageInput, scheduledPromptTextInput, scheduledPromptTimeInput, promptRepetitionsInput].includes(activeEl)) return;
-            if (e.code === 'Space') { e.preventDefault(); userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; if (recognitionActive && currentRecognition) currentRecognition.abort(); else if (userExplicitlyWantsContinuousListen && !recognitionActive) createAndStartRecognition(); }
-            else if (e.key.toLowerCase() === 'c') { e.preventDefault(); toggleWebcam(); } 
-            else if (e.key.toLowerCase() === 'm') { e.preventDefault(); toggleMute(); }
-            else if (e.key.toLowerCase() === 'i') { e.preventDefault(); interruptModeButton.click(); }
+            
+            initAudioContext(); 
+
+            if (e.code === 'Space') { 
+                e.preventDefault(); 
+                userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen;
+                isEvaActivatedListening = false; 
+
+                if (userExplicitlyWantsContinuousListen) {
+                    stopWakeWordRecognition();
+                    if (!recognitionActive) startCommandRecognition(true); 
+                } else {
+                    stopCommandRecognition();
+                    startWakeWordRecognition(); 
+                }
+            }
+            else if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleWebcam(); } 
+            else if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleMute(); }
+            else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); interruptModeButton.click(); }
         });
 
         toggleInfoPanelButton.addEventListener('click', () => {
@@ -1820,7 +2087,7 @@
                 setActiveInfoPanel(event.target.dataset.target, false); 
             }
         });
-        if (toggleCodeCanvasButton) { // Check if button exists
+        if (toggleCodeCanvasButton) { 
             toggleCodeCanvasButton.addEventListener('click', () => {
                 if (evaCodeCanvasContentWrapper) evaCodeCanvasContentWrapper.classList.toggle('expanded');
                 if (codeCanvasIcon) {
@@ -1841,9 +2108,11 @@
 
         // --- Initialisation ---
         document.addEventListener('DOMContentLoaded', () => {
+            document.body.addEventListener('click', initAudioContext, { once: true });
+
             updateDateTimeDashboard(); setInterval(updateDateTimeDashboard, 1000);
             getUserLocationAndFetchWeather(); setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); 
-            if (statusText) statusText.textContent = 'Appuyez sur Espace (continu) ou Micro (unique)';
+            
             connectWebSocket();
             addMessageToChat("Si vous souhaitez utiliser les fonctionnalités Google (Agenda, Gmail, etc.), cliquez sur le bouton 'Autoriser l'accès aux services Google' ci-dessous.", "assistant");
             
@@ -1871,6 +2140,13 @@
                     google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); 
                 } 
             });
+            
+            if (SpeechRecognitionAPI) {
+                startWakeWordRecognition();
+            } else {
+                statusText.textContent = "Reconnaissance vocale non supportée par ce navigateur.";
+                if (micButton) micButton.disabled = true;
+            }
         });
     </script>
 </body>
