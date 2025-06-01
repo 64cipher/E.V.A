@@ -6,7 +6,7 @@
     <title>Enhanced Voice Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDDBMIm84uCXi797d2WB8i9pHsZcv6Tqvg&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
             display: flex;
@@ -764,7 +764,7 @@
         let attachedFile = null; 
 
         // --- OpenWeatherMap API Key ---
-        const openWeatherMapApiKey = 'c3fd3de675361cff4e3e449db7c64993'; 
+        const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
 
         // --- Audio Context for Sounds ---
         let audioCtx;
@@ -1031,8 +1031,8 @@
             wakeWordRecognizer.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript.toLowerCase().trim();
-                    if (event.results[i].isFinal || transcript.includes("eva")) { 
-                        if (transcript.includes("eva")) {
+                    if (event.results[i].isFinal || transcript.includes("motocross")) { 
+                        if (transcript.includes("motocross")) {
                             console.log("Wake word 'Eva' detected.");
                             evaActivationSound();
                             stopWakeWordRecognition(); 
@@ -1513,8 +1513,8 @@
                             case 'calendarContent': if(calendarEventListContentDiv) calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData); break;
                             case 'weatherForecastContent': displayWeatherForecast(); break;
                             case 'codeDisplayContent':
-                                const codeInfos = extractCodeInfo(panelData); 
-                                if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.length > 0 ? codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n') : panelData; 
+                                const codeInfos = extractCodeInfo(panelData); // panelData est la réponse du handler Python
+                                if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.length > 0 ? codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n') : panelData;
                                 if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                                     evaCodeCanvasContentWrapper.classList.add('expanded');
                                     if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
