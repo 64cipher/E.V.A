@@ -1024,16 +1024,16 @@
             wakeWordRecognizer.onstart = () => {
                 wakeWordRecognitionActive = true;
                 updateMicButtonState(false); 
-                statusText.textContent = "Dites 'Eva' pour activer, ou Espace pour continu.";
+                statusText.textContent = "Dites 'OK Eva' pour activer, ou Espace pour continu.";
                 console.log("Wake word recognition started.");
             };
 
             wakeWordRecognizer.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript.toLowerCase().trim();
-                    if (event.results[i].isFinal || transcript.includes("eva")) { 
-                        if (transcript.includes("eva")) {
-                            console.log("Wake word 'Eva' detected.");
+                    if (event.results[i].isFinal || transcript.includes("ok eva")) { 
+                        if (transcript.includes("ok eva")) {
+                            console.log("Wake word 'OK Eva' detected.");
                             evaActivationSound();
                             stopWakeWordRecognition(); 
                             isEvaActivatedListening = true;
