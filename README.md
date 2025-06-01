@@ -170,8 +170,11 @@ Ligne 408:
 * **Voix ponctuelle** : cliquez sur le micro.
 * **Mode interruption** : Voix continu avec la possibilité d'interrompre E.V.A en parlant dans le micro.
 * **Envoi de fichiers supporté** : jpg, png, doc et txt
-* **Commandes supportées** : « Crée un événement demain à 14 h », « Envoie un e‑mail à Alice … », « Ajoute une tâche … », « Itinéraire jusqu’à Genève », « Recherche Web : les actus sur l'IA ».
-* EVA détecte une commande ➜ renvoie un JSON (voir `SYSTEM_MESSAGE_CONTENT` dans `main.py`) ➜ backend exécute.
+* **Commandes supportées** : « Crée un événement demain à 14 h », « Envoie un e‑mail à Alice … », « Ajoute une tâche … », « Itinéraire jusqu’à Paris », « Recherche Web : les actus sur l'IA ».
+* **"OK Eva"** : Vous pouvez déclancher l'écoute par cette simple phrase.
+* **Lancement d'applications** : E.V.A peux ouvrir des applications de votre PC. Configurez les chemins d'accès dans ```.env``` avec les variables ```APP_NOM_DE_L'APP_PATH="C:\chemin\vers\app.exe```
+
+EVA détecte une commande ➜ renvoie un JSON (voir `SYSTEM_MESSAGE_CONTENT` dans `main.py`) ➜ backend exécute.
 
 * **Raccourcis touches** : Caméra 'C' - Muet 'M' - Mode Interruption 'I' 
 ---
