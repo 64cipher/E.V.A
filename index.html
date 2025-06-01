@@ -1031,8 +1031,8 @@
             wakeWordRecognizer.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript.toLowerCase().trim();
-                    if (event.results[i].isFinal || transcript.includes("motocross")) { 
-                        if (transcript.includes("motocross")) {
+                    if (event.results[i].isFinal || transcript.includes("eva")) { 
+                        if (transcript.includes("eva")) {
                             console.log("Wake word 'Eva' detected.");
                             evaActivationSound();
                             stopWakeWordRecognition(); 
