@@ -12,6 +12,9 @@ from email.utils import parsedate_to_datetime # Pour parser les dates d'email
 import json # Ajouté pour WebSockets et carnet d'adresses
 import time
 import calendar # Ajouté pour la gestion des mois
+import subprocess # Pour exécuter des scripts et lancer des applications
+import webbrowser # Pour ouvrir des pages web
+import contextlib # Pour redirect_stdout avec exec
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -396,16 +399,20 @@ Ta tâche principale est d'analyser la requête de l'utilisateur.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle 'VOTRE_NOM_PRENOM_ICI'.
+L'utilisateur s'appelle VOTRE_PRENOM.
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, ou obtenir des détails sur les emails d'un contact), tu DOIS la reformuler en un objet JSON structuré.
 Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
-
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases. Ce commentaire doit :
-1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, VOTRE_PRENOM_ICI ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 2. Être concis, spirituel et professionnel.
 3. Ce commentaire textuel doit être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
+
+Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
+Pour l'action "generate_3d_object", le commentaire doit indiquer que le code OpenSCAD a été généré et peut être utilisé avec le logiciel OpenSCAD.
+Pour "launch_application", le commentaire doit confirmer le lancement (ou l'échec).
+Pour "open_webpage", le commentaire doit confirmer l'ouverture de la page.
 
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
@@ -422,6 +429,10 @@ Exemples d'entités attendues pour chaque action :
 - "get_directions": {"origin": "lieu de départ (optionnel, défaut Thonon-les-Bains si non spécifié par l'utilisateur)", "destination": "lieu d'arrivée"}
 - "web_search": {"query": "la question ou les termes à rechercher"}
 - "get_weather_forecast": {} (les entités sont vides, la localisation est gérée côté client)
+- "execute_python_code": {"code": "le code Python à exécuter"}
+- "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder')", "params": "dictionnaire de paramètres (ex: {'size': 10} ou {'radius': 5} ou {'height': 20, 'radius_top': 3, 'radius_bottom': 5})"}
+- "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
+- "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -433,6 +444,9 @@ Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et 
 Tu t'exprimes toujours en français, de manière claire, concise et professionnelle, tout en restant amicale.
 N'écris jamais d'émojis.
 Les fonctionnalités pour Google Keep ne sont pas disponibles (informe l'utilisateur si demandé).
+ATTENTION : L'exécution de code Python via 'execute_python_code' peut présenter des risques de sécurité si le code provient de sources non fiables. Utilise cette fonctionnalité avec prudence.
+La génération d'objets 3D produit du code OpenSCAD. L'utilisateur devra utiliser OpenSCAD pour visualiser/rendre l'objet.
+Le lancement d'applications dépend des applications installées sur l'ordinateur de l'utilisateur et de la configuration du PATH système.
 Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et SerpAPI.
 Le système principal gère un carnet d'adresses local.
 L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spécifiée par l'utilisateur.
@@ -1312,6 +1326,113 @@ def handle_google_keep_info(entities): # Example of a graceful "not supported"
 def handle_get_weather_forecast(entities):
     # This action is mostly a trigger for the client-side JS to display its own weather panel
     return "Prévisions météo pour votre localisation." # Generic message, client handles display
+
+# --- Handlers for new functionalities ---
+
+def handle_execute_python_code(entities):
+    code_to_execute = entities.get("code")
+    if not code_to_execute:
+        return "Aucun code Python à exécuter n'a été fourni."
+
+    # CRITICAL SECURITY WARNING: Executing arbitrary code is dangerous.
+    # This is implemented for a local, trusted user scenario.
+    # Do NOT expose this functionality to untrusted users or over an unsecured network.
+    
+    output_capture = io.StringIO()
+    error_capture = io.StringIO()
+    
+    # Create a restricted global scope if needed, or use current globals() carefully
+    # For simplicity, using current globals, but be aware of implications.
+    # You might want to provide specific modules or functions in a custom globals dict.
+    execution_globals = globals().copy() # Or a more restricted dict
+    execution_locals = {} # Separate locals for the exec
+
+    try:
+        with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(error_capture):
+            exec(code_to_execute, execution_globals, execution_locals)
+        
+        stdout_val = output_capture.getvalue()
+        stderr_val = error_capture.getvalue()
+        
+        response = "ATTENTION : L'exécution de code Python peut être risquée.\n"
+        if stdout_val:
+            response += f"Sortie standard:\n{stdout_val}\n"
+        if stderr_val:
+            response += f"Erreur standard:\n{stderr_val}\n"
+        if not stdout_val and not stderr_val:
+            response += "Le code a été exécuté sans sortie ni erreur explicite."
+        return response
+    except Exception as e:
+        return f"ATTENTION : L'exécution de code Python peut être risquée.\nErreur lors de l'exécution du code Python:\n{traceback.format_exc()}"
+
+def handle_generate_3d_object(entities):
+    object_type = entities.get("object_type", "").lower()
+    params = entities.get("params", {})
+    scad_code = ""
+
+    if object_type == "cube":
+        size = params.get("size", params.get("côté", 10)) # Default size 10
+        scad_code = f"cube({size});"
+    elif object_type == "sphere" or object_type == "sphère":
+        radius = params.get("radius", params.get("rayon", 5)) # Default radius 5
+        scad_code = f"sphere(r={radius});"
+    elif object_type == "cylinder" or object_type == "cylindre":
+        height = params.get("height", params.get("hauteur", 20)) # Default height 20
+        radius = params.get("radius", params.get("rayon", params.get("r", 5))) # Default radius 5
+        # OpenSCAD cylinder can have r, r1, r2. For simplicity, one radius or r1/r2.
+        radius_top = params.get("radius_top", params.get("r1"))
+        radius_bottom = params.get("radius_bottom", params.get("r2"))
+        if radius_top is not None and radius_bottom is not None:
+            scad_code = f"cylinder(h={height}, r1={radius_top}, r2={radius_bottom});"
+        else:
+            scad_code = f"cylinder(h={height}, r={radius});"
+    else:
+        return "Type d'objet 3D non reconnu ou paramètres manquants. Je peux générer des 'cube', 'sphere', ou 'cylinder'."
+
+    return f"// Code OpenSCAD généré par EVA\n// Type: {object_type}, Paramètres: {params}\n{scad_code}"
+
+def handle_launch_application(entities):
+    app_name_alias = entities.get("app_name") # Nom potentiellement court/alias
+    args = entities.get("args", [])
+
+    if not app_name_alias:
+        return "Veuillez spécifier le nom de l'application à lancer."
+
+    # Construire le nom de la variable d'environnement attendue
+    # Par exemple, si app_name_alias est "flstudio", on cherche APP_FLSTUDIO_PATH
+    env_var_name = f"APP_{app_name_alias.upper()}_PATH"
+    app_path_from_env = os.getenv(env_var_name)
+
+    executable_path = app_path_from_env if app_path_from_env else app_name_alias # Utilise le chemin du .env s'il existe, sinon l'alias/nom direct
+
+    try:
+        command = [executable_path] + (args if isinstance(args, list) else [])
+        subprocess.Popen(command)
+        # Si app_path_from_env est défini, cela signifie que nous avons utilisé un alias du .env
+        display_name = app_name_alias if app_path_from_env else executable_path
+        return f"Lancement de l'application '{display_name}' initié."
+    except FileNotFoundError:
+        # Si app_path_from_env était défini mais que le fichier n'est pas trouvé, le chemin dans .env est incorrect
+        if app_path_from_env:
+            return f"Application '{app_name_alias}' (chemin: '{app_path_from_env}') non trouvée. Vérifiez le chemin dans le fichier .env et la variable '{env_var_name}'."
+        else:
+            return f"Application '{app_name_alias}' non trouvée. Vérifiez qu'elle est installée et dans le PATH, ou définissez '{env_var_name}' dans votre fichier .env."
+    except Exception as e:
+        display_name = app_name_alias if app_path_from_env else executable_path
+        return f"Erreur lors du lancement de '{display_name}': {e}"
+
+def handle_open_webpage(entities):
+    url = entities.get("url")
+    if not url:
+        return "Veuillez spécifier l'URL à ouvrir."
+    if not (url.startswith("http://") or url.startswith("https://")):
+        url = "http://" + url # Add http if missing for webbrowser
+    try:
+        webbrowser.open_new_tab(url)
+        return f"Ouverture de {url} dans le navigateur."
+    except Exception as e:
+        return f"Erreur lors de l'ouverture de l'URL '{url}': {e}"
+
 # --- End of missing handler functions ---
 
 action_dispatcher = {
@@ -1330,6 +1451,10 @@ action_dispatcher = {
     "web_search": handle_web_search,
     "google_keep_info": handle_google_keep_info, # Example for unsupported features
     "get_weather_forecast": handle_get_weather_forecast, 
+    "execute_python_code": handle_execute_python_code,
+    "generate_3d_object": handle_generate_3d_object,
+    "launch_application": handle_launch_application,
+    "open_webpage": handle_open_webpage,
 }
 
 # --- WebSocket Handler ---
@@ -1566,6 +1691,20 @@ def chat_ws(ws):
                                 panel_target_id = "weatherForecastContent" 
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
                                     chat_display_message = "Voici les prévisions météo."
+                            elif parsed_command_action == "execute_python_code":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "codeDisplayContent"
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Résultat de l'exécution du code Python (voir onglet Code)."
+                            elif parsed_command_action == "generate_3d_object":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "codeDisplayContent"
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Code OpenSCAD généré (voir onglet Code)."
+                            # For launch_application and open_webpage, panel_data_content remains None.
+                            # chat_display_message is already set to the handler's response or Gemini's text.
+                            # No specific panel target needed for these two.
+
                         else: 
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
@@ -1641,6 +1780,12 @@ def chat_ws(ws):
                             text_for_gtts = "Voici la liste des tâches."
                         elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
                              text_for_gtts = "Voici les événements du calendrier."
+                        elif parsed_command_action == "execute_python_code" and "ATTENTION" in chat_display_message:
+                             text_for_gtts = "Le code Python a été exécuté. Vérifiez les résultats."
+                        elif parsed_command_action == "generate_3d_object":
+                             text_for_gtts = "J'ai généré le code OpenSCAD pour votre objet."
+                        # For launch_application and open_webpage, chat_display_message is already the status.
+
 
                 elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
                      text_for_gtts = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici le code que j'ai généré."
