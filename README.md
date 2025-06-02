@@ -194,7 +194,6 @@ pillow
 simple‑websocket
 serpapi
 google‑generativeai
-pickle
 dotenv
 google-search-results
 ```
