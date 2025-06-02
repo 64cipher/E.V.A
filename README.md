@@ -196,6 +196,7 @@ serpapi
 google‑generativeai
 pickle
 dotenv
+google-search-results
 ```
 
 Générez le fichier exact via :
