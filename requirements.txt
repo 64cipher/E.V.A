@@ -12,3 +12,4 @@ serpapi
 google‑generativeai
 pickle
 dotenv
+google-search-results
