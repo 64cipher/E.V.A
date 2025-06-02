@@ -399,13 +399,13 @@ Ta tâche principale est d'analyser la requête de l'utilisateur.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle VOTRE_PRENOM.
+L'utilisateur s'appelle Silver.
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, ou obtenir des détails sur les emails d'un contact), tu DOIS la reformuler en un objet JSON structuré.
 Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases. Ce commentaire doit :
-1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 2. Être concis, spirituel et professionnel.
 3. Ce commentaire textuel doit être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
 
@@ -1506,6 +1506,8 @@ def chat_ws(ws):
                             header, encoded = file_data_from_client.split(",", 1)
                             image_bytes = base64.b64decode(encoded)
                             img = Image.open(io.BytesIO(image_bytes))
+                            MAX_SIZE = (1024, 1024) # Définissez une taille maximale appropriée
+                            img.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
                             # Add a textual description and the image object for Gemini
                             current_user_parts_for_gemini.append(f"L'utilisateur a joint une image nommée '{file_name_from_client}'. Voici l'image :")
                             current_user_parts_for_gemini.append(img)
@@ -1526,6 +1528,8 @@ def chat_ws(ws):
                         header, encoded = image_data_url.split(",", 1)
                         image_bytes = base64.b64decode(encoded)
                         img = Image.open(io.BytesIO(image_bytes))
+                        MAX_SIZE = (1024, 1024) # Définissez une taille maximale appropriée
+                        img.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
                         current_user_parts_for_gemini.append("L'utilisateur a fourni une image via la webcam. Voici l'image :")
                         current_user_parts_for_gemini.append(img)
                     except Exception as e:
