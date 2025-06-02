@@ -3,7 +3,7 @@
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
 
 Inspiré par le projet ada_app de Nlouis38
-https://github.com/Nlouis38/ada_app 
+https://github.com/Nlouis38/ada 
 
 Merci à lui pour son travail.
 
