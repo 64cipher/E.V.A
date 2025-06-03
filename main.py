@@ -467,7 +467,7 @@ except Exception as e:
     print("Le backend continuera sans le client Gemini.")
 
 gemini_conversation_history = []
-MAX_HISTORY_ITEMS = 10 
+MAX_HISTORY_ITEMS = 5 
 
 def get_google_credentials():
     creds = None
