@@ -102,6 +102,7 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
    ![Capture d’écran 2025-05-21 123055](https://github.com/user-attachments/assets/6529a5c5-5dd6-4642-b71a-1c37640e3753)
 
    * Récupérez et utilisez gratuitement votre clé API Gemini sans compte de facturation sur [AI Studio](https://aistudio.google.com)
+     (Vous pouvez activer la facturation pour gemini-2.0-flash pour pas cher : 0.10$/M de tokens INPUT et 0.50$/M de tokens en OUTPUT en cas d'utilise plus intensive d'E.V.A)
 
      ![image](https://github.com/user-attachments/assets/a29bbfaa-dd6f-4fc3-93be-bc27c35fc48b)
 
