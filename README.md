@@ -11,7 +11,7 @@ Merci à lui pour son travail.
 
 ## Présentation
 
-EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, SerpAPI pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
+EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, Custom Search API pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
 
 **Use‑case principal :** un hub productivité « tout‑en‑un » piloté à la voix : créer des événements calendrier, envoyer des e‑mails, obtenir un itinéraire, lancer une recherche Web, gérer contacts & tâches… et obtenir la réponse parlée.
 
@@ -24,7 +24,7 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
 | **NLP/IA**        | Appels direct au modèle Gemini 2 (configurable).                              |
 | **Voix**          | Synthèse vocale via gTTS (facultatif) & Web Speech API côté navigateur.       |
 | **Google API**    | OAuth 2 offline + Calendar, Gmail, Tasks, Maps Directions.                    |
-| **Recherche Web** | Résumés SerpAPI (fallback answer‑box / knowledge graph).                      |
+| **Recherche Web** | Résumés API (fallback answer‑box / knowledge graph).                      |
 | **Météo**         | OpenWeatherMap affiché dans le tableau de bord.                               |
 | **Contact book**  | Carnet d’adresses local (JSON).                                               |
 | **WebSocket**     | Dialogue temps‑réel entre front (HTML/JS) et backend (Flask + Flask‑Sock).    |
@@ -41,7 +41,7 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
 └───────────────┘                                   └──────────────┘
         │                                                    │
         ▼ Google Maps JS                                     ▼
-   Browser APIs : Speech‑to‑Text, gTTS audio          Google APIs / Gemini / SerpAPI
+   Browser APIs : Speech‑to‑Text, gTTS audio          Google APIs / Gemini / Custom Search API
 ```
 
 ---
@@ -55,7 +55,7 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
   * Google Gemini `GEMINI_API_KEY`
   * Google Maps JS `GOOGLE_MAPS_API_KEY`
   * Google OAuth 2 credentials (`client_secret.json`)
-  * SerpAPI `SERPAPI_API_KEY` (optionnel mais recommandé)
+  * Google Custom Search `GOOGLE_CUSTOM_SEARCH_API_KEY` et le CX `GOOGLE_CUSTOM_SEARCH_CX` (optionnel mais recommandé)
   * OpenWeatherMap `OPENWEATHERMAP_API_KEY` (frontend)
 * `ffmpeg` installé (optionnel : synthèse gTTS fiable)
 
@@ -82,7 +82,8 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
    GEMINI_API_KEY=sk‑...
    GEMINI_MODEL_NAME=gemini-2.0-flash          # facultatif
    GOOGLE_MAPS_API_KEY=AIza...
-   SERPAPI_API_KEY=...
+   GOOGLE_CUSTOM_SEARCH_API_KEY==...
+   GOOGLE_CUSTOM_SEARCH_CX=YOUR_CX_KEY
    FLASK_SECRET_KEY=change‑me-super‑secret
    GOOGLE_CLIENT_SECRETS_FILE=client_secret.json
    # Facultatif : décommenter si besoin de proxy
@@ -208,15 +209,15 @@ pip freeze > requirements.txt
 
 ## Variables d’environnement détaillées
 
-| Variable                     | Description                               | Obligatoire        |
-| ---------------------------- | ----------------------------------------- | ------------------ |
-| `GEMINI_API_KEY`             | Clé API Gemini v2                         | ✔︎                 |
-| `GEMINI_MODEL_NAME`          | Nom du modèle (défaut : gemini‑2.0‑flash) | ❌                  |
-| `GOOGLE_MAPS_API_KEY`        | Clé JS Google Maps (itinéraires + carte)  | ❌ (désactive map)  |
-| `SERPAPI_API_KEY`            | Clé SerpAPI pour la recherche Web         | ❌ (web search off) |
-| `FLASK_SECRET_KEY`           | Secret session Flask                      | ✔︎                 |
-| `GOOGLE_CLIENT_SECRETS_FILE` | Nom du fichier JSON OAuth                 | ✔︎                 |
-| `OPENWEATHERMAP_API_KEY`     | Clé météo (frontend)                      | ❌ (pas de météo)   |
+| Variable                                             | Description                               | Obligatoire        |
+| -----------------------------------------------------| ----------------------------------------- | ------------------ |
+| `GEMINI_API_KEY`                                     | Clé API Gemini v2                         | ✔︎                 |
+| `GEMINI_MODEL_NAME`                                  | Nom du modèle (défaut : gemini‑2.0‑flash) | ❌                  |
+| `GOOGLE_MAPS_API_KEY`                                | Clé JS Google Maps (itinéraires + carte)  | ❌ (désactive map)  |
+| `CUSTOM_SEARCH_API_KEY` et `GOOGLE_CUSTOM_SEARCH_CX` | Clé Custom Search pour la recherche Web   | ❌ (web search off) |
+| `FLASK_SECRET_KEY`                                   | Secret session Flask                      | ✔︎                 |
+| `GOOGLE_CLIENT_SECRETS_FILE`                         | Nom du fichier JSON OAuth                 | ✔︎                 |
+| `OPENWEATHERMAP_API_KEY`                             | Clé météo (frontend)                      | ❌ (pas de météo)   |
 
 ---
 
