@@ -119,6 +119,16 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
 
      ![image](https://github.com/user-attachments/assets/a2c8d592-d9d9-4d88-9647-3a59a97a0261)
 
+   * Pour Google Custom Search API, vous devez aller sur [La plate-forme de moteur de recherche personnalisé](https://programmablesearchengine.google.com/)
+
+     ![image](https://github.com/user-attachments/assets/bc5271b2-0d62-4632-bbf8-ca34b65a34d2)
+
+     Copier l'ID du moteur de recherche et coller le dans `GOOGLE_CUSTOM_SEARCH_CX` présent dans le fichier .env  
+   
+     ![image](https://github.com/user-attachments/assets/ed6a61d3-f303-46ba-8e17-b190fb8597a1)
+
+ 
+     
 6. **Frontend : insérez vos clés JS**
 
    * Ouvrez `index.html` et recherchez, ligne 9 :
