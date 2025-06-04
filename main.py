@@ -873,7 +873,7 @@ def perform_web_search(query, num_results=6):
             summary_details_text += f"{i+1}. {title}\n"
             if snippet:
                 summary_details_text += f"   Extrait: {snippet}\n"
-            summary_details_text += f"   Source: {display_link}\n\n"
+            summary_details_text += f"   Source: {link}\n\n"
 
         # L'API Google Custom Search ne fournit pas d'équivalent direct à "answer_box" ou "knowledge_graph"
         # comme SerpApi. Le 'panel_summary' sera la liste formatée des résultats.
