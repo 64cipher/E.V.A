@@ -60,20 +60,9 @@ from flask_sock import Sock
 # --- Imports pour Google OAuth et API Client ---
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
+from googleapiclient.discovery import build # Utilisé pour Google APIs y compris Custom Search
 from google.auth.transport.requests import Request
-from googleapiclient.errors import HttpError
-
-# --- Import pour SerpAPI (Recherche Web) ---
-serpapi_client_available = False
-try:
-    from serpapi import GoogleSearch
-    serpapi_client_available = True
-    # print("DEBUG: Bibliothèque SerpAPI 'google-search-results' trouvée et importée.")
-except ImportError:
-    print("AVERTISSEMENT: Bibliothèque SerpAPI 'google-search-results' NON TROUVÉE.")
-    print("             Pour l'installer, exécutez: pip install google-search-results")
-    print("             La fonctionnalité de recherche web sera DÉSACTIVÉE.")
+from googleapiclient.errors import HttpError # Utilisé pour gérer les erreurs des API Google
 
 from simple_websocket.errors import ConnectionClosed
 
@@ -81,8 +70,12 @@ from simple_websocket.errors import ConnectionClosed
 # Récupérer les clés API et configurations
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY")
-serpapi_api_key = os.getenv("SERPAPI_API_KEY")
 gemini_model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.0-flash") # Modèle par défaut si non spécifié
+
+# Configuration pour Google Custom Search API
+google_custom_search_api_key = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY")
+google_custom_search_cx = os.getenv("GOOGLE_CUSTOM_SEARCH_CX") # CX est l'ID du moteur de recherche personnalisé
+google_custom_search_available = bool(google_custom_search_api_key and google_custom_search_cx)
 
 if not gemini_api_key:
     print("Erreur critique: Clé API Gemini manquante. Arrêt.")
@@ -92,15 +85,14 @@ if not google_maps_api_key:
     print("AVERTISSEMENT: Clé API Google Maps (GOOGLE_MAPS_API_KEY) manquante dans le fichier .env.")
     print("             La fonctionnalité d'itinéraire sera DÉSACTIVÉE.")
 
-if serpapi_client_available:
-    if not serpapi_api_key:
-        print("AVERTISSEMENT: Clé API SerpAPI (SERPAPI_API_KEY) manquante dans le fichier .env.")
-        print("             La recherche web sera DÉSACTIVÉE.")
-        serpapi_client_available = False
-    # else:
-        # print("DEBUG: Clé API SerpAPI trouvée.")
-else:
-    print("INFO: Recherche web SerpAPI non disponible car la bibliothèque n'a pas pu être importée.")
+if not google_custom_search_api_key:
+    print("AVERTISSEMENT: Clé API Google Custom Search (GOOGLE_CUSTOM_SEARCH_API_KEY) manquante dans le fichier .env.")
+if not google_custom_search_cx:
+    print("AVERTISSEMENT: ID du moteur de recherche Google Custom Search (GOOGLE_CUSTOM_SEARCH_CX) manquant dans le fichier .env.")
+if not google_custom_search_available:
+    print("INFO: Recherche web via Google Custom Search DÉSACTIVÉE (clé API ou CX manquant).")
+# else:
+    # print("DEBUG: Clés API et CX Google Custom Search trouvées et prêtes à l'emploi.")
 
 
 app = Flask(__name__)
@@ -188,7 +180,7 @@ def add_contact_to_book(name, email):
             print(f"AVERTISSEMENT [add_contact_to_book]: Échec de confirmation du contact '{normalized_name}' après rechargement. CONTACT_BOOK: {CONTACT_BOOK}")
             return f"Erreur de vérification après sauvegarde du contact '{name}'."
     else:
-        load_contacts() 
+        load_contacts()
         return f"Erreur lors de la sauvegarde du contact '{name}'."
 
 def get_contact_email(name):
@@ -255,15 +247,15 @@ def parse_french_datetime(datetime_str):
             num_months = 1
         else:
             num_months = int(num_months_str)
-        
+
         current_month = now.month
         current_year = now.year
-        
+
         new_month_abs = current_month + num_months
-        
+
         new_year = current_year + (new_month_abs - 1) // 12
         new_month = (new_month_abs - 1) % 12 + 1
-        
+
         last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
         new_day = min(now.day, last_day_of_new_month)
 
@@ -272,19 +264,19 @@ def parse_french_datetime(datetime_str):
 
     if "demain" in datetime_str_cleaned:
         target_date = now + datetime.timedelta(days=1)
-        hour, minute = extract_time(datetime_str_cleaned) 
+        hour, minute = extract_time(datetime_str_cleaned)
         return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     if "aujourd'hui" in datetime_str_cleaned or "ce jour" in datetime_str_cleaned:
         target_date = now
-        hour, minute = extract_time(datetime_str_cleaned) 
+        hour, minute = extract_time(datetime_str_cleaned)
         return target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
     pattern_datetime = re.compile(
         r"(?:le\s+|l')?(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre)\s*(?:l'année\s*(\d{4})\s*)?(?:à|a)\s*(\d{1,2})h(?:(\d{2}))?",
         re.IGNORECASE
     )
-    match_datetime = pattern_datetime.search(datetime_str_cleaned) 
+    match_datetime = pattern_datetime.search(datetime_str_cleaned)
 
     if match_datetime:
         day_str, month_name_fr, year_str, hour_str, minute_str = match_datetime.groups()
@@ -293,12 +285,12 @@ def parse_french_datetime(datetime_str):
              r"(?:le\s+|l')?(\d{1,2})\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre)\s*(?:l'année\s*(\d{4})\s*)?",
              re.IGNORECASE
         )
-        match_date_only = pattern_date_only.search(datetime_str_cleaned) 
+        match_date_only = pattern_date_only.search(datetime_str_cleaned)
         if match_date_only:
             day_str, month_name_fr, year_str = match_date_only.groups()
             hour_str, minute_str = "9", "00" # Default time
         else:
-            return None 
+            return None
 
     try:
         day = int(day_str)
@@ -308,7 +300,7 @@ def parse_french_datetime(datetime_str):
         hour = int(hour_str)
         minute = int(minute_str) if minute_str else 0
         if not (1 <= day <= 31 and 0 <= hour <= 23 and 0 <= minute <= 59): return None
-        
+
         parsed_dt = datetime.datetime(year, month_num, day, hour, minute)
         # If the parsed date is in the past for the current year (and no year was specified),
         # and "prochain" or a similar keyword is used, or the month is past, assume next year.
@@ -379,7 +371,7 @@ def format_event_datetime(start_str):
         # For full accuracy, use a library like pytz if available, or rely on Google API to return local times.
         # Assuming Paris is UTC+1 (standard) or UTC+2 (DST)
         now_paris = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=1))) # CET
-        is_dst = time.localtime().tm_isdst > 0 
+        is_dst = time.localtime().tm_isdst > 0
         paris_offset_hours = 2 if is_dst else 1
         paris_tz = datetime.timezone(datetime.timedelta(hours=paris_offset_hours))
 
@@ -393,7 +385,7 @@ def format_event_datetime(start_str):
                  # For simplicity, if it has an offset, we'll assume it's correct or convert from UTC if no offset.
             else: # No explicit timezone, assume UTC as per Google API common practice for 'dateTime'
                 dt_object_utc = datetime.datetime.fromisoformat(start_str).replace(tzinfo=datetime.timezone.utc)
-            
+
             dt_object_paris = dt_object_utc.astimezone(paris_tz)
             return dt_object_paris.strftime("%d %B %Y à %Hh%M")
         else:  # Date only string (all-day event)
@@ -466,7 +458,7 @@ Les fonctionnalités pour Google Keep ne sont pas disponibles (informe l'utilisa
 ATTENTION : L'exécution de code Python via 'execute_python_code' peut présenter des risques de sécurité si le code provient de sources non fiables. Utilise cette fonctionnalité avec prudence.
 La génération d'objets 3D produit du code OpenSCAD. L'utilisateur devra utiliser OpenSCAD pour visualiser/rendre l'objet.
 Le lancement d'applications dépend des applications installées sur l'ordinateur de l'utilisateur et de la configuration du PATH système.
-Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et SerpAPI.
+Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et la recherche web.
 Le système principal gère un carnet d'adresses local.
 L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spécifiée par l'utilisateur.
 Les prévisions météo sont gérées par le client (JavaScript) pour l'affichage, mais tu dois fournir un résumé verbal comme indiqué plus haut.
@@ -486,7 +478,7 @@ except Exception as e:
     print("Le backend continuera sans le client Gemini.")
 
 gemini_conversation_history = []
-MAX_HISTORY_ITEMS = 4 
+MAX_HISTORY_ITEMS = 4
 
 def get_google_credentials():
     creds = None
@@ -640,8 +632,8 @@ def get_email_body_from_payload(payload):
                 nested_result = get_email_body_from_payload(part)
                 if nested_result: # If something (hopefully plain text) is found deeper
                     # This simple recursion returns the first non-None. A more complex one could prioritize.
-                    return nested_result 
-        
+                    return nested_result
+
         if plain_text_body:
             return plain_text_body
         elif html_body_content:
@@ -737,7 +729,7 @@ def list_google_tasks(max_results=10): # Added default value
                 tasklist_id = tl['id']
                 tasklist_title = tl['title']
                 break
-        
+
         results = service.tasks().list(tasklist=tasklist_id, maxResults=int(max_results), showCompleted=False, showHidden=False).execute() # Ensure max_results is int
         tasks = results.get('items', [])
         if not tasks: return f"Aucune tâche active trouvée dans la liste '{tasklist_title}'."
@@ -780,7 +772,7 @@ def get_directions_from_google_maps_api(origin, destination):
             leg = directions_result[0]['legs'][0] # Assuming one leg for simplicity
             distance_text = leg['distance']['text']
             duration_text = leg['duration']['text']
-            
+
             route_summary = f"Itinéraire de {origin} à {destination}:\n"
             route_summary += f"  Distance: {distance_text}, Durée: {duration_text}\n"
             if len(leg['steps']) > 0:
@@ -824,85 +816,86 @@ def get_directions_from_google_maps_api(origin, destination):
         }
 
 def perform_web_search(query, num_results=6):
-    global serpapi_client_available, serpapi_api_key
-    if not serpapi_client_available:
-        return {"panel_summary": "Service de recherche web non configuré ou bibliothèque manquante.", "top_source_name": "N/A"}
+    """
+    Effectue une recherche web en utilisant Google Custom Search API.
+    Retourne un dictionnaire avec 'panel_summary' et 'top_source_name'.
+    """
+    global google_custom_search_available, google_custom_search_api_key, google_custom_search_cx
+    if not google_custom_search_available:
+        return {"panel_summary": "Service de recherche web Google Custom Search non configuré ou clé/CX manquant.", "top_source_name": "N/A"}
 
     try:
-        params = { "q": query, "api_key": serpapi_api_key, "num": num_results, "hl": "fr", "gl": "fr" }
-        search = GoogleSearch(params)
-        results = search.get_dict()
+        # Le service 'build' est déjà importé via 'from googleapiclient.discovery import build'
+        service = build("customsearch", "v1", developerKey=google_custom_search_api_key)
+        # Exécute la requête de recherche
+        # Limite num_results à 10 max car c'est la limite par requête de l'API Custom Search
+        num_results_api = min(num_results, 10)
+        results = service.cse().list(
+            q=query,
+            cx=google_custom_search_cx,
+            num=num_results_api,
+            hl='fr',  # Langue des résultats souhaitée
+            gl='fr'   # Géolocalisation pour biaiser les résultats (France)
+        ).execute()
 
-        organic_results = results.get("organic_results", [])
-        top_source_name = "Source inconnue" # Default
-
-        # Prioriser l'Answer Box si elle existe et fournit une source directe
-        answer_box = results.get("answer_box")
-        if answer_box:
-            answer_snippet = answer_box.get("answer") or answer_box.get("snippet")
-            ab_source_info = answer_box.get("source") # Peut être un dict ou une string
-            if isinstance(ab_source_info, dict):
-                top_source_name = ab_source_info.get('name', ab_source_info.get('link', top_source_name))
-            elif isinstance(ab_source_info, str):
-                top_source_name = ab_source_info
-
-            if answer_snippet: # Si l'answer box a une réponse directe
-                 panel_text = f"Réponse directe pour '{query}':\n{answer_snippet}"
-                 if top_source_name != "Source inconnue" and top_source_name : panel_text += f"\nSource: {top_source_name}"
-                 return {"panel_summary": panel_text, "top_source_name": top_source_name}
-
-        # Si pas d'Answer Box satisfaisante, ou pour le résumé général, utiliser les résultats organiques
-        if organic_results:
-            first_res = organic_results[0]
-            # 'source' (nom de domaine/nom du site) est souvent meilleur que 'displayed_link' pour la citation.
-            top_source_name = first_res.get('source', first_res.get('displayed_link', "Source inconnue"))
-        elif results.get("knowledge_graph"): # Si pas de résultats organiques, mais un knowledge graph
-             kg = results.get("knowledge_graph")
-             kg_title = kg.get("title", query)
-             kg_description = kg.get("description")
-             kg_source_info = kg.get("source") # Souvent un dict avec name et link
-             if isinstance(kg_source_info, dict):
-                 top_source_name = kg_source_info.get('name', kg_source_info.get('link', "Knowledge Graph"))
-             elif isinstance(kg_source_info, str):
-                  top_source_name = kg_source_info
-             else:
-                 top_source_name = kg_title # Fallback au titre du KG si pas de source claire
-
-             if kg_description:
-                 return {
-                     "panel_summary": f"Information (Knowledge Graph) pour '{kg_title}':\n{kg_description}\nSource: {top_source_name}",
-                     "top_source_name": top_source_name
-                 }
-
-        if not organic_results and top_source_name == "Source inconnue": # Vraiment aucun résultat ou source
-             return {"panel_summary": f"Aucun résultat pertinent trouvé pour '{query}'.", "top_source_name": "N/A"}
-
-        # Construction du résumé pour le panneau à partir des résultats organiques
+        search_items = results.get('items', [])
+        top_source_name = "Source inconnue"
         summary_details_text = f"Résultats web pour '{query}':\n"
-        for i, res in enumerate(organic_results[:num_results]):
-            summary_details_text += f"{i+1}. {res.get('title', 'Sans titre')}\n"
-            snippet = res.get('snippet', 'N/A')
+
+        if not search_items:
+            return {"panel_summary": f"Aucun résultat pertinent trouvé pour '{query}'.", "top_source_name": "N/A"}
+
+        # Déterminer la source principale à partir du premier résultat
+        if search_items:
+            try:
+                first_item_link = search_items[0].get('link')
+                if first_item_link:
+                    # Essayer d'extraire le nom de domaine
+                    domain_match = re.search(r"https?://(?:www\.)?([^/]+)", first_item_link)
+                    if domain_match:
+                        top_source_name = domain_match.group(1)
+                    else:
+                        # Fallback sur displayLink si l'extraction du domaine échoue
+                        top_source_name = search_items[0].get('displayLink', "Source inconnue")
+                else:
+                    top_source_name = search_items[0].get('displayLink', "Source inconnue")
+            except Exception:
+                # top_source_name reste "Source inconnue" en cas d'erreur
+                pass
+
+        # Construire le résumé des résultats pour affichage
+        for i, item in enumerate(search_items):
+            title = item.get('title', 'Sans titre')
+            snippet = item.get('snippet', 'N/A') # 'snippet' contient un résumé du contenu
+            link = item.get('link', '#') # URL de la page
+            display_link = item.get('displayLink', link) # Souvent le nom de domaine
+
+            summary_details_text += f"{i+1}. {title}\n"
             if snippet:
                 summary_details_text += f"   Extrait: {snippet}\n"
-            # Pour l'affichage dans le panel, le 'displayed_link' ou 'source' est bien.
-            display_source_panel = res.get('source', res.get('displayed_link', res.get('link', '#')))
-            summary_details_text += f"   Source: {display_source_panel}\n\n"
+            summary_details_text += f"   Source: {display_link}\n\n"
 
-        # Si une Answer Box existe en plus des résultats organiques, on peut l'ajouter
-        if answer_box and (answer_box.get("answer") or answer_box.get("snippet")) and not (top_source_name != "Source inconnue" and top_source_name != "Knowledge Graph" and organic_results):
-             # Évite la redondance si l'answer_box était déjà la source principale
-             summary_details_text += f"Info complémentaire (Answer Box):\n{answer_box.get('answer') or answer_box.get('snippet')}\n"
-             ab_source_info_extra = answer_box.get("source")
-             if isinstance(ab_source_info_extra, dict): summary_details_text += f"Source: {ab_source_info_extra.get('name', ab_source_info_extra.get('link'))}\n"
-             elif isinstance(ab_source_info_extra, str) : summary_details_text += f"Source: {ab_source_info_extra}\n"
-
-
+        # L'API Google Custom Search ne fournit pas d'équivalent direct à "answer_box" ou "knowledge_graph"
+        # comme SerpApi. Le 'panel_summary' sera la liste formatée des résultats.
         return {"panel_summary": summary_details_text.strip(), "top_source_name": top_source_name}
 
-    except Exception as e:
-        print(f"Erreur lors de la recherche web SerpAPI: {e}")
+    except HttpError as e:
+        # Gérer les erreurs spécifiques à l'API Google
+        error_details_str = e.content.decode('utf-8') if e.content else "{}"
+        try:
+            error_details = json.loads(error_details_str)
+            error_message = error_details.get("error", {}).get("message", str(e))
+        except json.JSONDecodeError:
+            error_message = error_details_str if error_details_str else str(e)
+        
+        print(f"Erreur API Google Custom Search: {error_message}")
         traceback.print_exc()
-        return {"panel_summary": f"Erreur lors de la recherche web : {type(e).__name__}", "top_source_name": "Erreur"}
+        return {"panel_summary": f"Erreur lors de la recherche web (Google Custom Search): {error_message}", "top_source_name": "Erreur"}
+    except Exception as e:
+        print(f"Erreur inattendue lors de la recherche web (Google Custom Search): {e}")
+        traceback.print_exc()
+        return {"panel_summary": f"Erreur inattendue lors de la recherche web: {type(e).__name__}", "top_source_name": "Erreur"}
+
 
 # --- Fonctions Gemini et gTTS ---
 def get_gemini_response(current_user_parts):
@@ -911,7 +904,7 @@ def get_gemini_response(current_user_parts):
 
     # Prepare the history for the API request
     api_request_contents = list(gemini_conversation_history) # Make a copy to append current user turn
-    
+
     # Add current user message to the request contents
     if current_user_parts:
         formatted_parts = []
@@ -922,7 +915,7 @@ def get_gemini_response(current_user_parts):
                 formatted_parts.append(part) # Add the image object directly
             else:
                 print(f"WARN: Partie utilisateur non gérée pour Gemini: {type(part)}")
-        
+
         if formatted_parts: # Only append if there are valid parts
              api_request_contents.append({"role": "user", "parts": formatted_parts})
 
@@ -934,19 +927,19 @@ def get_gemini_response(current_user_parts):
         # print(f"DEBUG Gemini Request: {json.dumps(api_request_contents, indent=2, default=lambda o: '<non-serializable>' if isinstance(o, Image.Image) else str(o))}")
         response = generative_model.generate_content(api_request_contents)
         # print(f"DEBUG Gemini Response: {response}") # For debugging raw response
-        
+
         response_text = ""
         # Try to access response.text directly (common for simple text responses)
-        if hasattr(response, 'text'): 
+        if hasattr(response, 'text'):
             response_text = response.text
         # If no .text, check .parts (common for multimodal or complex responses)
-        elif hasattr(response, 'parts') and response.parts: 
+        elif hasattr(response, 'parts') and response.parts:
              response_text = "".join([p.text for p in response.parts if hasattr(p, 'text')])
         else: # More complex extraction if neither .text nor .parts is directly available
             # Check for blocking reasons first
             if hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason:
                 return f"Réponse Gemini bloquée ({response.prompt_feedback.block_reason_message or response.prompt_feedback.block_reason})."
-            
+
             # Try to get text from candidates if available
             candidate = response.candidates[0] if hasattr(response, 'candidates') and response.candidates else None
             if candidate and hasattr(candidate, 'content') and hasattr(candidate.content, 'parts') and candidate.content.parts:
@@ -967,14 +960,14 @@ def get_gemini_response(current_user_parts):
                              response_text = potential_json_str # Assume it's the command JSON
                          else:
                              return "Gemini n'a pas généré de réponse textuelle claire ni de JSON de commande valide."
-                     else: 
+                     else:
                          return "Réponse de Gemini non interprétable comme texte ou JSON de commande."
 
 
         # Update history: Add the user's message that led to this response
         if current_user_parts and formatted_parts: # Check if formatted_parts were successfully created
             gemini_conversation_history.append({"role": "user", "parts": formatted_parts})
-        
+
         # Check if the response is a command JSON (it should be the only content if so)
         is_command_json = False
         if isinstance(response_text, str) and response_text.strip().startswith("{") and response_text.strip().endswith("}"):
@@ -1000,7 +993,7 @@ def get_gemini_response(current_user_parts):
         # Trim history if it gets too long
         if len(gemini_conversation_history) > MAX_HISTORY_ITEMS * 2: # Each turn has user + model
             gemini_conversation_history = gemini_conversation_history[-(MAX_HISTORY_ITEMS * 2):]
-        
+
         return response_text
     except Exception as e:
         print(f"Erreur API Gemini: {e}")
@@ -1045,9 +1038,9 @@ def handle_list_calendar_events(entities):
     try:
         service = build('calendar', 'v3', credentials=creds)
         now_utc_dt = datetime.datetime.utcnow()
-        
+
         # Determine Paris timezone offset (simplified)
-        is_dst = time.localtime().tm_isdst > 0 
+        is_dst = time.localtime().tm_isdst > 0
         paris_tz_offset_hours = 2 if is_dst else 1
         # paris_tz = datetime.timezone(datetime.timedelta(hours=paris_tz_offset_hours)) # Not directly used for API call min/max
 
@@ -1064,14 +1057,14 @@ def handle_list_calendar_events(entities):
             orderBy='startTime'
         ).execute()
         all_events = events_result.get('items', [])
-        
+
         if not all_events:
             return "Aucun événement à venir trouvé dans les 90 prochains jours."
 
         # Extract filters from entities
         event_summary_hint = entities.get("event_summary_hint", "").lower().strip()
         specific_datetime_str = entities.get("specific_datetime_str")
-        
+
         parsed_specific_datetime_naive_local = None
         if specific_datetime_str:
             parsed_specific_datetime_naive_local = parse_french_datetime(specific_datetime_str)
@@ -1087,7 +1080,7 @@ def handle_list_calendar_events(entities):
                 summary_match = False
                 datetime_match = False
                 event_summary_lower = event.get('summary', '').lower()
-                
+
                 # Check for summary match
                 if event_summary_hint and event_summary_hint in event_summary_lower:
                     summary_match = True
@@ -1100,7 +1093,7 @@ def handle_list_calendar_events(entities):
                         # Convert event start/end to naive local Paris time for comparison
                         # Google API returns 'dateTime' in RFC3339 format (often UTC or with offset)
                         # and 'date' for all-day events.
-                        
+
                         # Determine event start time (UTC, then convert to Paris local naive)
                         if 'Z' in event_start_str: event_start_utc = datetime.datetime.fromisoformat(event_start_str.replace('Z', '+00:00'))
                         elif '+' in event_start_str[10:] or '-' in event_start_str[10:]: event_start_utc = datetime.datetime.fromisoformat(event_start_str) # Already has offset
@@ -1112,13 +1105,13 @@ def handle_list_calendar_events(entities):
                         elif '+' in event_end_str[10:] or '-' in event_end_str[10:]: event_end_utc = datetime.datetime.fromisoformat(event_end_str)
                         elif 'T' in event_end_str: event_end_utc = datetime.datetime.fromisoformat(event_end_str).replace(tzinfo=datetime.timezone.utc)
                         else: event_end_utc = (datetime.datetime.strptime(event_end_str, "%Y-%m-%d") + datetime.timedelta(days=1)).replace(tzinfo=datetime.timezone.utc) # All-day events end at midnight next day
-                       
+
                         event_start_local_paris_naive = event_start_utc.astimezone(datetime.timezone(datetime.timedelta(hours=paris_tz_offset_hours))).replace(tzinfo=None)
                         event_end_local_paris_naive = event_end_utc.astimezone(datetime.timezone(datetime.timedelta(hours=paris_tz_offset_hours))).replace(tzinfo=None)
-                        
+
                         # If the query was for a specific date (without time), match if event occurs on that day
                         query_is_date_only = parsed_specific_datetime_naive_local.time() == datetime.time(0,0) and not (specific_datetime_str and 'h' in specific_datetime_str.lower())
-                        
+
                         if query_is_date_only:
                             # Event starts on or before the query date AND ends on or after the query date
                             if event_start_local_paris_naive.date() <= parsed_specific_datetime_naive_local.date() < event_end_local_paris_naive.date():
@@ -1133,13 +1126,13 @@ def handle_list_calendar_events(entities):
                     except ValueError as ve:
                         print(f"Error parsing event date for filtering: {ve} for event {event.get('summary')}")
                         continue # Skip this event if its date format is problematic
-                
+
                 # Combine matches based on what filters were provided
                 if event_summary_hint and parsed_specific_datetime_naive_local:
                     if summary_match and datetime_match: filtered_events.append(event)
                 elif event_summary_hint and summary_match: filtered_events.append(event)
                 elif parsed_specific_datetime_naive_local and datetime_match: filtered_events.append(event)
-            
+
             # Prepare response based on filtered events
             if not filtered_events:
                 response_text = "Je n'ai trouvé aucun événement correspondant à "
@@ -1185,7 +1178,7 @@ def handle_list_calendar_events(entities):
 
 # --- Handler functions that were missing or needed correction ---
 def handle_list_emails(entities):
-    return list_unread_emails() 
+    return list_unread_emails()
 
 def handle_get_contact_emails(entities):
     creds = get_google_credentials()
@@ -1215,18 +1208,18 @@ def handle_get_contact_emails(entities):
             if info["email"] == contact_email:
                 contact_display_name = info["display_name"]
                 break
-    
+
     try:
         service = build('gmail', 'v1', credentials=creds)
         query_parts = [f"from:{contact_email}"]
         if subject_filter:
             query_parts.append(f"subject:({subject_filter})") # Use parentheses for multi-word subjects
-        
+
         # Search in INBOX, not just UNREAD for specific contact queries
-        query_parts.append("in:inbox") 
-        
+        query_parts.append("in:inbox")
+
         final_query = " ".join(query_parts)
-        
+
         num_results_to_fetch = max_summaries if retrieve_mode == "summary" else 1
 
         list_request = service.users().messages().list(userId='me', q=final_query, maxResults=num_results_to_fetch)
@@ -1250,7 +1243,7 @@ def handle_get_contact_emails(entities):
                     try:
                         date_obj = parsedate_to_datetime(date_str_raw)
                         # Adjust to local timezone (Paris)
-                        is_dst = time.localtime().tm_isdst > 0 
+                        is_dst = time.localtime().tm_isdst > 0
                         paris_offset_hours = 2 if is_dst else 1
                         paris_tz = datetime.timezone(datetime.timedelta(hours=paris_offset_hours))
                         date_obj_local = date_obj.astimezone(paris_tz)
@@ -1262,7 +1255,7 @@ def handle_get_contact_emails(entities):
                 return f"De: {contact_display_name}\nSujet: {subject}\nDate: {date_formatted}\n\n{body.strip()}"
             else:
                 return f"Contenu du dernier email de '{contact_display_name}' non trouvé ou format non supporté."
-        
+
         else: # retrieve_mode == "summary"
             email_summaries = []
             for msg_ref in messages:
@@ -1278,7 +1271,7 @@ def handle_get_contact_emails(entities):
                 if date_str_raw:
                     try:
                         date_obj = parsedate_to_datetime(date_str_raw)
-                        is_dst = time.localtime().tm_isdst > 0 
+                        is_dst = time.localtime().tm_isdst > 0
                         paris_offset_hours = 2 if is_dst else 1
                         paris_tz = datetime.timezone(datetime.timedelta(hours=paris_offset_hours))
                         date_obj_local = date_obj.astimezone(paris_tz)
@@ -1309,7 +1302,7 @@ def handle_get_contact_emails(entities):
 
 
 def handle_list_tasks(entities):
-    return list_google_tasks() 
+    return list_google_tasks()
 
 def handle_send_email(entities):
     recipient_name_or_email = entities.get("recipient_name_or_email")
@@ -1344,7 +1337,7 @@ def handle_add_contact(entities):
         return add_contact_to_book(name, email)
     return "Pour ajouter un contact, veuillez me donner son nom et son adresse e-mail."
 
-def handle_list_contacts(entities): 
+def handle_list_contacts(entities):
     return list_contacts_from_book()
 
 def handle_remove_contact(entities):
@@ -1380,8 +1373,8 @@ def handle_get_directions(entities):
 def handle_web_search(entities):
     query = entities.get("query")
     if query:
-        return perform_web_search(query)
-    return "Que souhaitez-vous rechercher sur le web ?"
+        return perform_web_search(query) # Appel de la nouvelle fonction
+    return {"panel_summary": "Que souhaitez-vous rechercher sur le web ?", "top_source_name": "N/A"} # Assurer un retour dict
 
 def handle_google_keep_info(entities): # Example of a graceful "not supported"
     return "Désolé, Google Keep n'a pas d'API publique officielle, je ne peux donc pas gérer vos notes Keep directement."
@@ -1401,10 +1394,10 @@ def handle_execute_python_code(entities):
     # CRITICAL SECURITY WARNING: Executing arbitrary code is dangerous.
     # This is implemented for a local, trusted user scenario.
     # Do NOT expose this functionality to untrusted users or over an unsecured network.
-    
+
     output_capture = io.StringIO()
     error_capture = io.StringIO()
-    
+
     # Create a restricted global scope if needed, or use current globals() carefully
     # For simplicity, using current globals, but be aware of implications.
     # You might want to provide specific modules or functions in a custom globals dict.
@@ -1414,10 +1407,10 @@ def handle_execute_python_code(entities):
     try:
         with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(error_capture):
             exec(code_to_execute, execution_globals, execution_locals)
-        
+
         stdout_val = output_capture.getvalue()
         stderr_val = error_capture.getvalue()
-        
+
         response = "ATTENTION : L'exécution de code Python peut être risquée.\n"
         if stdout_val:
             response += f"Sortie standard:\n{stdout_val}\n"
@@ -1508,14 +1501,14 @@ def fetch_url_content_for_processing(url_to_fetch):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url_to_fetch, headers=headers, timeout=15, allow_redirects=True) # Increased timeout, allow redirects
-        response.raise_for_status() 
-        
+        response.raise_for_status()
+
         content_type = response.headers.get('content-type', '').lower()
         if 'html' in content_type:
             soup = BeautifulSoup(response.content, 'html.parser')
             for script_or_style in soup(["script", "style", "header", "footer", "nav", "aside"]): # Remove more non-content tags
                 script_or_style.decompose()
-            
+
             # Try to find main content areas
             main_content_tags = soup.find_all(['main', 'article', 'div.content', 'div.main-content', 'div.post-body'])
             if main_content_tags:
@@ -1532,7 +1525,7 @@ def fetch_url_content_for_processing(url_to_fetch):
             return response.text.strip()
         else:
             return f"Contenu de type non supporté ({content_type}) pour l'analyse."
-            
+
     except requests.exceptions.Timeout:
         return f"Erreur lors de la récupération de l'URL: Le délai d'attente a été dépassé pour {url_to_fetch}."
     except requests.exceptions.RequestException as e:
@@ -1554,13 +1547,13 @@ def handle_process_url(entities):
 
     if not (url.startswith("http://") or url.startswith("https://")):
         url = 'http://' + url
-        
+
     print(f"INFO: [handle_process_url] Début du traitement de l'URL: {url}")
     content = fetch_url_content_for_processing(url)
-    
+
     if not isinstance(content, str) or "Erreur" in content or "Contenu de type non supporté" in content or "désactivée" in content:
         print(f"WARN: [handle_process_url] Échec de la récupération ou traitement initial du contenu de {url}. Message: {content}")
-        return content 
+        return content
 
     if not content.strip():
         print(f"WARN: [handle_process_url] Contenu vide extrait de {url}.")
@@ -1588,7 +1581,7 @@ def handle_process_url(entities):
                 #     # etc.
                 # ]
             )
-            
+
             response_text = ""
             if hasattr(url_analysis_gemini_response, 'text'):
                 response_text = url_analysis_gemini_response.text
@@ -1620,20 +1613,20 @@ def handle_process_url(entities):
 
 action_dispatcher = {
     "create_calendar_event": handle_create_calendar_event,
-    "list_calendar_events": handle_list_calendar_events, 
+    "list_calendar_events": handle_list_calendar_events,
     "send_email": handle_send_email,
-    "list_emails": handle_list_emails, 
-    "get_contact_emails": handle_get_contact_emails, 
+    "list_emails": handle_list_emails,
+    "get_contact_emails": handle_get_contact_emails,
     "create_task": handle_create_task,
-    "list_tasks": handle_list_tasks,   
+    "list_tasks": handle_list_tasks,
     "add_contact": handle_add_contact,
-    "list_contacts": handle_list_contacts, 
+    "list_contacts": handle_list_contacts,
     "remove_contact": handle_remove_contact,
-    "get_contact_email": handle_get_contact_email, 
+    "get_contact_email": handle_get_contact_email,
     "get_directions": handle_get_directions,
     "web_search": handle_web_search,
-    "google_keep_info": handle_google_keep_info, 
-    "get_weather_forecast": handle_get_weather_forecast, 
+    "google_keep_info": handle_google_keep_info,
+    "get_weather_forecast": handle_get_weather_forecast,
     "process_url": handle_process_url, # Nouvelle action
     "execute_python_code": handle_execute_python_code,
     "generate_3d_object": handle_generate_3d_object,
@@ -1661,7 +1654,7 @@ def chat_ws(ws):
                 raise # Re-raise to exit the loop and handler
             except Exception: # Catches timeout errors from ws.receive specifically
                 # This is expected if client is idle, server will then ping
-                pass 
+                pass
 
             if raw_data is not None:
                 last_activity_time = current_time # Update activity time on receiving data
@@ -1704,7 +1697,7 @@ def chat_ws(ws):
                     else:
                         print(f"WARN: Type de fichier joint non supporté '{file_type_from_client}' pour '{file_name_from_client}'.")
                         current_user_parts_for_gemini.append(f"(Note: Fichier '{file_name_from_client}' de type non supporté '{file_type_from_client}' reçu mais non traité.)")
-                
+
                 # Handle webcam image data if no file is attached (file takes precedence)
                 elif data.get('imageData'): # imageData is from webcam
                     image_data_url = data.get('imageData')
@@ -1719,26 +1712,26 @@ def chat_ws(ws):
                     except Exception as e:
                         print(f"Erreur lors du décodage de l'image webcam: {e}")
                         current_user_parts_for_gemini.append("(Erreur: Impossible de traiter l'image de la webcam)")
-                
+
                 # --- Initialize response variables ---
                 final_text_response_for_action = None # Result from action dispatcher (data for panel)
-                action_taken_by_nlu = False 
-                parsed_command_action = None 
+                action_taken_by_nlu = False
+                parsed_command_action = None
                 chat_display_message = None # What EVA says in chat (witty summary or general response)
-                panel_data_content = None 
-                panel_target_id = None 
+                panel_data_content = None
+                panel_target_id = None
                 gemini_explanation_text = None # Text from Gemini (potentially the witty summary)
-                extracted_code_block = None  
+                extracted_code_block = None
 
                 # --- Process with Gemini ---
                 if not current_user_parts_for_gemini and not gemini_conversation_history:
                     chat_display_message = "Veuillez fournir une requête ou une image."
                 else:
                     gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
-                    
+
                     extracted_json_command_str = None
                     # Default gemini_explanation_text to the full response, it will be refined if JSON is found
-                    gemini_explanation_text = str(gemini_raw_response) 
+                    gemini_explanation_text = str(gemini_raw_response)
 
                     if isinstance(gemini_raw_response, str):
                         match_markdown_json = re.search(r"```json\s*(\{.*?\})\s*```", gemini_raw_response, re.DOTALL | re.IGNORECASE)
@@ -1750,11 +1743,11 @@ def chat_ws(ws):
                         elif gemini_raw_response.strip().startswith("{") and gemini_raw_response.strip().endswith("}"):
                             try:
                                 test_parse = json.loads(gemini_raw_response.strip())
-                                if isinstance(test_parse, dict) and "action" in test_parse: 
+                                if isinstance(test_parse, dict) and "action" in test_parse:
                                     extracted_json_command_str = gemini_raw_response.strip()
-                                    gemini_explanation_text = None 
+                                    gemini_explanation_text = None
                             except json.JSONDecodeError:
-                                pass 
+                                pass
 
                         if not extracted_json_command_str:
                             match_code = re.search(r"```(?:\w*\s*\n)?([\s\S]*?)\n```", gemini_raw_response, re.DOTALL)
@@ -1764,9 +1757,9 @@ def chat_ws(ws):
                                 post_text = gemini_raw_response[match_code.end():].strip()
                                 if pre_text or post_text:
                                      gemini_explanation_text = f"{pre_text}\n{post_text}".strip()
-                                else: 
-                                     gemini_explanation_text = "Code généré." 
-                                if not gemini_explanation_text.strip(): 
+                                else:
+                                     gemini_explanation_text = "Code généré."
+                                if not gemini_explanation_text.strip():
                                      gemini_explanation_text = "Code généré et affiché dans l'onglet Code."
 
 
@@ -1784,11 +1777,11 @@ def chat_ws(ws):
                     if parsed_command_obj and isinstance(parsed_command_obj, dict) and "action" in parsed_command_obj:
                         parsed_command_action = parsed_command_obj.get("action", "").strip()
                         entities = parsed_command_obj.get("entities", {})
-                        
+
                         if parsed_command_action in action_dispatcher:
                             final_text_response_for_action = action_dispatcher[parsed_command_action](entities) # This is data for the panel or a direct status message
                             action_taken_by_nlu = True
-                            
+
                             # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary OR the direct result of process_url
                             if parsed_command_action == "process_url":
                                 chat_display_message = str(final_text_response_for_action) # Result of URL processing is the main message
@@ -1801,20 +1794,20 @@ def chat_ws(ws):
                                     chat_display_message = str(final_text_response_for_action) # e.g. "Tâche ajoutée"
 
                             # PANEL DATA LOGIC:
-                            panel_data_content = None 
-                            panel_target_id = None    
+                            panel_data_content = None
+                            panel_target_id = None
 
                             if parsed_command_action == "list_calendar_events":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "calendarContent"
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()): # Fallback chat message if no wit
                                     chat_display_message = "Voici vos événements." if "Aucun événement" not in str(final_text_response_for_action) else str(final_text_response_for_action)
-                            elif parsed_command_action == "list_emails": 
+                            elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
                                     chat_display_message = "Voici vos e-mails non lus." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
-                            elif parsed_command_action == "get_contact_emails": 
+                            elif parsed_command_action == "get_contact_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
@@ -1824,7 +1817,7 @@ def chat_ws(ws):
                                         chat_display_message = panel_data_content
                                     elif mode == "full_last":
                                         chat_display_message = f"Voici le dernier email de {contact_id}."
-                                    else: 
+                                    else:
                                         chat_display_message = f"Voici les emails pour {contact_id}."
                             elif parsed_command_action == "list_tasks":
                                 panel_data_content = str(final_text_response_for_action)
@@ -1833,20 +1826,20 @@ def chat_ws(ws):
                                     chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
-                                panel_target_id = "searchContent" 
+                                panel_target_id = "searchContent"
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
                                     chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
-                            
+
                             elif parsed_command_action == "get_directions":
-                                if isinstance(final_text_response_for_action, dict): 
+                                if isinstance(final_text_response_for_action, dict):
                                     panel_data_content = final_text_response_for_action.get("summary", "Détails de l'itinéraire non disponibles.")
                                     panel_target_id = "mapContent"
-                                    
+
                                     if final_text_response_for_action.get("status") == "success":
                                         distance = final_text_response_for_action.get("distance", "distance inconnue")
                                         duration = final_text_response_for_action.get("duration", "durée inconnue")
                                         destination_entity = entities.get("destination", "votre destination")
-                                        
+
                                         default_formatted_message = f"En route pour {destination_entity}! Le trajet est de {distance} et devrait prendre environ {duration}. Bon voyage !"
 
                                         if gemini_explanation_text and gemini_explanation_text.strip():
@@ -1862,7 +1855,7 @@ def chat_ws(ws):
                                                     )
                                                 except Exception as e_fmt:
                                                     print(f"WARN: Erreur lors du formatage du message de Gemini pour get_directions: {e_fmt}. Original: '{gemini_explanation_text}'")
-                                                    chat_display_message = default_formatted_message 
+                                                    chat_display_message = default_formatted_message
                                             else:
                                                 # Gemini text exists but no common placeholders, use it as is (it was already set to chat_display_message)
                                                 chat_display_message = gemini_explanation_text
@@ -1872,19 +1865,19 @@ def chat_ws(ws):
                                     # If status is not "success", chat_display_message would have already been set to
                                     # gemini_explanation_text (if any) or str(final_text_response_for_action) by the general logic above.
                                     # So, if it's an error summary from final_text_response_for_action, it will be used.
-                                
+
                                 elif isinstance(final_text_response_for_action, str): # Error string from handler
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
                                     # chat_display_message is already final_text_response_for_action if gemini_explanation_text was None
-                            
+
                             elif parsed_command_action == "web_search":
                                 top_source = "Source inconnue" # Default
                                 if isinstance(final_text_response_for_action, dict):
                                     panel_data_content = final_text_response_for_action.get("panel_summary", "Impossible d'afficher les résultats de recherche.")
                                     top_source = final_text_response_for_action.get("top_source_name", "Source inconnue")
                                     # Nettoyer un peu top_source si c'est une URL simple
-                                    if top_source.startswith("http"):
+                                    if isinstance(top_source, str) and top_source.startswith("http"):
                                         try:
                                             domain_match = re.search(r"https?://(?:www\.)?([^/]+)", top_source)
                                             if domain_match:
@@ -1892,24 +1885,20 @@ def chat_ws(ws):
                                         except Exception:
                                             pass # Garder l'URL si regex échoue
                                 else:
-                                    # Fallback si perform_web_search n'a pas retourné un dict (ancien comportement ou erreur)
+                                    # Fallback si perform_web_search n'a pas retourné un dict
                                     panel_data_content = str(final_text_response_for_action)
 
                                 panel_target_id = "searchContent"
 
                                 # Remplacer [Source] dans le message de Gemini (chat_display_message)
-                                # chat_display_message est généralement initialisé avec gemini_explanation_text
                                 if chat_display_message and isinstance(chat_display_message, str):
                                     if "[Source]" in chat_display_message:
                                         chat_display_message = chat_display_message.replace("[Source]", top_source)
                                     elif "[source]" in chat_display_message: # Au cas où Gemini utilise une casse différente
                                         chat_display_message = chat_display_message.replace("[source]", top_source)
-                                # Si chat_display_message était vide ou ne contenait pas le placeholder,
-                                # il reste tel quel (par ex. une blague de Gemini ou un message d'erreur).
-                                # chat_display_message is already set by Gemini's explanation or fallback
                             elif parsed_command_action == "get_weather_forecast":
-                                panel_data_content = str(final_text_response_for_action) 
-                                panel_target_id = "weatherForecastContent" 
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "weatherForecastContent"
                                 # chat_display_message is already set by Gemini's explanation or fallback
                             elif parsed_command_action == "process_url":
                                 panel_data_content = str(final_text_response_for_action) # The summary/answer from Gemini
@@ -1924,35 +1913,35 @@ def chat_ws(ws):
                                 panel_target_id = "codeDisplayContent"
                                 # chat_display_message already set
 
-                        else: 
+                        else:
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
-                            action_taken_by_nlu = False 
-                    
-                    elif extracted_code_block: 
-                        action_taken_by_nlu = False 
-                        parsed_command_action = "code_generation" 
-                        panel_data_content = extracted_code_block 
-                        panel_target_id = "codeDisplayContent"   
+                            action_taken_by_nlu = False
+
+                    elif extracted_code_block:
+                        action_taken_by_nlu = False
+                        parsed_command_action = "code_generation"
+                        panel_data_content = extracted_code_block
+                        panel_target_id = "codeDisplayContent"
                         chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code généré et affiché dans l'onglet Code."
-                    
+
                     else: # No command, no code -> general conversation or Gemini failed to provide JSON + text as instructed
                         action_taken_by_nlu = False
                         chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Je n'ai pas compris la demande."
 
 
                 # --- Prepare and Send Response to Client ---
-                if chat_display_message is None: 
+                if chat_display_message is None:
                     chat_display_message = "Je ne suis pas sûr de pouvoir traiter cette demande."
-                
-                chat_display_message = str(chat_display_message) 
-                
+
+                chat_display_message = str(chat_display_message)
+
                 if "```json" in chat_display_message and panel_target_id:
                     if gemini_explanation_text and gemini_explanation_text.strip() and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
                          chat_display_message = gemini_explanation_text.strip() if gemini_explanation_text.strip() else "Action effectuée."
-                    elif extracted_code_block : 
+                    elif extracted_code_block :
                          chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code affiché dans le panneau dédié."
-                    else: 
+                    else:
                         chat_display_message = f"Action traitée. Contenu affiché dans le panneau dédié."
 
 
@@ -1960,9 +1949,9 @@ def chat_ws(ws):
                 if panel_data_content and panel_target_id:
                     message_to_send["panel_data"] = panel_data_content
                     message_to_send["panel_target_id"] = panel_target_id
-                
+
                 ws.send(json.dumps(message_to_send))
-                
+
                 # --- TTS Logic ---
                 audio_data_url = None
                 text_for_gtts = chat_display_message # Base: speak what's in the chat
@@ -1972,32 +1961,32 @@ def chat_ws(ws):
                     if parsed_command_action == "get_directions":
                         if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
                             # chat_display_message should already be formatted for TTS by Gemini or fallback.
-                            text_for_gtts = chat_display_message 
+                            text_for_gtts = chat_display_message
                         elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("summary"):
-                            text_for_gtts = final_text_response_for_action["summary"] 
+                            text_for_gtts = final_text_response_for_action["summary"]
                     elif parsed_command_action == "process_url":
                         text_for_gtts = chat_display_message # Already the summary/answer
                     # For other actions, if gemini_explanation_text was primary, it's already in chat_display_message.
                     # If not, and a simple confirmation was generated, that's fine for TTS.
                     # The goal is that chat_display_message (which becomes text_for_gtts) IS the summary.
-                
+
                 elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
                      text_for_gtts = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici le code que j'ai généré."
-                
-                should_speak = True 
+
+                should_speak = True
                 lower_chat_message_for_tts_check = text_for_gtts.lower()
 
                 suppress_audio_keywords = [
                      "client gemini non configuré", "réponse gemini bloquée",
                      "erreur critique", "erreur serveur", "erreur interne",
                      "bibliothèque manquante", "non disponible",
-                     "je ne suis pas sûr de comprendre votre demande" , 
+                     "je ne suis pas sûr de comprendre votre demande" ,
                 ]
                 if any(keyword in lower_chat_message_for_tts_check for keyword in suppress_audio_keywords):
-                    if text_for_gtts == chat_display_message: 
+                    if text_for_gtts == chat_display_message:
                             should_speak = False
-                
-                if text_for_gtts.strip() == "" or lower_chat_message_for_tts_check == "ok.": 
+
+                if text_for_gtts.strip() == "" or lower_chat_message_for_tts_check == "ok.":
                     should_speak = False
 
 
@@ -2010,19 +1999,19 @@ def chat_ws(ws):
                     ws.send(json.dumps({"type": "no_audio_data"}))
 
 
-            else: 
+            else:
                 if current_time - last_activity_time > server_ping_interval:
                     try:
                         # print(f"DEBUG: Server PING to client at {current_time}")
                         ws.send(json.dumps({"type": "system_ping", "timestamp": current_time}))
-                        last_activity_time = current_time 
+                        last_activity_time = current_time
                     except (ConnectionClosed, ConnectionResetError):
                         # print("[INFO WebSocket Handler] Connection closed by client during ping (expected).")
-                        raise 
+                        raise
                     except Exception as e_ping:
                         print(f"ERREUR lors de l'envoi du ping serveur: {type(e_ping).__name__} - {e_ping}")
                         traceback.print_exc()
-                        raise 
+                        raise
 
     except (ConnectionClosed, ConnectionResetError):
         print(f"[INFO WebSocket Handler] Connexion fermée avec le client.")
@@ -2047,10 +2036,10 @@ if __name__ == '__main__':
     print("-------------------------------------------")
     print(f"Démarrage du serveur Flask sur http://localhost:5000")
     print(f"Endpoint WebSocket: ws://localhost:5000/api/chat_ws")
-    print(f"Mode debug Flask: {'Activé' if app.debug else 'Désactivé'}") 
+    print(f"Mode debug Flask: {'Activé' if app.debug else 'Désactivé'}")
     print(f"Modèle Gemini: {gemini_model_name}")
     print(f"gTTS: {'Oui' if gtts_enabled else 'Non'}")
-    print(f"SerpAPI: {'Oui' if serpapi_client_available and serpapi_api_key else 'Non'}")
+    print(f"Google Custom Search: {'Oui' if google_custom_search_available else 'Non'}") # Modifié ici
     print(f"Google Maps API: {'Oui' if google_maps_api_key else 'Non'}")
     print(f"Traitement d'URL: {'Oui' if url_processing_available else 'Non (requests/BeautifulSoup manquant)'}")
     print(f"Lien d'autorisation Google OAuth: http://localhost:5000/authorize_google")
