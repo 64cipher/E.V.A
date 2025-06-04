@@ -192,7 +192,6 @@ googlemaps
 gtts
 pillow
 simple‑websocket
-serpapi
 google‑generativeai
 dotenv
 google-search-results
