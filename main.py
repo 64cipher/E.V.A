@@ -823,42 +823,86 @@ def get_directions_from_google_maps_api(origin, destination):
             "destination": destination
         }
 
-def perform_web_search(query, num_results=6): # Default to 6 results
+def perform_web_search(query, num_results=6):
     global serpapi_client_available, serpapi_api_key
     if not serpapi_client_available:
-        return "Service de recherche web non configuré ou bibliothèque manquante."
+        return {"panel_summary": "Service de recherche web non configuré ou bibliothèque manquante.", "top_source_name": "N/A"}
+
     try:
         params = { "q": query, "api_key": serpapi_api_key, "num": num_results, "hl": "fr", "gl": "fr" }
         search = GoogleSearch(params)
         results = search.get_dict()
-        
+
         organic_results = results.get("organic_results", [])
+        top_source_name = "Source inconnue" # Default
 
-        if not organic_results:
-            # Check for answer box or knowledge graph if no organic results
-            answer_box = results.get("answer_box")
-            if answer_box and (answer_box.get("answer") or answer_box.get("snippet")):
-                return f"Réponse directe pour '{query}':\n{answer_box.get('answer') or answer_box.get('snippet')}"
-            knowledge_graph = results.get("knowledge_graph")
-            if knowledge_graph and knowledge_graph.get("description"):
-                 return f"Information pour '{query}':\n{knowledge_graph['description']}"
-            return f"Aucun résultat pertinent pour '{query}'."
+        # Prioriser l'Answer Box si elle existe et fournit une source directe
+        answer_box = results.get("answer_box")
+        if answer_box:
+            answer_snippet = answer_box.get("answer") or answer_box.get("snippet")
+            ab_source_info = answer_box.get("source") # Peut être un dict ou une string
+            if isinstance(ab_source_info, dict):
+                top_source_name = ab_source_info.get('name', ab_source_info.get('link', top_source_name))
+            elif isinstance(ab_source_info, str):
+                top_source_name = ab_source_info
 
-        summary_details = f"Résultats web pour '{query}':\n"
-        for i, res in enumerate(organic_results[:num_results]): # Ensure we only process up to num_results
-            summary_details += f"{i+1}. {res.get('title', 'Sans titre')}\n"
-            summary_details += f"   Extrait: {res.get('snippet', 'N/A')}\n" # Snippet is usually available
-            summary_details += f"   Source: {res.get('link', '#')}\n\n" # Link to the source
+            if answer_snippet: # Si l'answer box a une réponse directe
+                 panel_text = f"Réponse directe pour '{query}':\n{answer_snippet}"
+                 if top_source_name != "Source inconnue" and top_source_name : panel_text += f"\nSource: {top_source_name}"
+                 return {"panel_summary": panel_text, "top_source_name": top_source_name}
 
-        # Optionally, add answer box info if it exists alongside organic results
-        if results.get("answer_box") and (results["answer_box"].get("answer") or results["answer_box"].get("snippet")):
-            summary_details += f"Info complémentaire:\n{results['answer_box'].get('answer') or results['answer_box'].get('snippet')}\n\n"
+        # Si pas d'Answer Box satisfaisante, ou pour le résumé général, utiliser les résultats organiques
+        if organic_results:
+            first_res = organic_results[0]
+            # 'source' (nom de domaine/nom du site) est souvent meilleur que 'displayed_link' pour la citation.
+            top_source_name = first_res.get('source', first_res.get('displayed_link', "Source inconnue"))
+        elif results.get("knowledge_graph"): # Si pas de résultats organiques, mais un knowledge graph
+             kg = results.get("knowledge_graph")
+             kg_title = kg.get("title", query)
+             kg_description = kg.get("description")
+             kg_source_info = kg.get("source") # Souvent un dict avec name et link
+             if isinstance(kg_source_info, dict):
+                 top_source_name = kg_source_info.get('name', kg_source_info.get('link', "Knowledge Graph"))
+             elif isinstance(kg_source_info, str):
+                  top_source_name = kg_source_info
+             else:
+                 top_source_name = kg_title # Fallback au titre du KG si pas de source claire
 
-        return summary_details.strip()
+             if kg_description:
+                 return {
+                     "panel_summary": f"Information (Knowledge Graph) pour '{kg_title}':\n{kg_description}\nSource: {top_source_name}",
+                     "top_source_name": top_source_name
+                 }
+
+        if not organic_results and top_source_name == "Source inconnue": # Vraiment aucun résultat ou source
+             return {"panel_summary": f"Aucun résultat pertinent trouvé pour '{query}'.", "top_source_name": "N/A"}
+
+        # Construction du résumé pour le panneau à partir des résultats organiques
+        summary_details_text = f"Résultats web pour '{query}':\n"
+        for i, res in enumerate(organic_results[:num_results]):
+            summary_details_text += f"{i+1}. {res.get('title', 'Sans titre')}\n"
+            snippet = res.get('snippet', 'N/A')
+            if snippet:
+                summary_details_text += f"   Extrait: {snippet}\n"
+            # Pour l'affichage dans le panel, le 'displayed_link' ou 'source' est bien.
+            display_source_panel = res.get('source', res.get('displayed_link', res.get('link', '#')))
+            summary_details_text += f"   Source: {display_source_panel}\n\n"
+
+        # Si une Answer Box existe en plus des résultats organiques, on peut l'ajouter
+        if answer_box and (answer_box.get("answer") or answer_box.get("snippet")) and not (top_source_name != "Source inconnue" and top_source_name != "Knowledge Graph" and organic_results):
+             # Évite la redondance si l'answer_box était déjà la source principale
+             summary_details_text += f"Info complémentaire (Answer Box):\n{answer_box.get('answer') or answer_box.get('snippet')}\n"
+             ab_source_info_extra = answer_box.get("source")
+             if isinstance(ab_source_info_extra, dict): summary_details_text += f"Source: {ab_source_info_extra.get('name', ab_source_info_extra.get('link'))}\n"
+             elif isinstance(ab_source_info_extra, str) : summary_details_text += f"Source: {ab_source_info_extra}\n"
+
+
+        return {"panel_summary": summary_details_text.strip(), "top_source_name": top_source_name}
+
     except Exception as e:
         print(f"Erreur lors de la recherche web SerpAPI: {e}")
         traceback.print_exc()
-        return f"Erreur lors de la recherche web : {type(e).__name__}"
+        return {"panel_summary": f"Erreur lors de la recherche web : {type(e).__name__}", "top_source_name": "Erreur"}
 
 # --- Fonctions Gemini et gTTS ---
 def get_gemini_response(current_user_parts):
@@ -1794,7 +1838,7 @@ def chat_ws(ws):
                                     chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
                             
                             elif parsed_command_action == "get_directions":
-                                if isinstance(final_text_response_for_action, dict): # Expected structure
+                                if isinstance(final_text_response_for_action, dict): 
                                     panel_data_content = final_text_response_for_action.get("summary", "Détails de l'itinéraire non disponibles.")
                                     panel_target_id = "mapContent"
                                     
@@ -1803,24 +1847,65 @@ def chat_ws(ws):
                                         duration = final_text_response_for_action.get("duration", "durée inconnue")
                                         destination_entity = entities.get("destination", "votre destination")
                                         
-                                        if chat_display_message and "{destination}" in chat_display_message: 
-                                            try:
-                                                chat_display_message = chat_display_message.format(distance=distance, duration=duration, destination=destination_entity)
-                                            except KeyError:
-                                                print(f"WARN: Placeholders non trouvés ou incorrects dans chat_display_message (venant de Gemini) pour get_directions. Message: '{chat_display_message}'")
-                                                chat_display_message = f"{chat_display_message.strip()} (Trajet vers {destination_entity}: {distance}, environ {duration})."
-                                        elif not (gemini_explanation_text and gemini_explanation_text.strip()): 
-                                            chat_display_message = f"Voici l'itinéraire pour {destination_entity}. Le trajet est de {distance} et durera environ {duration}."
+                                        default_formatted_message = f"En route pour {destination_entity}! Le trajet est de {distance} et devrait prendre environ {duration}. Bon voyage !"
+
+                                        if gemini_explanation_text and gemini_explanation_text.strip():
+                                            # Try to format Gemini's text if it contains any of the known placeholders
+                                            if "{distance}" in gemini_explanation_text or \
+                                               "{duration}" in gemini_explanation_text or \
+                                               "{destination}" in gemini_explanation_text:
+                                                try:
+                                                    chat_display_message = gemini_explanation_text.format(
+                                                        destination=destination_entity,
+                                                        distance=distance,
+                                                        duration=duration
+                                                    )
+                                                except Exception as e_fmt:
+                                                    print(f"WARN: Erreur lors du formatage du message de Gemini pour get_directions: {e_fmt}. Original: '{gemini_explanation_text}'")
+                                                    chat_display_message = default_formatted_message 
+                                            else:
+                                                # Gemini text exists but no common placeholders, use it as is (it was already set to chat_display_message)
+                                                chat_display_message = gemini_explanation_text
+                                        else:
+                                            # No text from Gemini, or it was empty
+                                            chat_display_message = default_formatted_message
+                                    # If status is not "success", chat_display_message would have already been set to
+                                    # gemini_explanation_text (if any) or str(final_text_response_for_action) by the general logic above.
+                                    # So, if it's an error summary from final_text_response_for_action, it will be used.
                                 
-                                elif isinstance(final_text_response_for_action, str): 
+                                elif isinstance(final_text_response_for_action, str): # Error string from handler
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
-                                    if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                        chat_display_message = final_text_response_for_action
+                                    # chat_display_message is already final_text_response_for_action if gemini_explanation_text was None
                             
                             elif parsed_command_action == "web_search":
-                                panel_data_content = str(final_text_response_for_action)
+                                top_source = "Source inconnue" # Default
+                                if isinstance(final_text_response_for_action, dict):
+                                    panel_data_content = final_text_response_for_action.get("panel_summary", "Impossible d'afficher les résultats de recherche.")
+                                    top_source = final_text_response_for_action.get("top_source_name", "Source inconnue")
+                                    # Nettoyer un peu top_source si c'est une URL simple
+                                    if top_source.startswith("http"):
+                                        try:
+                                            domain_match = re.search(r"https?://(?:www\.)?([^/]+)", top_source)
+                                            if domain_match:
+                                                top_source = domain_match.group(1)
+                                        except Exception:
+                                            pass # Garder l'URL si regex échoue
+                                else:
+                                    # Fallback si perform_web_search n'a pas retourné un dict (ancien comportement ou erreur)
+                                    panel_data_content = str(final_text_response_for_action)
+
                                 panel_target_id = "searchContent"
+
+                                # Remplacer [Source] dans le message de Gemini (chat_display_message)
+                                # chat_display_message est généralement initialisé avec gemini_explanation_text
+                                if chat_display_message and isinstance(chat_display_message, str):
+                                    if "[Source]" in chat_display_message:
+                                        chat_display_message = chat_display_message.replace("[Source]", top_source)
+                                    elif "[source]" in chat_display_message: # Au cas où Gemini utilise une casse différente
+                                        chat_display_message = chat_display_message.replace("[source]", top_source)
+                                # Si chat_display_message était vide ou ne contenait pas le placeholder,
+                                # il reste tel quel (par ex. une blague de Gemini ou un message d'erreur).
                                 # chat_display_message is already set by Gemini's explanation or fallback
                             elif parsed_command_action == "get_weather_forecast":
                                 panel_data_content = str(final_text_response_for_action) 
