@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Enhanced Virtual Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- IMPORTANT: Replace YOUR_GOOGLE_MAPS_API_KEY with your actual Google Maps API Key -->
     <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         body {
@@ -15,8 +16,7 @@
             min-height: 100vh;
             margin: 0;
             font-family: 'Inter', sans-serif;
-            overflow-x: hidden;
-            
+            overflow-x: hidden; /* Prevent horizontal scroll */
         }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -27,16 +27,14 @@
             padding: 1rem;
             gap: 1rem;
             justify-content: center;
-            
-            
         }
 
         #infoPanelColumn {
             flex-basis: 38%;
-            min-width: 0;
+            min-width: 0; /* Allows shrinking */
             max-width: 38%;
-            min-height: 0;
-            max-height: 86%;
+            min-height: 0; /* Allows shrinking */
+            /* max-height: 86%; /* Removed to be more flexible, especially on mobile */
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -83,17 +81,17 @@
 
         #infoPanelTabs {
             display: flex;
-            flex-wrap: wrap;
+            flex-wrap: wrap; /* Allow tabs to wrap */
             padding: 0.25rem;
             background-color: #374151; 
             border-top-left-radius: 0.5rem;
             border-top-right-radius: 0.5rem;
-            margin-top: 45px;
+            margin-top: 45px; /* Space for the toggle button */
         }
         .info-tab-button {
             padding: 0.5rem 0.75rem;
             margin-right: 0.25rem;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.25rem; /* For wrapped tabs */
             border-radius: 0.375rem;
             background-color: #4B5563; 
             color: #D1D5DB; 
@@ -118,7 +116,7 @@
             border-bottom-right-radius: 0.5rem;
             overflow: hidden; 
             position: relative;
-            height: 400px; 
+            /* height: 400px; /* Removed for flexibility, especially on mobile */
         }
         .info-content-panel {
             display: none;
@@ -224,11 +222,11 @@
 
 
         #chatColumn {
-            flex: 1;
-            max-width: 42rem;
+            flex: 1; /* Takes up remaining space on larger screens */
+            max-width: 42rem; /* Approx 672px */
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: center; /* Center content like visual indicator */
         }
 
         .listening-indicator { width: 150px; height: 150px; border-radius: 50%; background-color: #10B981; display: flex; justify-content: center; align-items: center; box-shadow: 0 0 0 0 rgba(16, 185, 129, 1); }
@@ -248,7 +246,7 @@
             display: flex;
             flex-direction: column;
         }
-         #codeDisplayContent #evaCodeCanvasContainer .bg-gray-800 {
+         #codeDisplayContent #evaCodeCanvasContainer .bg-gray-800 { /* Specificity for Tailwind override if needed */
             background-color: #374151; 
          }
 
@@ -260,13 +258,13 @@
             border-bottom-right-radius: 0.5rem;
             flex-grow: 1; 
             padding: 1rem;
-            height: 0; 
-            opacity: 0;
+            height: 0; /* Collapsed by default */
+            opacity: 0; /* Hidden by default */
         }
         #evaCodeCanvasContentWrapper.expanded {
-            height: auto;
+            height: auto; /* Expand to content height */
             opacity: 1;
-            min-height: 0; 
+            min-height: 0; /* Ensure it can shrink if content is small */
         }
         #evaCodeCanvasContentCode { color: #d4d4d4; font-family: 'Courier New', Courier, monospace; white-space: pre-wrap; word-break: break-all; display: block; }
 
@@ -282,11 +280,11 @@
         #schedulerContent #scheduledPromptsList li { 
             color: #D1D5DB; 
             display: flex;
-            flex-direction: column; 
+            flex-direction: column; /* Stack details and actions */
             justify-content: space-between;
             align-items: flex-start; 
             font-size: 0.875rem; 
-            gap: 0.25rem; 
+            gap: 0.25rem; /* Space between details and actions */
         }
         #schedulerContent #scheduledPromptsList .prompt-details {
             margin-bottom: 0.25rem;
@@ -339,7 +337,7 @@
             gap: 0.5rem; 
             align-items: center;
         }
-         .input-row label { margin-top: 0; } 
+         .input-row label { margin-top: 0; } /* Reset margin for labels in rows */
 
         /* Calculator Styles */
         #calculatorContainer {
@@ -424,19 +422,143 @@
             grid-column: span 2; 
         }
 
-
+        /* --- Styles for Mobile Responsiveness --- */
         @media (max-width: 700px) {
-            #mainAppContainer { flex-direction: column; align-items: center; }
-            #infoPanelColumn, #chatColumn { width: 100%; flex-basis: auto; max-width: 100%; min-width: unset; }
-            #infoPanelColumn.collapsed { flex-basis: auto; height: 50px; }
+            body {
+                padding: 0.5rem; /* Add some padding to the body on small screens */
+            }
+            #mainAppContainer {
+                flex-direction: column;
+                align-items: center; /* Ensure children are centered when stacked */
+                padding: 0.5rem; /* Reduce padding for main container */
+                gap: 0.5rem; /* Reduce gap between stacked elements */
+            }
+            #infoPanelColumn, #chatColumn {
+                width: 100%; /* Full width for stacked elements */
+                flex-basis: auto; /* Reset flex-basis for stacked layout */
+                max-width: 100%;
+                min-width: unset; /* Remove min-width constraints */
+            }
+            #infoPanelColumn {
+                max-height: none; /* Allow info panel to grow if needed */
+            }
+            #infoPanelColumn.collapsed {
+                flex-basis: auto; /* Reset flex-basis */
+                height: 50px; /* Fixed height when collapsed */
+            }
             #infoPanelColumn.collapsed #infoPanelTabs,
-            #infoPanelColumn.collapsed #infoPanelContentArea { display: none; }
-            #infoPanelContentArea { height: 300px; } 
+            #infoPanelColumn.collapsed #infoPanelContentArea {
+                display: none;
+            }
+            #infoPanelContentArea {
+                height: auto; /* Allow content to define height */
+                min-height: 200px; /* A reasonable min-height for content visibility */
+                max-height: 40vh; /* Limit height to prevent excessive scrolling on small screens */
+            }
             
-            .info-content-panel { padding: 0.75rem; }
-            #mapContent, #codeDisplayContent, #calculatorContent { padding: 0; } 
+            .info-content-panel { padding: 0.75rem; } /* Slightly reduced padding for content panels */
+            #mapContent, #codeDisplayContent, #calculatorContent { padding: 0; } /* Keep no padding for these */
             #schedulerContent { padding: 0.75rem; } 
 
+            /* Adjusting the main title "E.V.A" for mobile */
+            h1.text-6xl { /* Targeting the specific h1, assuming it's the main title */
+                font-size: 2.5rem; /* Tailwind's text-4xl or text-5xl equivalent */
+                margin-top: 1rem; 
+                margin-bottom: 1rem; 
+            }
+
+            #chatColumn {
+                padding: 0; /* Remove padding if body/mainAppContainer has it */
+                display: flex; /* Make chatColumn a flex container */
+                flex-direction: column; /* Stack its children vertically */
+                height: auto; /* Let content define height, or use flex-grow if #mainAppContainer has fixed height */
+                /* Consider flex-grow: 1 if #mainAppContainer is meant to fill viewport height */
+            }
+
+            #dashboard {
+                padding: 0.5rem; 
+                margin-bottom: 0.5rem; 
+                font-size: 0.8rem; 
+            }
+            #dashboard #timeDisplay {
+                font-size: 1rem; 
+            }
+
+            #visualIndicator {
+                width: 100px; 
+                height: 100px;
+                margin-bottom: 0.5rem; 
+            }
+            #listeningIndicator.listening-indicator { /* Ensure specificity */
+                width: 100px;
+                height: 100px;
+            }
+            #webcamVideo {
+                width: 100px;
+                height: 100px;
+            }
+            #listeningIndicator .listening-indicator-inner {
+                width: 35px; 
+                height: 35px;
+            }
+            @keyframes pulse { /* Adjusted pulse for smaller size */
+                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+                70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); } /* Reduced shadow spread */
+                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            }
+
+            #statusText {
+                margin-bottom: 0.5rem; 
+                font-size: 0.75rem; 
+            }
+
+            #chatbox {
+                height: auto; /* Allow chatbox to take remaining space */
+                flex-grow: 1; /* Make chatbox fill available vertical space in #chatColumn */
+                min-height: 150px; /* Ensure a minimum height for usability */
+                max-height: 50vh; /* Sensible max height to prevent overly tall chatbox */
+                margin-bottom: 0.5rem; 
+            }
+
+            /* Chat input area: Selector targets the div containing input and buttons. 
+               Using a more specific ID for this container would be more robust if HTML can be modified. */
+            #chatColumn > .w-full.flex.items-center.space-x-2.mb-4 { 
+                flex-wrap: wrap; /* Allow buttons to wrap to the next line */
+                gap: 0.5rem; /* Spacing between wrapped items (Tailwind v3+ might be needed for full 'gap' support with flex-wrap, otherwise use margins) */
+                /* For Tailwind v2 or if 'gap' isn't working as expected with wrap, use margins on children: */
+                /* margin-left: -0.5rem; /* Negative margin to counteract child margins for alignment */
+                /* margin-right: -0.5rem; */
+                justify-content: center; /* Center buttons when they wrap */
+                margin-bottom: 0.5rem; 
+            }
+             /* If not using 'gap', add margins to children for spacing when wrapped */
+            #chatColumn > .w-full.flex.items-center.space-x-2.mb-4 > * {
+                 margin: 0.25rem; /* Adjust as needed for spacing */
+            }
+
+            #messageInput {
+                flex-grow: 1; /* Allow input to take available space on its line */
+                min-width: 150px; /* Ensure input is not too small */
+                padding: 0.5rem; 
+                font-size: 0.9rem; 
+                /* width: 100%; /* Optionally make it full width if it wraps to its own line */
+            }
+            #chatColumn > .w-full.flex.items-center.space-x-2.mb-4 > button {
+                padding: 0.6rem; 
+                font-size: 0.8rem; 
+                flex-shrink: 0; /* Prevent buttons from shrinking too much */
+            }
+            #sendButton {
+                padding: 0.6rem 1rem; 
+            }
+            
+            #filePreview {
+                margin-bottom: 0.5rem;
+            }
+            #authorizeGoogleButton {
+                padding: 0.6rem 1rem;
+                font-size: 0.9rem;
+            }
 
             .input-row { flex-direction: column; align-items: stretch;}
             .input-row input[type="number"], .input-row input[type="checkbox"] { width: 100%;}
@@ -449,14 +571,18 @@
 </head>
 <body class="bg-gray-900 text-white">
 
+    <!-- Titre principal de l'application -->
     <h1 class="text-6xl font-bold my-8 text-center">‎ ‎ ‎ ‎ ‎E.V.A</h1>
 
+    <!-- Conteneur principal de l'application -->
     <div id="mainAppContainer">
+        <!-- Colonne du panneau d'information (Carte, Recherche, etc.) -->
         <div id="infoPanelColumn">
             <button id="toggleInfoPanelButton" title="Afficher/Masquer Panneau d'Info">
                 <i class="fas fa-chevron-left"></i>
                 <i class="fas fa-chevron-right" style="display:none;"></i>
             </button>
+            <!-- Onglets pour le panneau d'information -->
             <div id="infoPanelTabs">
                 <button class="info-tab-button active-tab" data-target="mapContent">Carte</button>
                 <button class="info-tab-button" data-target="searchContent">Recherche</button>
@@ -468,6 +594,7 @@
                 <button class="info-tab-button" data-target="schedulerContent">Planificateur</button> 
                 <button class="info-tab-button" data-target="calculatorContent">Calculatrice</button> 
             </div>
+            <!-- Zone de contenu pour le panneau d'information -->
             <div id="infoPanelContentArea">
                 <div id="mapContent" class="info-content-panel active-content">
                     <div id="mapDiv"></div>
@@ -551,38 +678,45 @@
                         
                         <h4 class="mt-4 text-base font-medium text-gray-300">Prompts Planifiés :</h4>
                         <ul id="scheduledPromptsList" class="mt-2 space-y-1">
-                           </ul>
+                           <!-- Les prompts planifiés seront listés ici -->
+                        </ul>
                     </div>
                 </div>
                 <div id="calculatorContent" class="info-content-panel"> 
                     <div id="calculatorContainer">
                         <div id="calculatorDisplay">0</div>
                         <div id="calculatorButtons">
+                            <!-- Rangée 1 -->
                             <button class="calc-button function" data-value="sin">sin</button>
                             <button class="calc-button function" data-value="cos">cos</button>
                             <button class="calc-button function" data-value="tan">tan</button>
                             <button class="calc-button function" data-value="sqrt">√</button>
                             <button class="calc-button function" data-value="^">xʸ</button>
+                            <!-- Rangée 2 -->
                             <button class="calc-button function" data-value="log">log</button>
                             <button class="calc-button function" data-value="ln">ln</button>
                             <button class="calc-button function" data-value="(">(</button>
                             <button class="calc-button function" data-value=")">)</button>
                             <button class="calc-button clear" data-value="C">C</button>
+                            <!-- Rangée 3 -->
                             <button class="calc-button" data-value="7">7</button>
                             <button class="calc-button" data-value="8">8</button>
                             <button class="calc-button" data-value="9">9</button>
                             <button class="calc-button operator" data-value="/">÷</button>
                             <button class="calc-button function" data-value="pi">π</button>
+                            <!-- Rangée 4 -->
                             <button class="calc-button" data-value="4">4</button>
                             <button class="calc-button" data-value="5">5</button>
                             <button class="calc-button" data-value="6">6</button>
                             <button class="calc-button operator" data-value="*">×</button>
                             <button class="calc-button function" data-value="e">e</button>
+                            <!-- Rangée 5 -->
                             <button class="calc-button" data-value="1">1</button>
                             <button class="calc-button" data-value="2">2</button>
                             <button class="calc-button" data-value="3">3</button>
                             <button class="calc-button operator" data-value="-">−</button>
                             <button class="calc-button function" data-value="!">x!</button>
+                            <!-- Rangée 6 -->
                             <button class="calc-button zero" data-value="0">0</button>
                             <button class="calc-button" data-value=".">.</button>
                             <button class="calc-button operator" data-value="+">+</button>
@@ -593,7 +727,9 @@
             </div>
         </div>
 
+        <!-- Colonne du Chat -->
         <div id="chatColumn" class="w-full">
+            <!-- Tableau de bord (Date, Heure, Météo) -->
             <div id="dashboard" class="w-full p-3 mb-6 bg-gray-800 rounded-lg shadow-md text-sm text-gray-300 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0 sm:space-x-4">
                 <div id="dateDisplay" class="text-center sm:text-left">Chargement date...</div>
                 <div id="timeDisplay" class="text-center font-semibold text-lg order-first sm:order-none">Chargement heure...</div>
@@ -605,6 +741,7 @@
                 </div>
             </div>
 
+            <!-- Indicateur visuel (Micro/Webcam) -->
             <div id="visualIndicator" class="mb-4 relative flex justify-center items-center" style="width: 150px; height: 150px;">
                 <div id="listeningIndicator" class="listening-indicator absolute">
                     <div class="listening-indicator-inner"></div>
@@ -614,12 +751,16 @@
             </div>
             <p id="statusText" class="text-gray-400 mb-4 text-sm">Appuyez sur Espace (continu) ou Micro (unique)</p>
 
+            <!-- Boîte de Chat -->
             <div id="chatbox" class="w-full h-96 overflow-y-auto bg-gray-800 rounded-lg p-4 mb-4 border border-gray-700 flex flex-col space-y-2">
+                <!-- Message initial de l'assistant -->
                 <div class="assistant-message p-2 rounded-lg max-w-xs md:max-w-md">
                      E.V.A Activée. Pour accéder aux services Google, veuillez autoriser l'application.
                  </div>
             </div>
 
+            <!-- Zone de saisie et boutons de contrôle du chat -->
+            <!-- Note: For Tailwind v2, 'gap' with flex-wrap might not work as expected. Margins are used as fallback in @media query. -->
             <div class="w-full flex items-center space-x-2 mb-4">
                 <button id="micButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white focus:outline-none" title="Activer le microphone (ou dire 'Eva', ou touche 'ESPACE' pour continu)">
                     <i class="fas fa-microphone"></i>
@@ -636,7 +777,9 @@
                 <button id="muteButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver le son (ou touche 'M')">Muet</button>
                 <button id="camButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver la caméra (ou touche 'C')">Cam</button>
             </div>
-            <div id="filePreview" class="w-full mb-2"></div>
+            <div id="filePreview" class="w-full mb-2"></div> <!-- Zone d'aperçu du fichier -->
+            
+            <!-- Bouton d'autorisation Google -->
             <div class="w-full flex justify-center mb-4">
                 <button id="authorizeGoogleButton" class="p-3 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold focus:outline-none">
                     <i class="fab fa-google mr-2"></i> Autoriser l'accès aux services Google
@@ -734,11 +877,11 @@
         let gMap; 
         let directionsService;
         let directionsRenderer;
-        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; 
+        const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; // Default: Paris
         let currentMapCenter = defaultMapCenter;
         let currentMapZoom = 12;
-        let activeInfoPanelId = 'mapContent';
-        let userLocatedCity = "Thonon-les-Bains"; 
+        let activeInfoPanelId = 'mapContent'; // Default active panel
+        let userLocatedCity = "Thonon-les-Bains"; // Default city if geolocation fails or not permitted
         let userLatitude = null;
         let userLongitude = null;
 
@@ -746,24 +889,25 @@
         let isMuted = false;
         let isCamOn = false;
         
-        let commandRecognizer = null; 
-        let wakeWordRecognizer = null;
+        let commandRecognizer = null; // For recognizing commands after wake word or mic press
+        let wakeWordRecognizer = null; // For recognizing the wake word "Eva"
         
-        let mediaStream = null;
-        let userExplicitlyWantsContinuousListen = false; 
+        let mediaStream = null; // For webcam
+        let userExplicitlyWantsContinuousListen = false; // True if spacebar is held or continuous mode is on
         let recognitionActive = false; // Tracks if commandRecognizer is active
         let wakeWordRecognitionActive = false; // Tracks if wakeWordRecognizer is active
         let isEvaActivatedListening = false; // True if listening after "Eva" was detected
 
-        let pausedForEvaOutput = false; 
-        let skipNextAudioDueToCode = false;
-        let isSpeakingClientSide = false; 
-        let interruptEvaEnabled = false; 
-        let evaIsCurrentlySpeaking = false; 
-        let scheduledPrompts = []; 
-        let attachedFile = null; 
+        let pausedForEvaOutput = false; // True if recognition is paused while EVA is speaking/processing
+        let skipNextAudioDueToCode = false; // Flag to skip audio if code was just displayed
+        let isSpeakingClientSide = false; // True if client-side TTS is active
+        let interruptEvaEnabled = false; // True if EVA can be interrupted by user speech
+        let evaIsCurrentlySpeaking = false; // True if EVA is generating audio output (server or client TTS)
+        let scheduledPrompts = []; // Array to store scheduled prompts
+        let attachedFile = null; // Stores the currently attached file for sending
 
         // --- OpenWeatherMap API Key ---
+        // IMPORTANT: Replace 'YOUR_OPENWEATHERMAP_API_KEY' with your actual OpenWeatherMap API Key
         const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
 
         // --- Audio Context for Sounds ---
@@ -774,7 +918,8 @@
             }
         }
 
-        function playBeep(frequency = 440, duration = 100, type = 'sine', volume = 0.05) { // Added volume parameter
+        // Plays a simple beep sound
+        function playBeep(frequency = 440, duration = 100, type = 'sine', volume = 0.05) {
             if (isMuted) return;
             if (!audioCtx) initAudioContext();
             if (!audioCtx) { console.warn("AudioContext non supporté ou non initialisé."); return; }
@@ -799,32 +944,33 @@
             oscillator.type = type;
             oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
             
-            // Apply a short fade-in and fade-out to make it smoother
             gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + duration * 0.0001); // Quick fade in (10% of duration)
-            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime + duration * 0.0008); // Hold volume (80% of duration)
-            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration * 0.001); // Quick fade out (10% of duration)
+            gainNode.gain.linearRampToValueAtTime(volume, audioCtx.currentTime + duration * 0.0001); 
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime + duration * 0.0008); 
+            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration * 0.001); 
 
 
             oscillator.start(audioCtx.currentTime);
             oscillator.stop(audioCtx.currentTime + duration / 1000);
         }
 
-        // Adjusted sound profiles for softer, more "design" feel
-        const evaActivationSound = () => playBeep(880, 100, 'sine', 0.03); // Higher pitch, shorter, sine wave, softer volume
-        const cameraToggleSound = () => playBeep(440, 150, 'sine', 0.04);  // Lower pitch, slightly longer, sine wave, slightly softer volume
+        // Sound profiles
+        const evaActivationSound = () => playBeep(880, 100, 'sine', 0.03); 
+        const cameraToggleSound = () => playBeep(440, 150, 'sine', 0.04);  
 
 
         // --- Dashboard Functions ---
+        // Updates the date and time on the dashboard
         function updateDateTimeDashboard() {
             const dateDisplay = document.getElementById('dateDisplay');
             const timeDisplay = document.getElementById('timeDisplay');
-            if (!dateDisplay || !timeDisplay) return;
+            if (!dateDisplay || !timeDisplay) return; // Elements not found
             const now = new Date();
             dateDisplay.textContent = now.toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
             timeDisplay.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Europe/Paris' });
         }
 
+        // Fetches and displays current weather on the dashboard
         async function fetchWeatherDashboard(latitude, longitude) {
             const weatherLocationEl = document.getElementById('weatherLocation');
             const weatherTempEl = document.getElementById('weatherTemp');
@@ -866,6 +1012,7 @@
             }
         }
 
+        // Converts OpenWeatherMap icon code to an emoji
         function getWeatherEmoji(iconCode) {
             const emojiMap = { 
                 "01d": "☀️", "01n": "🌑", "02d": "⛅", "02n": "☁️", 
@@ -877,42 +1024,45 @@
             return emojiMap[iconCode] || "❓";
         }
 
+        // Gets user's geolocation and then fetches weather
         function getUserLocationAndFetchWeather() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         userLatitude = position.coords.latitude;
                         userLongitude = position.coords.longitude;
+                        // Attempt to get city name from coordinates if API key is valid
                         if (openWeatherMapApiKey !== 'YOUR_OPENWEATHERMAP_API_KEY' && openWeatherMapApiKey) {
                             fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${userLatitude}&lon=${userLongitude}&appid=${openWeatherMapApiKey}&lang=fr&units=metric`)
                                 .then(response => response.json())
                                 .then(data => {
-                                    if (data.name) userLocatedCity = data.name;
+                                    if (data.name) userLocatedCity = data.name; // Update city if found
                                     fetchWeatherDashboard(userLatitude, userLongitude);
                                 })
                                 .catch(err => {
                                     console.warn("Erreur récupération nom ville depuis coords:", err);
-                                    fetchWeatherDashboard(userLatitude, userLongitude); 
+                                    fetchWeatherDashboard(userLatitude, userLongitude); // Fetch with coords anyway
                                 });
                         } else {
-                             fetchWeatherDashboard(userLatitude, userLongitude); 
+                             fetchWeatherDashboard(userLatitude, userLongitude); // API key missing, use coords
                         }
                     },
                     (error) => {
                         console.warn("Erreur de géolocalisation: ", error.message);
                         userLatitude = null; userLongitude = null;
-                        fetchWeatherDashboard(); 
+                        fetchWeatherDashboard(); // Fetch weather for default city
                     }
                 );
             } else {
                 console.warn("La géolocalisation n'est pas supportée.");
                 userLatitude = null; userLongitude = null;
-                fetchWeatherDashboard(); 
+                fetchWeatherDashboard(); // Fetch weather for default city
             }
         }
 
+        // Displays detailed weather forecast in the info panel
         async function displayWeatherForecast() {
-            setActiveInfoPanel('weatherForecastContent', true); 
+            setActiveInfoPanel('weatherForecastContent', true); // Ensure panel is visible
             weatherForecastDisplayDiv.innerHTML = `<h3>Prévisions Météo pour ${userLocatedCity || 'votre position'}</h3><p>Chargement des prévisions...</p>`;
 
             if (openWeatherMapApiKey === 'YOUR_OPENWEATHERMAP_API_KEY' || !openWeatherMapApiKey) {
@@ -923,7 +1073,7 @@
             let forecastApiUrl;
             const lang = 'fr';
             const units = 'metric';
-            const cnt = 40; 
+            const cnt = 40; // Number of 3-hour forecast periods (5 days)
 
             if (userLatitude && userLongitude) {
                 forecastApiUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${userLatitude}&lon=${userLongitude}&appid=${openWeatherMapApiKey}&lang=${lang}&units=${units}&cnt=${cnt}`;
@@ -983,47 +1133,50 @@
         // --- Speech Recognition ---
         const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+        // Updates microphone button appearance based on listening state
         function updateMicButtonState(isListening) {
             if (isListening) {
                 micButton.classList.add('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                micButton.innerHTML = '<i class="fas fa-stop"></i>';
+                micButton.innerHTML = '<i class="fas fa-stop"></i>'; // Stop icon
                 listeningIndicator.classList.add('active');
             } else {
                 micButton.classList.remove('bg-red-600', 'hover:bg-red-700');
                 micButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                micButton.innerHTML = '<i class="fas fa-microphone"></i>';
+                micButton.innerHTML = '<i class="fas fa-microphone"></i>'; // Mic icon
                 listeningIndicator.classList.remove('active');
             }
         }
         
+        // Stops all active speech recognitions
         function stopAllRecognitions() {
             if (wakeWordRecognizer && wakeWordRecognitionActive) {
-                wakeWordRecognizer.abort(); 
+                wakeWordRecognizer.abort(); // Use abort to stop immediately
                 wakeWordRecognitionActive = false;
             }
             if (commandRecognizer && recognitionActive) {
                 commandRecognizer.abort();
                 recognitionActive = false;
             }
-            updateMicButtonState(false);
+            updateMicButtonState(false); // Reset mic button
         }
 
 
+        // Starts wake word ("Eva") recognition
         function startWakeWordRecognition() {
             if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
-            if (wakeWordRecognitionActive || recognitionActive) return; 
+            if (wakeWordRecognitionActive || recognitionActive) return; // Already active or command recognition is active
 
-            stopAllRecognitions(); 
+            stopAllRecognitions(); // Ensure no other recognition is running
 
             wakeWordRecognizer = new SpeechRecognitionAPI();
             wakeWordRecognizer.lang = 'fr-FR';
-            wakeWordRecognizer.continuous = true; 
-            wakeWordRecognizer.interimResults = true; 
+            wakeWordRecognizer.continuous = true; // Keep listening
+            wakeWordRecognizer.interimResults = true; // Get results as they come
 
             wakeWordRecognizer.onstart = () => {
                 wakeWordRecognitionActive = true;
-                updateMicButtonState(false); 
+                updateMicButtonState(false); // Mic button shows "ready to listen"
                 statusText.textContent = "Dites 'OK Eva' pour activer, ou Espace pour continu.";
                 console.log("Wake word recognition started.");
             };
@@ -1031,15 +1184,15 @@
             wakeWordRecognizer.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const transcript = event.results[i][0].transcript.toLowerCase().trim();
-                    if (event.results[i].isFinal || transcript.includes("ok eva")) { 
+                    if (event.results[i].isFinal || transcript.includes("ok eva")) { // Check for "ok eva" in interim or final
                         if (transcript.includes("ok eva")) {
-                            console.log("Wake word 'OK Eva' detected.");
+                            console.log("Wake word 'Eva' detected.");
                             evaActivationSound();
-                            stopWakeWordRecognition(); 
-                            isEvaActivatedListening = true;
-                            userExplicitlyWantsContinuousListen = false; 
-                            startCommandRecognition(false); 
-                            return; 
+                            stopWakeWordRecognition(); // Stop this recognizer
+                            isEvaActivatedListening = true; // Flag that Eva was activated
+                            userExplicitlyWantsContinuousListen = false; // Reset continuous listen flag
+                            startCommandRecognition(false); // Start command recognition (single shot)
+                            return; // Exit once wake word is processed
                         }
                     }
                 }
@@ -1055,8 +1208,9 @@
                 
                 statusText.textContent = errorMsg;
                 console.error("Wake word recognition error:", event.error);
+                // Attempt to restart unless it's a permission issue or aborted by user/system
                 if (event.error !== 'not-allowed' && event.error !== 'aborted' && !recognitionActive) {
-                    setTimeout(startWakeWordRecognition, 250); 
+                    setTimeout(startWakeWordRecognition, 250); // Short delay before restart
                 } else {
                     statusText.textContent = errorMsg + " Réessayez ou vérifiez permissions.";
                 }
@@ -1066,11 +1220,12 @@
                 const wasActive = wakeWordRecognitionActive;
                 wakeWordRecognitionActive = false;
                 console.log("Wake word recognition ended.");
+                // If it ended naturally and command recognition isn't starting, restart wake word
                 if (wasActive && !recognitionActive && !isEvaActivatedListening) {
                      console.log("Restarting wake word recognition due to natural end.");
-                     setTimeout(startWakeWordRecognition, 50); 
+                     setTimeout(startWakeWordRecognition, 50); // Quick restart
                 } else {
-                    updateMicButtonState(recognitionActive); 
+                    updateMicButtonState(recognitionActive); // Update based on command recognizer state
                 }
             };
             
@@ -1084,29 +1239,31 @@
             }
         }
 
+        // Stops wake word recognition
         function stopWakeWordRecognition() {
             if (wakeWordRecognizer && wakeWordRecognitionActive) {
-                wakeWordRecognizer.abort(); 
+                wakeWordRecognizer.abort(); // Use abort for immediate stop
             }
             wakeWordRecognitionActive = false;
         }
 
 
+        // Starts command recognition (after wake word or mic press)
         function startCommandRecognition(isContinuous) {
             if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; }
             if (recognitionActive) { console.warn("Reconnaissance de commande déjà active."); return; }
 
-            stopWakeWordRecognition(); 
+            stopWakeWordRecognition(); // Ensure wake word recognition is stopped
 
             commandRecognizer = new SpeechRecognitionAPI();
             commandRecognizer.lang = 'fr-FR';
-            commandRecognizer.interimResults = false;
+            commandRecognizer.interimResults = false; // We want final results for commands
             commandRecognizer.maxAlternatives = 1;
-            commandRecognizer.continuous = isContinuous || interruptEvaEnabled;
+            commandRecognizer.continuous = isContinuous || interruptEvaEnabled; // Continuous if specified or interrupt mode is on
 
             commandRecognizer.onstart = () => {
                 recognitionActive = true;
-                updateMicButtonState(true); 
+                updateMicButtonState(true); // Mic button shows "listening"
 
                 if (isEvaActivatedListening) {
                     statusText.textContent = "Eva activée. Écoute de la commande...";
@@ -1117,6 +1274,7 @@
                 }
                  console.log("Command recognition started. Continuous:", commandRecognizer.continuous, "EvaActivated:", isEvaActivatedListening);
 
+                // If interrupt mode is on and EVA is speaking, stop EVA's speech
                 if (interruptEvaEnabled && evaIsCurrentlySpeaking) {
                     if (audioPlayer && !audioPlayer.paused) audioPlayer.pause(); 
                     if (speechSynthesis.speaking) speechSynthesis.cancel();
@@ -1129,6 +1287,7 @@
 
                 let commandProcessedLocally = false;
 
+                // Example local commands (can be expanded)
                 if (transcript === "allume la caméra") {
                     if (!isCamOn) {
                         toggleWebcam(); 
@@ -1149,6 +1308,7 @@
                     sendMessageViaWebSocket(event.results[event.results.length - 1][0].transcript.trim());
                 }
                 
+                // If it was a single-shot listen after "Eva", onend will handle restarting wake word
                 if (isEvaActivatedListening && !commandRecognizer.continuous) {
                     // Handled by onend
                 }
@@ -1164,18 +1324,21 @@
                 else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio (commande).';
                 else if (event.error === 'not-allowed') {
                      errorMsg = 'Accès micro refusé (commande).';
-                     userExplicitlyWantsContinuousListen = false; 
+                     userExplicitlyWantsContinuousListen = false; // Reset flags if permission denied
                      isEvaActivatedListening = false;
                 }
                 statusText.textContent = errorMsg;
                 console.error("Command recognition error:", event.error, " EvaActivated:", isEvaActivatedListening, " Continuous:", userExplicitlyWantsContinuousListen);
 
-                if (isEvaActivatedListening) { 
+                // Logic to restart appropriate recognition mode
+                if (isEvaActivatedListening) { // If it was after "Eva"
                     isEvaActivatedListening = false;
                     if (event.error !== 'not-allowed') setTimeout(startWakeWordRecognition, 100);
                 } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasRecognizingBeforeError && event.error !== 'not-allowed' && event.error !== 'aborted') {
+                    // If it was continuous mode and not a critical error, restart continuous
                     setTimeout(() => startCommandRecognition(true), 250);
                 } else {
+                     // Otherwise, try to fallback to wake word recognition if not permission issue
                      if (event.error !== 'not-allowed' && !userExplicitlyWantsContinuousListen && !interruptEvaEnabled) {
                         setTimeout(startWakeWordRecognition, 100);
                      } else if (event.error === 'not-allowed') {
@@ -1190,20 +1353,25 @@
                 console.log("Command recognition ended. EvaActivated:", isEvaActivatedListening, "Continuous:", userExplicitlyWantsContinuousListen, "Interrupt:", interruptEvaEnabled);
                 
                 if (pausedForEvaOutput && !interruptEvaEnabled) {
+                    // If paused for EVA's output (and not in interrupt mode), wait for EVA to finish
                     statusText.textContent = "En attente d'EVA...";
                 } else if (isEvaActivatedListening) {
+                    // If it was a single listen after "Eva", go back to wake word
                     isEvaActivatedListening = false;
                     updateMicButtonState(false); 
                     startWakeWordRecognition(); 
                 } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasActive) {
+                    // If it was continuous mode and ended (e.g., due to silence), restart continuous
                     if (userExplicitlyWantsContinuousListen || interruptEvaEnabled) { 
                          console.log("Restarting continuous command recognition.");
                          startCommandRecognition(true);
                     } else {
+                         // Fallback if flags changed mid-recognition
                          updateMicButtonState(false);
                          startWakeWordRecognition();
                     }
                 } else { 
+                    // Default: if not continuous and not after "Eva", go back to wake word
                     updateMicButtonState(false);
                     if (!userExplicitlyWantsContinuousListen && !interruptEvaEnabled) { 
                         startWakeWordRecognition();
@@ -1219,22 +1387,25 @@
                 statusText.textContent = "Erreur démarrage reco. commande.";
                 console.error("Error starting command recognition:", e);
                 if (isEvaActivatedListening) isEvaActivatedListening = false;
-                startWakeWordRecognition(); 
+                startWakeWordRecognition(); // Fallback to wake word
             }
         }
         
+        // Stops command recognition
         function stopCommandRecognition() {
             if (commandRecognizer && recognitionActive) {
-                commandRecognizer.abort(); 
+                commandRecognizer.abort(); // Use abort for immediate stop
             }
             recognitionActive = false;
-            isEvaActivatedListening = false; 
+            isEvaActivatedListening = false; // Reset Eva activation flag
             updateMicButtonState(false);
         }
 
 
         // --- Info Panel Management ---
+        // Sets the active tab and content panel in the info column
         function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) {
+            // Open panel if collapsed and autoOpen is true
             if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) {
                 infoPanelColumn.classList.remove('collapsed');
                 const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left');
@@ -1243,28 +1414,34 @@
                 if(rightIcon) rightIcon.style.display = 'none';
             }
 
+            // Update tab buttons
             document.querySelectorAll('.info-tab-button').forEach(button => {
                 button.classList.remove('active-tab');
                 if (button.dataset.target === targetPanelId) button.classList.add('active-tab');
             });
+            // Update content panels
             document.querySelectorAll('.info-content-panel').forEach(panel => {
                 panel.classList.remove('active-content');
                 if (panel.id === targetPanelId) panel.classList.add('active-content');
             });
-            activeInfoPanelId = targetPanelId;
+            activeInfoPanelId = targetPanelId; // Store current active panel
 
+            // Special handling for map resize when panel becomes visible
             if (targetPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { 
-                setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350);
+                setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350); // Delay to allow panel to render
             }
         }
 
         // --- Google Maps Functions ---
+        // Initializes Google Map (callback for API script)
         window.initMap = function() {
             const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
             const apiKeyFromScript = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null;
 
+            // Check if API key is valid or a placeholder
             if (!apiKeyFromScript || apiKeyFromScript === "YOUR_GOOGLE_MAPS_API_KEY" || !apiKeyFromScript.startsWith("AIza")) { 
                  if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps incorrecte ou manquante.</p>";
+                 console.error("Google Maps API key is missing or invalid.");
                  return;
             }
 
@@ -1276,27 +1453,32 @@
                     center: currentMapCenter, 
                     zoom: currentMapZoom, 
                     mapTypeId: google.maps.MapTypeId.ROADMAP, 
+                    // Dark theme for the map
                     styles: [ {elementType:"geometry",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.stroke",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.fill",stylers:[{color:"#746855"}]},{featureType:"administrative.locality",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#263c3f"}]},{featureType:"poi.park",elementType:"labels.text.fill",stylers:[{color:"#6b9a76"}]},{featureType:"road",elementType:"geometry",stylers:[{color:"#38414e"}]},{featureType:"road",elementType:"geometry.stroke",stylers:[{color:"#212a37"}]},{featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#9ca5b3"}]},{featureType:"road.highway",elementType:"geometry",stylers:[{color:"#746855"}]},{featureType:"road.highway",elementType:"geometry.stroke",stylers:[{color:"#1f2835"}]},{featureType:"road.highway",elementType:"labels.text.fill",stylers:[{color:"#f3d19c"}]},{featureType:"transit",elementType:"geometry",stylers:[{color:"#2f3948"}]},{featureType:"transit.station",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"water",elementType:"geometry",stylers:[{color:"#17263c"}]},{featureType:"water",elementType:"labels.text.fill",stylers:[{color:"#515c6d"}]},{featureType:"water",elementType:"labels.text.stroke",stylers:[{color:"#17263c"}]}]
                 });
-                directionsRenderer.setMap(gMap); 
+                directionsRenderer.setMap(gMap); // Link renderer to the map
+                // Store map center and zoom when changed by user
                 gMap.addListener('center_changed', () => { if(gMap) currentMapCenter = gMap.getCenter(); }); 
                 gMap.addListener('zoom_changed', () => { if(gMap) currentMapZoom = gMap.getZoom(); }); 
 
+                // Try to center map on user's current location
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         (position) => { if(gMap) { const userPos = { lat: position.coords.latitude, lng: position.coords.longitude }; gMap.setCenter(userPos); currentMapCenter = userPos;} },
                         () => { console.warn("Impossible d'obtenir la position pour centrer la carte."); }
                     );
                 }
-            } catch (e) { addMessageToChat("Erreur init carte.", "assistant"); }
+            } catch (e) { addMessageToChat("Erreur init carte.", "assistant"); console.error("Map initialization error:", e); }
         }
+        // Calculates and displays a route on the map
         function calculateAndDisplayRoute(origin, destination) {
             if (!directionsService || !directionsRenderer || !gMap) { addMessageToChat("Services carte non prêts.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
             if (!origin || !destination) { addMessageToChat("Origine/destination manquante.", "assistant"); setActiveInfoPanel('mapContent', true); return; }
             
             let originForMap = origin;
+            // Handle "current location" as origin
             if (typeof origin === 'string' && (origin.toLowerCase().includes("votre position") || origin.toLowerCase().includes("ma position") || origin.toLowerCase().includes("actuelle"))) {
-                if (userLatitude && userLongitude) {
+                if (userLatitude && userLongitude) { // If we have coords
                      const userCurrentPos = { lat: userLatitude, lng: userLongitude };
                      directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                             if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
@@ -1304,7 +1486,7 @@
                         }
                     );
                     return;
-                } else if (navigator.geolocation) {
+                } else if (navigator.geolocation) { // Try to get coords
                      navigator.geolocation.getCurrentPosition(position => {
                         const userCurrentPos = { lat: position.coords.latitude, lng: position.coords.longitude };
                         directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
@@ -1312,7 +1494,7 @@
                                 else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant");
                             }
                         );
-                     }, () => {
+                     }, () => { // Geolocation failed, use default city
                         addMessageToChat("Impossible d'obtenir votre position actuelle. Utilisation de " + userLocatedCity + ".", "assistant");
                         directionsService.route( { origin: userLocatedCity, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                             if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
@@ -1320,18 +1502,20 @@
                         });
                      });
                      return;
-                } else {
+                } else { // Geolocation not supported, use default city
                     addMessageToChat("Géolocalisation non supportée. Utilisation de " + userLocatedCity + ".", "assistant");
                     originForMap = userLocatedCity;
                 }
             }
 
+            // Standard route calculation
             directionsService.route( { origin: originForMap, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => {
                     if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response);
                     else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant");
                 }
             );
         }
+        // Parses origin and destination from a text response (e.g., from EVA)
         function parseDirectionsFromText(textResponse) { 
             const match = textResponse.match(/^Itinéraire de\s+(.+?)\s+à\s+(.+?):/i);
             if (match && match[1] && match[2]) return { origin: match[1].trim(), destination: match[2].trim() };
@@ -1339,6 +1523,7 @@
         }
 
         // --- Chat & Content Formatting Functions ---
+        // Adds a message to the chatbox
         function addMessageToChat(text, sender) { 
             const messageElement = document.createElement('div');
             messageElement.textContent = text;
@@ -1346,27 +1531,29 @@
             if (sender === 'user') messageElement.classList.add('user-message');
             else messageElement.classList.add('assistant-message');
             chatbox.appendChild(messageElement);
-            chatbox.scrollTop = chatbox.scrollHeight;
+            chatbox.scrollTop = chatbox.scrollHeight; // Auto-scroll to bottom
         }
 
+        // Formats raw text from search results into HTML for display
         function formatSearchResults(rawText) { 
             let html = `<h3>Résultats de recherche</h3>`;
             const queryMatch = rawText.match(/(?:Résultats web pour|Réponse directe pour|Information pour)\s+'([^']+)'/i);
             if (queryMatch && queryMatch[1]) html = `<h3>Résultats pour : <span class="italic">${queryMatch[1]}</span></h3>`;
             const mainContent = queryMatch ? rawText.substring(rawText.indexOf(':') + 1).trim() : rawText;
-            const parts = mainContent.split(/\n\s*\n/);
+            const parts = mainContent.split(/\n\s*\n/); // Split by double newlines
             parts.forEach(part => {
                 const lines = part.split('\n').map(l => l.trim()).filter(l => l); if (lines.length === 0) return;
-                if (lines[0].match(/^\d+\.\s+/)) { 
+                if (lines[0].match(/^\d+\.\s+/)) { // Numbered list item (likely a search result)
                     const title = lines[0].substring(lines[0].indexOf(' ') + 1);
                     const snippet = (lines.find(l => l.toLowerCase().startsWith("extrait:")) || "").substring(8).trim();
-                    const source = (lines.find(l => l.toLowerCase().startsWith("source:")) || "").substring(7).trim() || "#";
+                    const source = (lines.find(l => l.toLowerCase().startsWith("source:")) || "").substring(7).trim() || "#"; // Default to # if no source
                     html += `<div class="mb-4 p-3 bg-gray-600 rounded-md shadow"><h4 class="font-semibold text-blue-300 text-md mb-1"><a href="${source}" target="_blank" rel="noopener noreferrer">${title}</a></h4>${snippet ? `<p class="text-sm text-gray-200 mb-1">${snippet}</p>` : ''}<p class="text-xs text-gray-400 truncate"><a href="${source}" target="_blank" rel="noopener noreferrer">${source}</a></p></div>`;
-                } else if (lines.length > 0) { 
+                } else if (lines.length > 0) { // General text block
                      html += `<div class="mb-4 p-3 bg-gray-600 rounded-md shadow"><p class="text-sm text-gray-200">${lines.join('<br>')}</p></div>`;
                 }
             }); return html;
         }
+        // Formats raw email list text into HTML
         function formatEmailList(rawText) {
             let html = `<h3>Emails Non Lus</h3>`; const lines = rawText.split('\n');
             if (lines.length > 1 && lines[0].toLowerCase().includes("voici vos derniers e-mails non lus")) {
@@ -1379,6 +1566,7 @@
                 }); html += '</ul>';
             } else { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; } return html;
         }
+        // Formats raw task list text into HTML
         function formatTaskList(rawText) {
             let html = `<h3>Liste des Tâches</h3>`; const lines = rawText.split('\n');
             const titleMatch = rawText.match(/Voici vos tâches actives de la liste '([^']+)' :/i);
@@ -1389,8 +1577,8 @@
             let currentTaskTitle = "";
             lines.forEach(line => {
                 line = line.trim();
-                if (line.startsWith("- ")) {
-                    if (currentTaskTitle) html += `</div></li>`;
+                if (line.startsWith("- ")) { // Start of a new task
+                    if (currentTaskTitle) html += `</div></li>`; // Close previous task item
                     currentTaskTitle = line.substring(2).trim();
                     html += `<li class="task-item"><div><strong>${currentTaskTitle}</strong>`;
                 } else if (line.toLowerCase().startsWith("notes:") && currentTaskTitle) {
@@ -1398,10 +1586,11 @@
                     html += `<p class="task-notes">${notes}</p>`;
                 }
             });
-            if (currentTaskTitle) html += `</div></li>`; 
+            if (currentTaskTitle) html += `</div></li>`; // Close the last task item
             html += '</ul>';
             return html;
         }
+        // Formats raw calendar events text into HTML
         function formatCalendarEvents(rawText) {
             let html = `<h3>Événements du Calendrier</h3>`; const lines = rawText.split('\n');
             if (rawText.toLowerCase().includes("aucun événement à venir trouvé")) { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`; return html; }
@@ -1412,7 +1601,7 @@
                     line = line.trim();
                     if (line.startsWith("- ")) {
                         const eventDetails = line.substring(2).trim();
-                        const timeMatch = eventDetails.match(/\(le (.+?)\)$/);
+                        const timeMatch = eventDetails.match(/\(le (.+?)\)$/); // Extract time/date
                         const eventName = timeMatch ? eventDetails.substring(0, timeMatch.index).trim() : eventDetails;
                         const eventTime = timeMatch ? timeMatch[1] : "";
                         html += `<li class="calendar-event-item"><div><strong>${eventName}</strong>${eventTime ? `<p class="calendar-event-time">${eventTime}</p>` : ''}</div></li>`;
@@ -1422,6 +1611,7 @@
             } else { html += `<p class="mt-2 text-sm text-gray-300">${rawText}</p>`;}
             return html;
         }
+        // Formats raw contact list text into HTML
         function formatContactList(rawText) { 
             let html = `<h3>Liste des Contacts</h3>`;
             const lines = rawText.split('\n');
@@ -1440,10 +1630,12 @@
             return html;
         }
 
+        // Captures a frame from the webcam as a base64 JPEG
         function getWebcamFrameData() {
-            if (!isCamOn || !webcamVideo.srcObject || webcamVideo.readyState < 3) return null;
-            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { return null; }
+            if (!isCamOn || !webcamVideo.srcObject || webcamVideo.readyState < 3) return null; // Webcam not ready
+            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { console.error("Error getting webcam frame:", error); return null; }
         }
+        // Extracts code blocks from markdown text
         function extractCodeInfo(markdownText) {
             const infos = []; const regex = /```([a-zA-Z0-9]*)\n([\s\S]*?)\n```/g; let match;
             while ((match = regex.exec(markdownText)) !== null) infos.push({ language: match[1].toLowerCase() || 'plaintext', code: match[2].trim() });
@@ -1451,10 +1643,12 @@
         }
 
         // --- Client-side TTS ---
+        // Speaks a message using the browser's SpeechSynthesis API
         function speakClientSideMessage(textToSpeak) {
             if (!('speechSynthesis' in window) || isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; } 
             
-            speechSynthesis.cancel(); 
+            speechSynthesis.cancel(); // Cancel any ongoing speech
+            // Pause recognition if not in interrupt mode
             if (recognitionActive && commandRecognizer && !interruptEvaEnabled) { 
                 pausedForEvaOutput = true; 
                 commandRecognizer.abort(); 
@@ -1475,26 +1669,29 @@
                 restartRecognitionAfterEva(); 
             };
             utterance.onerror = (event) => { 
+                console.error("Client-side TTS error:", event.error);
                 isSpeakingClientSide = false; 
                 evaIsCurrentlySpeaking = false; 
                 listeningIndicator.classList.remove('speaking'); 
                 restartRecognitionAfterEva(); 
             };
-            setTimeout(() => { speechSynthesis.speak(utterance); }, 50); 
+            setTimeout(() => { speechSynthesis.speak(utterance); }, 50); // Small delay for stability
         }
 
         // --- WebSocket Functions ---
+        // Connects to the WebSocket server
         function connectWebSocket() {
             if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return; 
             statusText.textContent = "Connexion au serveur..."; 
             ws = new WebSocket(backendWsUrl);
             ws.onopen = () => { wsReady = true; statusText.textContent = "Connecté. Prêt à discuter."; };
-            ws.onmessage = (event) => {
+            ws.onmessage = (event) => { // Handles messages from the server
                 try {
                     const serverMessage = JSON.parse(event.data);
                     
                     if (serverMessage.text) addMessageToChat(serverMessage.text, 'assistant');
 
+                    // Handle data for info panels
                     if (serverMessage.panel_data && serverMessage.panel_target_id) {
                         setActiveInfoPanel(serverMessage.panel_target_id, true); 
                         const panelData = serverMessage.panel_data;
@@ -1511,9 +1708,9 @@
                             case 'emailContent': if(emailListContentDiv) emailListContentDiv.innerHTML = formatEmailList(panelData); break;
                             case 'taskContent': if(taskListContentDiv) taskListContentDiv.innerHTML = formatTaskList(panelData); break;
                             case 'calendarContent': if(calendarEventListContentDiv) calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData); break;
-                            case 'weatherForecastContent': displayWeatherForecast(); break;
+                            case 'weatherForecastContent': displayWeatherForecast(); break; // Trigger forecast display
                             case 'codeDisplayContent':
-                                const codeInfos = extractCodeInfo(panelData); // panelData est la réponse du handler Python
+                                const codeInfos = extractCodeInfo(panelData); 
                                 if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.length > 0 ? codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n') : panelData;
                                 if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                                     evaCodeCanvasContentWrapper.classList.add('expanded');
@@ -1523,6 +1720,7 @@
                             default: console.warn("Unknown panel_target_id:", serverMessage.panel_target_id);
                         }
                     } else if (serverMessage.type === 'final_text' && serverMessage.text) {
+                        // If final text contains code, ensure it's shown in the code panel
                         const codeInfos = extractCodeInfo(serverMessage.text);
                         if (codeInfos.length > 0 && activeInfoPanelId !== 'codeDisplayContent') { 
                              setActiveInfoPanel('codeDisplayContent', true);
@@ -1531,34 +1729,40 @@
                                 evaCodeCanvasContentWrapper.classList.add('expanded');
                                 if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-plus', 'fa-minus');
                              }
+                             // Update chat message to indicate code is in panel
                              const chatMsgForCode = serverMessage.text.replace(/```(?:[a-zA-Z0-9]*)?\n[\s\S]*?\n```/g, "").trim();
-                             if (chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) {
+                             if (chatbox.lastChild && chatbox.lastChild.textContent === serverMessage.text) { // If the full text was added
                                  chatbox.lastChild.textContent = chatMsgForCode || "Code généré. (Affiché dans l'onglet Code)";
                              }
                         } else if (codeInfos.length === 0 && activeInfoPanelId === 'codeDisplayContent' && evaCodeCanvasContentWrapper && evaCodeCanvasContentWrapper.classList.contains('expanded')) {
-                            evaCodeCanvasContentWrapper.classList.remove('expanded');
-                            if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-minus', 'fa-plus');
+                            // If no code and code panel is open, collapse it (optional behavior)
+                            // evaCodeCanvasContentWrapper.classList.remove('expanded');
+                            // if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-minus', 'fa-plus');
                         }
                     }
 
+                    // Handle audio data from server
                     if (serverMessage.type === 'audio_data') {
                         if (skipNextAudioDueToCode) { skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); } 
                         else if (!isMuted && serverMessage.audio) playAudio(serverMessage.audio); 
-                        else { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); }
+                        else { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); } // Muted or no audio
                     } else if (serverMessage.type === 'no_audio_data' || serverMessage.type === 'error') {
+                        // If no audio or error, ensure recognition restarts
                         if (skipNextAudioDueToCode) skipNextAudioDueToCode = false;
                         evaIsCurrentlySpeaking = false; 
                         restartRecognitionAfterEva(); 
                     }
 
                 } catch (error) { 
+                    console.error("Error processing server message:", error);
                     addMessageToChat("Erreur communication.", "assistant"); 
                     skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
                 }
             };
-            ws.onerror = () => { statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
+            ws.onerror = (error) => { console.error("WebSocket Error:", error); statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
             ws.onclose = () => { wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
         }
+        // Sends a message (text, image, or file) via WebSocket
         function sendMessageViaWebSocket(speechTranscript = null) {
             let messageTextToSend = speechTranscript ? speechTranscript.trim() : messageInput.value.trim();
             const requestData = { text: messageTextToSend, imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, fileData: null, fileName: null, fileType: null };
@@ -1567,7 +1771,7 @@
                 requestData.fileData = attachedFile.data;
                 requestData.fileName = attachedFile.name;
                 requestData.fileType = attachedFile.type;
-                if (!messageTextToSend) messageTextToSend = `Fichier joint : ${attachedFile.name}`;
+                if (!messageTextToSend) messageTextToSend = `Fichier joint : ${attachedFile.name}`; // Default message if only file
             }
 
             if (!messageTextToSend && !requestData.imageData && !requestData.fileData) { 
@@ -1578,6 +1782,7 @@
             
             addMessageToChat(messageTextToSend || `Fichier : ${requestData.fileName}`, 'user');
 
+            // Pause recognition if not in interrupt mode
             if (!interruptEvaEnabled) { 
                 pausedForEvaOutput = true;
                 if (recognitionActive && commandRecognizer) commandRecognizer.abort(); 
@@ -1586,9 +1791,11 @@
             try { ws.send(JSON.stringify(requestData)); messageInput.value = ''; clearAttachedFile(); } 
             catch (error) { addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
         }
+        // Plays audio received from the server
         function playAudio(audioSource) {
             if (isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; }
-            if (isSpeakingClientSide) { evaIsCurrentlySpeaking = false; return; } 
+            if (isSpeakingClientSide) { evaIsCurrentlySpeaking = false; return; } // Don't play if client TTS is active
+            // Pause recognition if not in interrupt mode
             if (recognitionActive && commandRecognizer && !interruptEvaEnabled) { 
                 pausedForEvaOutput = true; 
                 commandRecognizer.abort(); 
@@ -1598,6 +1805,7 @@
             evaIsCurrentlySpeaking = true; 
             audioPlayer.src = audioSource; 
             audioPlayer.play().catch(e => { 
+                console.error("Error playing audio:", e);
                 listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
             });
             listeningIndicator.classList.add('speaking'); 
@@ -1605,28 +1813,32 @@
                 listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
             };
         }
+        // Restarts the appropriate speech recognition mode after EVA finishes speaking/processing
         function restartRecognitionAfterEva() {
             console.log("Restarting recognition after EVA. PausedForEvaOutput:", pausedForEvaOutput, "Interrupt:", interruptEvaEnabled, "ContinuousListen:", userExplicitlyWantsContinuousListen, "EvaActivated:", isEvaActivatedListening);
-            pausedForEvaOutput = false; 
+            pausedForEvaOutput = false; // Reset pause flag
 
             if (interruptEvaEnabled) {
-                if (!recognitionActive) startCommandRecognition(true);
+                if (!recognitionActive) startCommandRecognition(true); // Restart continuous if in interrupt mode
             } else if (userExplicitlyWantsContinuousListen) {
-                if (!recognitionActive) startCommandRecognition(true);
+                if (!recognitionActive) startCommandRecognition(true); // Restart continuous if user wants it
             } else if (isEvaActivatedListening) {
-                isEvaActivatedListening = false;
+                // This case should be handled by commandRecognizer.onend if it was a single shot after "Eva"
+                isEvaActivatedListening = false; // Reset flag
                 if (!wakeWordRecognitionActive && !recognitionActive) startWakeWordRecognition();
             } else {
+                // Default: go back to wake word recognition
                 if (!wakeWordRecognitionActive && !recognitionActive) startWakeWordRecognition();
             }
         }
 
 
         // --- Webcam & Mute ---
+        // Toggles webcam on/off
         async function toggleWebcam(playSound = true) { 
-            webcamError.classList.add('hidden'); 
+            webcamError.classList.add('hidden'); // Hide previous errors
             const camActionPromise = new Promise(async (resolve, reject) => {
-                if (!isCamOn) { 
+                if (!isCamOn) { // Turning camera ON
                     try { 
                         mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
                         webcamVideo.srcObject = mediaStream; 
@@ -1649,7 +1861,7 @@
                         camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
                         reject(err); 
                     } 
-                } else { 
+                } else { // Turning camera OFF
                     if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
                     webcamVideo.srcObject = null; webcamVideo.classList.add('hidden'); listeningIndicator.classList.remove('hidden'); 
                     isCamOn = false; camButton.textContent = 'Cam'; 
@@ -1666,15 +1878,18 @@
             }
         }
 
+        // Toggles mute state for EVA's audio output
         function toggleMute() {
             isMuted = !isMuted; 
             muteButton.textContent = isMuted ? 'Son' : 'Muet'; 
             muteButton.classList.toggle('bg-red-600', isMuted); muteButton.classList.toggle('hover:bg-red-700', isMuted); 
             muteButton.classList.toggle('bg-gray-600', !isMuted); muteButton.classList.toggle('hover:bg-gray-700', !isMuted);
+            // If muted and EVA is speaking (server audio), pause it
             if (isMuted && audioPlayer && !audioPlayer.paused) { 
                 audioPlayer.pause(); listeningIndicator.classList.remove('speaking'); evaIsCurrentlySpeaking = false; 
                  statusText.textContent = 'Muet. ' + (userExplicitlyWantsContinuousListen ? 'Mode continu en attente.' : (wakeWordRecognitionActive ? "Dites 'Eva'..." : 'Appuyez sur Espace/Micro.'));
             }
+            // If muted and client-side TTS is active, cancel it
             if (isMuted && isSpeakingClientSide) { 
                 speechSynthesis.cancel(); isSpeakingClientSide = false; listeningIndicator.classList.remove('speaking'); 
                 evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); 
@@ -1682,6 +1897,7 @@
         }
 
         // --- Prompt Scheduler Functions ---
+        // Schedules a new prompt
         function schedulePrompt() {
             const text = scheduledPromptTextInput.value.trim();
             const timeString = scheduledPromptTimeInput.value;
@@ -1691,7 +1907,7 @@
 
             if (!text || !timeString) { addMessageToChat("Veuillez entrer un texte pour le prompt et une heure de planification.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
             if (frequency !== 'once' && !indefinite && (isNaN(repetitions) || repetitions < 1)) { addMessageToChat("Veuillez entrer un nombre de répétitions valide.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
-            if (frequency !== 'once' && indefinite) repetitions = 0; 
+            if (frequency !== 'once' && indefinite) repetitions = 0; // 0 for indefinite
 
             const initialScheduledTime = new Date(timeString).getTime();
             if (initialScheduledTime <= Date.now()) { addMessageToChat("L'heure planifiée est déjà passée. Veuillez choisir une heure future.", "assistant"); setActiveInfoPanel('schedulerContent', true); return; }
@@ -1699,8 +1915,9 @@
             const promptId = `prompt-${Date.now()}`;
             const newPrompt = { id: promptId, text: text, time: initialScheduledTime, originalScheduledTime: initialScheduledTime, frequency: frequency, repetitions: repetitions, indefinite: indefinite, executedCount: 0, isActive: true, timeoutId: null };
             scheduledPrompts.push(newPrompt);
-            scheduleNextOccurrence(promptId); 
-            renderScheduledPrompts();
+            scheduleNextOccurrence(promptId); // Set up the first timeout
+            renderScheduledPrompts(); // Update UI
+            // Clear input fields
             scheduledPromptTextInput.value = ""; promptFrequencyInput.value = 'once';
             recurrenceOptionsDiv.classList.add('hidden'); promptRepetitionsInput.value = "1";
             promptIndefiniteCheckbox.checked = false; promptRepetitionsInput.disabled = false;
@@ -1710,63 +1927,72 @@
             addMessageToChat(scheduleMessage + ".", "assistant"); setActiveInfoPanel('schedulerContent', true);
         }
 
+        // Calculates the next occurrence time based on frequency
         function calculateNextTime(baseTime, frequency) {
             const nextDate = new Date(baseTime);
             switch (frequency) {
                 case 'daily': nextDate.setDate(nextDate.getDate() + 1); break;
                 case 'weekly': nextDate.setDate(nextDate.getDate() + 7); break;
                 case 'monthly': nextDate.setMonth(nextDate.getMonth() + 1); break;
-                default: return null; 
+                default: return null; // Should not happen for recurring prompts
             }
             return nextDate;
         }
         
+        // Sets the timeout for the next occurrence of a scheduled prompt
         function scheduleNextOccurrence(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
-            if (promptIndex === -1) return;
+            if (promptIndex === -1) return; // Prompt not found
             const prompt = scheduledPrompts[promptIndex];
-            if (prompt.timeoutId) clearTimeout(prompt.timeoutId); 
-            if (!prompt.isActive) { renderScheduledPrompts(); return; }
+            if (prompt.timeoutId) clearTimeout(prompt.timeoutId); // Clear existing timeout
+            if (!prompt.isActive) { renderScheduledPrompts(); return; } // Don't schedule if paused
             
             let targetTime = prompt.time;
             const currentTime = Date.now();
+            // If target time is in the past for a recurring prompt, calculate next valid future time
             if (targetTime < currentTime && prompt.frequency !== 'once') {
-                let newCalculatedTime = new Date(prompt.originalScheduledTime); 
-                while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) { 
+                let newCalculatedTime = new Date(prompt.originalScheduledTime); // Start from original
+                while(newCalculatedTime.getTime() <= currentTime || newCalculatedTime.getTime() < prompt.time) { // Ensure it's after current time AND after last set time
                     const next = calculateNextTime(newCalculatedTime.getTime(), prompt.frequency);
                     if(!next) break; newCalculatedTime = next;
                 }
-                targetTime = newCalculatedTime.getTime(); prompt.time = targetTime; 
+                targetTime = newCalculatedTime.getTime(); prompt.time = targetTime; // Update prompt's time
             }
             const delay = targetTime - currentTime;
-            if (delay < 0 && prompt.frequency === 'once') { 
+            if (delay < 0 && prompt.frequency === 'once') { // Past 'once' prompt
                  addMessageToChat(`Prompt unique "${prompt.text}" est dans le passé et ne sera pas exécuté.`, "assistant");
                  scheduledPrompts.splice(promptIndex, 1); renderScheduledPrompts(); return;
             }
-            prompt.timeoutId = setTimeout(() => executeAndReschedule(promptId), Math.max(0, delay)); 
-            renderScheduledPrompts(); 
+            prompt.timeoutId = setTimeout(() => executeAndReschedule(promptId), Math.max(0, delay)); // Ensure delay is not negative
+            renderScheduledPrompts(); // Update UI with new next execution time
         }
 
+        // Executes a scheduled prompt and reschedules if necessary
         function executeAndReschedule(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex === -1) return;
             const prompt = scheduledPrompts[promptIndex];
-            if (!prompt.isActive) return; 
+            if (!prompt.isActive) return; // Do nothing if paused
 
             addMessageToChat(`Exécution du prompt planifié : "${prompt.text}"`, "assistant");
             sendMessageViaWebSocket(prompt.text); prompt.executedCount++;
 
             if (prompt.frequency === 'once' || (!prompt.indefinite && prompt.executedCount >= prompt.repetitions)) {
+                // Prompt finished (once, or repetitions met)
                 addMessageToChat(`Prompt "${prompt.text}" terminé.`, "assistant");
                 if(prompt.timeoutId) clearTimeout(prompt.timeoutId); scheduledPrompts.splice(promptIndex, 1);
             } else {
+                // Reschedule for next occurrence
                 const nextTime = calculateNextTime(prompt.time, prompt.frequency);
                 if (nextTime) { prompt.time = nextTime.getTime(); scheduleNextOccurrence(promptId); } 
-                else { if(prompt.timeoutId) clearTimeout(prompt.timeoutId); scheduledPrompts.splice(promptIndex, 1); }
+                else { // Should not happen if frequency is valid
+                    if(prompt.timeoutId) clearTimeout(prompt.timeoutId); scheduledPrompts.splice(promptIndex, 1); 
+                }
             }
-            renderScheduledPrompts();
+            renderScheduledPrompts(); // Update UI
         }
 
+        // Cancels a scheduled prompt
         function cancelScheduledPrompt(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex > -1) {
@@ -1778,39 +2004,44 @@
             }
         }
 
+        // Toggles the active/paused state of a scheduled prompt
         function togglePromptActiveState(promptId) {
             const promptIndex = scheduledPrompts.findIndex(p => p.id === promptId);
             if (promptIndex === -1) return;
             const prompt = scheduledPrompts[promptIndex];
             prompt.isActive = !prompt.isActive;
 
-            if (prompt.isActive) {
+            if (prompt.isActive) { // Resuming
                 addMessageToChat(`Prompt "${prompt.text}" repris.`, "assistant");
+                // If original time is past, recalculate next valid time
                 if (prompt.time < Date.now() && prompt.frequency !== 'once') {
-                    let newTime = new Date(prompt.originalScheduledTime); 
-                    while (newTime.getTime() <= Date.now()) { 
+                    let newTime = new Date(prompt.originalScheduledTime); // Start from original
+                    while (newTime.getTime() <= Date.now()) { // Find next occurrence after now
                         const calculated = calculateNextTime(newTime.getTime(), prompt.frequency);
                         if (!calculated) break; newTime = calculated;
                     }
                     prompt.time = newTime.getTime();
                 }
                 scheduleNextOccurrence(promptId);
-            } else {
+            } else { // Pausing
                 addMessageToChat(`Prompt "${prompt.text}" mis en pause.`, "assistant");
                 if (prompt.timeoutId) { clearTimeout(prompt.timeoutId); prompt.timeoutId = null; }
             }
-            renderScheduledPrompts();
+            renderScheduledPrompts(); // Update UI
         }
         
+        // Translates frequency key to French string
         function translateFrequency(freq) {
             const map = {'once': 'Une fois', 'daily': 'Quotidien', 'weekly': 'Hebdomadaire', 'monthly': 'Mensuel'};
             return map[freq] || freq;
         }
 
+        // Renders the list of scheduled prompts in the UI
         function renderScheduledPrompts() {
             scheduledPromptsListUI.innerHTML = scheduledPrompts.length === 0 ? "<li class='text-gray-400'>Aucun prompt planifié.</li>" : "";
             if(scheduledPrompts.length === 0) return;
 
+            // Sort by next execution time for display
             [...scheduledPrompts].sort((a, b) => a.time - b.time).forEach(prompt => {
                 const listItem = document.createElement('li');
                 const date = new Date(prompt.time);
@@ -1819,6 +2050,7 @@
                 listItem.innerHTML = `<div class="prompt-details">${detailsText}</div><div class="prompt-actions">${prompt.frequency !== 'once' ? `<button data-id="${prompt.id}" class="${prompt.isActive ? 'pause' : 'resume'}-prompt-button">${prompt.isActive ? 'Pause' : 'Reprendre'}</button>` : ''}<button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button></div>`;
                 scheduledPromptsListUI.appendChild(listItem);
             });
+            // Add event listeners to new buttons
             document.querySelectorAll('.cancel-prompt-button, .pause-prompt-button, .resume-prompt-button').forEach(button => {
                 button.addEventListener('click', (event) => {
                     const id = event.target.dataset.id;
@@ -1829,31 +2061,36 @@
         }
 
         // --- File Handling Functions ---
+        // Handles file selection from the input
         function handleFileSelect(event) {
             const file = event.target.files[0];
             if (!file) { clearAttachedFile(); return; }
             const reader = new FileReader();
             const fileName = file.name; const fileType = file.type;
 
-            if (fileType.startsWith('image/')) {
+            if (fileType.startsWith('image/')) { // Image file
                 reader.onload = (e) => { attachedFile = { name: fileName, type: 'image', data: e.target.result }; displayFilePreview(fileName, e.target.result); };
                 reader.readAsDataURL(file);
-            } else if (fileType.startsWith('text/') || ['.py','.js','.html','.css','.json','.md'].some(ext => fileName.endsWith(ext))) {
+            } else if (fileType.startsWith('text/') || ['.py','.js','.html','.css','.json','.md'].some(ext => fileName.endsWith(ext))) { // Text-based file
                 reader.onload = (e) => { attachedFile = { name: fileName, type: 'text', data: e.target.result }; displayFilePreview(fileName, null); };
                 reader.readAsText(file);
             } else { addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant"); clearAttachedFile(); }
-            fileInput.value = ''; 
+            fileInput.value = ''; // Reset file input for next selection
         }
+        // Displays a preview of the attached file
         function displayFilePreview(fileName, imageSrc = null) {
             filePreviewContainer.innerHTML = `${imageSrc ? `<img src="${imageSrc}" alt="Aperçu de ${fileName}"><br>` : ''}<span class="mr-2">${fileName}</span> <button id="removeFileButton" class="text-red-500 hover:text-red-700 text-xs">&times;</button>`;
             document.getElementById('removeFileButton').addEventListener('click', clearAttachedFile);
         }
+        // Clears the attached file and its preview
         function clearAttachedFile() { attachedFile = null; filePreviewContainer.innerHTML = ''; fileInput.value = ''; }
 
         // --- Calculator Logic ---
+        // Updates the calculator display
         function updateCalculatorDisplay() {
             if(calculatorDisplay) {
                 let displayValue = calculatorCurrentInput || calculatorPreviousInput || "0";
+                // Truncate if too long
                 if (displayValue.length > MAX_INPUT_LENGTH) {
                     displayValue = displayValue.substring(0, MAX_INPUT_LENGTH) + "...";
                 }
@@ -1861,78 +2098,82 @@
             }
         }
 
+        // Handles input from calculator buttons
         function handleCalculatorInput(value) {
-            if (calculatorResetDisplay && !['(', ')'].includes(value)) { 
+            if (calculatorResetDisplay && !['(', ')'].includes(value)) { // Reset display if needed, unless it's a parenthesis
                 calculatorCurrentInput = "";
                 calculatorResetDisplay = false;
             }
 
+            // Prevent excessive input length
             if (calculatorCurrentInput.length >= MAX_INPUT_LENGTH && !['C', '=', 'sin', 'cos', 'tan', 'sqrt', 'log', 'ln', '!'].includes(value)) {
                 return;
             }
             
-            if (value >= '0' && value <= '9') {
+            if (value >= '0' && value <= '9') { // Digit input
                 calculatorCurrentInput += value;
-            } else if (value === '.') {
+            } else if (value === '.') { // Decimal point
                 if (!calculatorCurrentInput.includes('.')) {
                     calculatorCurrentInput += '.';
                 }
-            } else if (value === 'C') {
+            } else if (value === 'C') { // Clear
                 calculatorCurrentInput = "";
                 calculatorPreviousInput = "";
                 calculatorOperator = null;
-            } else if (value === '=') {
+            } else if (value === '=') { // Equals
                 if (calculatorOperator && calculatorPreviousInput !== "" && calculatorCurrentInput !== "") {
                     try {
                         let expressionToEvaluate = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput;
-                        if (calculatorOperator === '^') {
+                        if (calculatorOperator === '^') { // Power operation
                              expressionToEvaluate = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`;
                         }
                         
+                        // Basic sanitization to prevent arbitrary code execution (still limited)
                         const sanitizedExpression = expressionToEvaluate.replace(/[^-()\d/*+.]/g, '');
                         
-                        let result = new Function('return ' + sanitizedExpression)();
+                        let result = new Function('return ' + sanitizedExpression)(); // Evaluate expression
 
-                        if (!isFinite(result)) {
+                        if (!isFinite(result)) { // Handle overflow/invalid results
                             calculatorCurrentInput = "Dépassement"; 
                         } else {
                             calculatorCurrentInput = result.toString();
                         }
                         calculatorOperator = null;
                         calculatorPreviousInput = "";
-                        calculatorResetDisplay = true;
+                        calculatorResetDisplay = true; // Reset for next input
                     } catch (e) {
                         console.error("Calculator evaluation error:", e);
                         calculatorCurrentInput = "Erreur";
                         calculatorResetDisplay = true;
                     }
                 }
-            } else if (['+', '-', '*', '/', '^'].includes(value)) { 
+            } else if (['+', '-', '*', '/', '^'].includes(value)) { // Operator input
                 if (calculatorCurrentInput !== "") {
-                    if (calculatorPreviousInput === "") { 
+                    if (calculatorPreviousInput === "") { // First number entered
                         calculatorPreviousInput = calculatorCurrentInput;
                         calculatorCurrentInput = "";
                         calculatorOperator = value;
-                    } else if (calculatorOperator) { 
-                        handleCalculatorInput('='); 
+                    } else if (calculatorOperator) { // Chaining operations (e.g., 2+3* )
+                        handleCalculatorInput('='); // Calculate previous operation first
                         if (calculatorCurrentInput !== "Erreur" && calculatorCurrentInput !== "Dépassement") {
                             calculatorPreviousInput = calculatorCurrentInput; 
                             calculatorCurrentInput = "";
                             calculatorOperator = value;
                             calculatorResetDisplay = false; 
-                        } else { 
+                        } else { // Error in previous calculation
                             calculatorPreviousInput = "";
                             calculatorOperator = null;
                         }
                     }
                 } else if (calculatorPreviousInput !== "" && value === "-" && calculatorOperator && calculatorCurrentInput === "") { 
+                    // Handle negative number input after an operator, e.g. 5 * -2
                     calculatorCurrentInput = "-";
-                } else if (calculatorPreviousInput !== "" && !calculatorOperator) {
+                } else if (calculatorPreviousInput !== "" && !calculatorOperator) { // Operator after a result or previous input
                     calculatorOperator = value;
                     calculatorCurrentInput = "";
                     calculatorResetDisplay = false;
                 }
-            } else { 
+            } else { // Function input (sin, cos, sqrt, etc.) or parentheses
                 if (value === '(') {
                     calculatorCurrentInput += '(';
                     calculatorResetDisplay = false; 
@@ -1940,30 +2181,30 @@
                     calculatorCurrentInput += ')';
                     calculatorResetDisplay = false; 
                 } else if (calculatorCurrentInput !== "" || ['pi', 'e'].includes(value)) { 
-                    const num = parseFloat(calculatorCurrentInput); 
+                    const num = parseFloat(calculatorCurrentInput); // Ensure it's a number for functions
                     
                     if (isNaN(num) && !['pi', 'e'].includes(value) && !calculatorCurrentInput.endsWith(')')) {
-                        // Potentially do nothing or set error
+                        // Potentially do nothing or set error if input is not a number for a function
                     } else {
                         try {
                             let result;
                             switch(value) {
-                                case 'sin': result = Math.sin(num * Math.PI / 180); break; 
-                                case 'cos': result = Math.cos(num * Math.PI / 180); break; 
-                                case 'tan': result = Math.tan(num * Math.PI / 180); break; 
+                                case 'sin': result = Math.sin(num * Math.PI / 180); break; // Degrees to Radians
+                                case 'cos': result = Math.cos(num * Math.PI / 180); break; // Degrees to Radians
+                                case 'tan': result = Math.tan(num * Math.PI / 180); break; // Degrees to Radians
                                 case 'sqrt': result = Math.sqrt(num); break;
                                 case 'log': result = Math.log10(num); break;
                                 case 'ln': result = Math.log(num); break;
-                                case '!': 
-                                    if (num < 0 || !Number.isInteger(num) || num > 170) { 
-                                        result = Infinity; 
+                                case '!': // Factorial
+                                    if (num < 0 || !Number.isInteger(num) || num > 170) { // Handle invalid factorial inputs
+                                        result = Infinity; // Or "Erreur"
                                         break;
                                     }
                                     let fact = 1; for (let i = 2; i <= num; i++) fact *= i;
                                     result = fact; break;
                                 case 'pi': result = Math.PI; break;
                                 case 'e': result = Math.E; break;
-                                default: result = num; 
+                                default: result = num; // Should not happen if value is a known function
                             }
 
                             if (!isFinite(result)) {
@@ -1978,7 +2219,7 @@
                             calculatorResetDisplay = true;
                         }
                     }
-                } else if (['pi', 'e'].includes(value)) { 
+                } else if (['pi', 'e'].includes(value)) { // Pi or E as first input
                      calculatorCurrentInput = (value === 'pi' ? Math.PI : Math.E).toString();
                      calculatorResetDisplay = true;
                 }
@@ -1993,17 +2234,17 @@
         
         micButton.addEventListener('click', () => {
             if (!SpeechRecognitionAPI) return;
-            initAudioContext(); 
-            if (recognitionActive) { 
-                userExplicitlyWantsContinuousListen = false; 
+            initAudioContext(); // Ensure audio context is ready
+            if (recognitionActive) { // If already listening for command
+                userExplicitlyWantsContinuousListen = false; // Turn off continuous
                 isEvaActivatedListening = false;
                 stopCommandRecognition();
-                startWakeWordRecognition(); 
-            } else { 
-                userExplicitlyWantsContinuousListen = false; 
+                startWakeWordRecognition(); // Go back to wake word
+            } else { // If not listening for command (e.g., wake word active or idle)
+                userExplicitlyWantsContinuousListen = false; // Single shot listen
                 isEvaActivatedListening = false;
-                stopWakeWordRecognition(); 
-                startCommandRecognition(false); 
+                stopWakeWordRecognition(); // Stop wake word
+                startCommandRecognition(false); // Start single command listen
             }
         });
         
@@ -2017,15 +2258,15 @@
             interruptModeButton.title = `Interruption EVA (${interruptEvaEnabled ? 'Activé' : 'Désactivé'}) (i)`;
             
             if (interruptEvaEnabled) {
-                userExplicitlyWantsContinuousListen = true; 
+                userExplicitlyWantsContinuousListen = true; // Implies continuous listen
                 isEvaActivatedListening = false;
                 stopWakeWordRecognition();
-                if (!recognitionActive) startCommandRecognition(true);
+                if (!recognitionActive) startCommandRecognition(true); // Start continuous command listen
                 statusText.textContent = "Mode interruption: Activé. Écoute...";
             } else {
                 userExplicitlyWantsContinuousListen = false;
                 stopCommandRecognition();
-                startWakeWordRecognition(); 
+                startWakeWordRecognition(); // Go back to wake word
                 statusText.textContent = "Mode interruption: Désactivé.";
             }
         });
@@ -2033,37 +2274,41 @@
         muteButton.addEventListener('click', toggleMute); 
         camButton.addEventListener('click', () => { initAudioContext(); toggleWebcam(); }); 
         schedulePromptButton.addEventListener('click', schedulePrompt);
-        attachFileButton.addEventListener('click', () => fileInput.click());
+        attachFileButton.addEventListener('click', () => fileInput.click()); // Trigger file input
         fileInput.addEventListener('change', handleFileSelect);
 
+        // Show/hide recurrence options based on frequency selection
         promptFrequencyInput.addEventListener('change', () => {
             recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
         });
+        // Disable repetitions input if indefinite is checked
         promptIndefiniteCheckbox.addEventListener('change', () => {
             promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
             if (promptIndefiniteCheckbox.checked) promptRepetitionsInput.value = ""; 
-            else promptRepetitionsInput.value = "1"; 
+            else promptRepetitionsInput.value = "1"; // Default to 1 if not indefinite
         });
         
         if (authorizeGoogleButton) authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; });
         
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
+            // Ignore shortcuts if typing in an input field
             if ([messageInput, scheduledPromptTextInput, scheduledPromptTimeInput, promptRepetitionsInput].includes(activeEl)) return;
             
-            initAudioContext(); 
+            initAudioContext(); // Ensure audio context on keydown
 
-            if (e.code === 'Space') { 
+            if (e.code === 'Space') { // Spacebar for continuous listening toggle
                 e.preventDefault(); 
                 userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen;
-                isEvaActivatedListening = false; 
+                isEvaActivatedListening = false; // Reset Eva activation
 
                 if (userExplicitlyWantsContinuousListen) {
                     stopWakeWordRecognition();
-                    if (!recognitionActive) startCommandRecognition(true); 
+                    if (!recognitionActive) startCommandRecognition(true); // Start continuous command listen
                 } else {
                     stopCommandRecognition();
-                    startWakeWordRecognition(); 
+                    startWakeWordRecognition(); // Go back to wake word
                 }
             }
             else if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleWebcam(); } 
@@ -2071,6 +2316,7 @@
             else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); interruptModeButton.click(); }
         });
 
+        // Toggle info panel visibility
         toggleInfoPanelButton.addEventListener('click', () => {
             infoPanelColumn.classList.toggle('collapsed'); 
             const isCollapsed = infoPanelColumn.classList.contains('collapsed');
@@ -2078,15 +2324,18 @@
             const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
             if(leftIcon) leftIcon.style.display = isCollapsed ? 'none' : 'inline-block'; 
             if(rightIcon) rightIcon.style.display = isCollapsed ? 'inline-block' : 'none';
+            // Resize map if it becomes visible
             if (!isCollapsed && activeInfoPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { 
                 setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350); 
             }
         });
+        // Handle info panel tab clicks
         infoPanelTabsContainer.addEventListener('click', (event) => {
             if (event.target.classList.contains('info-tab-button')) { 
-                setActiveInfoPanel(event.target.dataset.target, false); 
+                setActiveInfoPanel(event.target.dataset.target, false); // Don't auto-open if clicking tab
             }
         });
+        // Toggle code canvas (generated code display) visibility
         if (toggleCodeCanvasButton) { 
             toggleCodeCanvasButton.addEventListener('click', () => {
                 if (evaCodeCanvasContentWrapper) evaCodeCanvasContentWrapper.classList.toggle('expanded');
@@ -2098,6 +2347,7 @@
         }
 
 
+        // Handle calculator button clicks
         if (calculatorButtonsContainer) { 
             calculatorButtonsContainer.addEventListener('click', (event) => {
                 if (event.target.classList.contains('calc-button')) {
@@ -2106,41 +2356,47 @@
             });
         }
 
-        // --- Initialisation ---
+        // --- Initialisation on DOMContentLoaded ---
         document.addEventListener('DOMContentLoaded', () => {
+            // Initialize audio context on first user interaction (click)
             document.body.addEventListener('click', initAudioContext, { once: true });
 
-            updateDateTimeDashboard(); setInterval(updateDateTimeDashboard, 1000);
-            getUserLocationAndFetchWeather(); setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); 
+            updateDateTimeDashboard(); setInterval(updateDateTimeDashboard, 1000); // Update clock every second
+            getUserLocationAndFetchWeather(); setInterval(getUserLocationAndFetchWeather, 15 * 60 * 1000); // Update weather every 15 mins
             
-            connectWebSocket();
+            connectWebSocket(); // Connect to backend
             addMessageToChat("Si vous souhaitez utiliser les fonctionnalités Google (Agenda, Gmail, etc.), cliquez sur le bouton 'Autoriser l'accès aux services Google' ci-dessous.", "assistant");
             
+            // Collapse info panel by default and set toggle icon
             if (infoPanelColumn) infoPanelColumn.classList.add('collapsed'); 
             const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); 
             const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
             if(leftIcon) leftIcon.style.display = 'none'; 
             if(rightIcon) rightIcon.style.display = 'inline-block';
-            setActiveInfoPanel('mapContent', false); 
+            setActiveInfoPanel('mapContent', false); // Set default panel without auto-opening
 
+            // Set initial state for code canvas toggle icon
             if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) {
                  if(codeCanvasIcon) { codeCanvasIcon.classList.remove('fa-minus'); codeCanvasIcon.classList.add('fa-plus');}
             } else {
                  if(codeCanvasIcon) { codeCanvasIcon.classList.remove('fa-plus'); codeCanvasIcon.classList.add('fa-minus');}
             }
-            renderScheduledPrompts(); 
-            updateCalculatorDisplay(); 
+            renderScheduledPrompts(); // Display any saved scheduled prompts
+            updateCalculatorDisplay(); // Initialize calculator display
 
             if (interruptModeButton) interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
+            // Set initial state for scheduler recurrence options
             if(promptFrequencyInput && recurrenceOptionsDiv) recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
             if(promptIndefiniteCheckbox && promptRepetitionsInput) promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
 
+            // Resize map on window resize if it's visible
             window.addEventListener('resize', () => { 
                 if (typeof google !== 'undefined' && google.maps && gMap && activeInfoPanelId === 'mapContent' && infoPanelColumn && !infoPanelColumn.classList.contains('collapsed')) { 
                     google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); 
                 } 
             });
             
+            // Start speech recognition if supported
             if (SpeechRecognitionAPI) {
                 startWakeWordRecognition();
             } else {
