@@ -26,6 +26,18 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 print("ATTENTION: OAUTHLIB_INSECURE_TRANSPORT activé. Pour développement local uniquement.")
 # !!!!! FIN DE L'AVERTISSEMENT !!!!!
 
+# --- Bibliothèques pour le traitement d'URL ---
+try:
+    import requests
+    from bs4 import BeautifulSoup
+    url_processing_available = True
+    # print("DEBUG: Bibliothèques 'requests' et 'BeautifulSoup' trouvées.")
+except ImportError:
+    print("AVERTISSEMENT: Bibliothèques 'requests' ou 'BeautifulSoup' non trouvées.")
+    print("             Pour les installer: pip install requests beautifulsoup4")
+    print("             La fonctionnalité de traitement d'URL sera DÉSACTIVÉE.")
+    url_processing_available = False
+
 
 # --- gTTS Configuration ---
 gtts_enabled = False
@@ -401,13 +413,17 @@ Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petit
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
 L'utilisateur s'appelle Silver.
 
-Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, ou obtenir des détails sur les emails d'un contact), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, ou analyser une URL), tu DOIS la reformuler en un objet JSON structuré.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
-TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases. Ce commentaire doit :
-1. Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte. Pour les itinéraires ("get_directions"), ton commentaire DOIT utiliser les placeholders {destination}, {distance} et {duration} que le système remplira (par exemple : 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
-2. Être concis, spirituel et professionnel.
-3. Ce commentaire textuel doit être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
+
+TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
+Ce commentaire doit :
+1.  Pour `web_search` portant sur une actualité, une information ou un article : Fournir un très court résumé (1-2 phrases) de la découverte principale et mentionner la source principale (ex: 'D'après [Source], [résumé].'). Pour les autres `web_search`, une blague ou un commentaire pertinent.
+2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
+3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+4.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
+Ce commentaire doit être concis, spirituel et professionnel, et être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
 Pour l'action "generate_3d_object", le commentaire doit indiquer que le code OpenSCAD a été généré et peut être utilisé avec le logiciel OpenSCAD.
@@ -428,7 +444,8 @@ Exemples d'entités attendues pour chaque action :
 - "get_contact_email": {"name": "nom du contact dont on veut l'email"}
 - "get_directions": {"origin": "lieu de départ (optionnel, défaut Thonon-les-Bains si non spécifié par l'utilisateur)", "destination": "lieu d'arrivée"}
 - "web_search": {"query": "la question ou les termes à rechercher"}
-- "get_weather_forecast": {} (les entités sont vides, la localisation est gérée côté client)
+- "get_weather_forecast": {} (les entités sont vides, la localisation est gérée côté client, mais tu dois fournir un résumé verbal)
+- "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder')", "params": "dictionnaire de paramètres (ex: {'size': 10} ou {'radius': 5} ou {'height': 20, 'radius_top': 3, 'radius_bottom': 5})"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
@@ -438,6 +455,8 @@ Si une information essentielle pour une entité de commande est manquante (ex: p
 
 Si la requête est une QUESTION GÉNÉRALE, une salutation, ou une conversation qui NE correspond PAS à une commande spécifique listée ci-dessus, tu DOIS répondre directement en langage naturel ET NE PAS générer de JSON.
 Si une question générale PEUT être résolue par une commande (par exemple, 'quel temps fait-il?' peut utiliser 'get_weather_forecast', 'comment aller à Paris?' peut utiliser 'get_directions', 'quelles sont les nouvelles sur X?' peut utiliser 'web_search'), alors tu DOIS prioriser la génération du JSON de la commande correspondante, suivi de ton commentaire spirituel.
+
+Si l'utilisateur fournit une URL pour analyse (avec ou sans question spécifique dessus), tu généreras l'action `process_url`. Le système (Python) te fournira ensuite le contenu textuel de cette page. Ta réponse textuelle subséquente (qui sera énoncée par EVA) devra être soit un résumé du contenu de la page (si aucune question n'est posée), soit la réponse à la question basée sur le contenu. Ce texte ne doit pas être dans le JSON de commande `process_url` lui-même, mais faire partie de ta réponse conversationnelle globale.
 
 Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et intègre tes observations dans ta réponse si c'est pertinent. Si l'utilisateur joint un fichier texte, son contenu te sera fourni précédé d'une note indiquant son nom. Utilise ce contenu textuel comme partie intégrante de la requête de l'utilisateur. Pour les commandes, les images ou fichiers ne sont généralement pas utilisés directement pour remplir les entités, mais peuvent fournir un contexte.
 
@@ -450,7 +469,7 @@ Le lancement d'applications dépend des applications installées sur l'ordinateu
 Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et SerpAPI.
 Le système principal gère un carnet d'adresses local.
 L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spécifiée par l'utilisateur.
-Les prévisions météo sont gérées par le client (JavaScript) en utilisant la localisation de l'utilisateur.
+Les prévisions météo sont gérées par le client (JavaScript) pour l'affichage, mais tu dois fournir un résumé verbal comme indiqué plus haut.
 """
 
 import google.generativeai as genai
@@ -467,7 +486,7 @@ except Exception as e:
     print("Le backend continuera sans le client Gemini.")
 
 gemini_conversation_history = []
-MAX_HISTORY_ITEMS = 5 
+MAX_HISTORY_ITEMS = 4 
 
 def get_google_credentials():
     creds = None
@@ -868,7 +887,7 @@ def get_gemini_response(current_user_parts):
 
 
     try:
-        # print(f"DEBUG Gemini Request: {api_request_contents}") # For debugging request structure
+        # print(f"DEBUG Gemini Request: {json.dumps(api_request_contents, indent=2, default=lambda o: '<non-serializable>' if isinstance(o, Image.Image) else str(o))}")
         response = generative_model.generate_content(api_request_contents)
         # print(f"DEBUG Gemini Response: {response}") # For debugging raw response
         
@@ -1324,8 +1343,9 @@ def handle_google_keep_info(entities): # Example of a graceful "not supported"
     return "Désolé, Google Keep n'a pas d'API publique officielle, je ne peux donc pas gérer vos notes Keep directement."
 
 def handle_get_weather_forecast(entities):
-    # This action is mostly a trigger for the client-side JS to display its own weather panel
-    return "Prévisions météo pour votre localisation." # Generic message, client handles display
+    # This action is mostly a trigger for the client-side JS to display its own weather panel.
+    # The Gemini system prompt now instructs it to provide a verbal summary.
+    return "Prévisions météo pour votre localisation." # Generic message for panel, client handles display, Gemini handles verbal summary.
 
 # --- Handlers for new functionalities ---
 
@@ -1433,6 +1453,125 @@ def handle_open_webpage(entities):
     except Exception as e:
         return f"Erreur lors de l'ouverture de l'URL '{url}': {e}"
 
+def fetch_url_content_for_processing(url_to_fetch):
+    """
+    Fetches and extracts text content from a given URL.
+    Used by handle_process_url.
+    """
+    global url_processing_available
+    if not url_processing_available:
+        return "La fonctionnalité de traitement d'URL est désactivée car les bibliothèques requises sont manquantes."
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(url_to_fetch, headers=headers, timeout=15, allow_redirects=True) # Increased timeout, allow redirects
+        response.raise_for_status() 
+        
+        content_type = response.headers.get('content-type', '').lower()
+        if 'html' in content_type:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            for script_or_style in soup(["script", "style", "header", "footer", "nav", "aside"]): # Remove more non-content tags
+                script_or_style.decompose()
+            
+            # Try to find main content areas
+            main_content_tags = soup.find_all(['main', 'article', 'div.content', 'div.main-content', 'div.post-body'])
+            if main_content_tags:
+                text = "\n".join(tag.get_text(separator='\n', strip=True) for tag in main_content_tags)
+            else: # Fallback to body or all text
+                body = soup.find('body')
+                text = body.get_text(separator='\n', strip=True) if body else soup.get_text(separator='\n', strip=True)
+
+            text = re.sub(r'\n\s*\n+', '\n', text) # Reduce multiple newlines effectively
+            return text.strip()
+        elif 'text/plain' in content_type: # Specifically check for text/plain
+            return response.text.strip()
+        elif 'text' in content_type: # Broader check for other text/* types
+            return response.text.strip()
+        else:
+            return f"Contenu de type non supporté ({content_type}) pour l'analyse."
+            
+    except requests.exceptions.Timeout:
+        return f"Erreur lors de la récupération de l'URL: Le délai d'attente a été dépassé pour {url_to_fetch}."
+    except requests.exceptions.RequestException as e:
+        return f"Erreur lors de la récupération de l'URL: {e}"
+    except Exception as e:
+        return f"Erreur inattendue lors du traitement de l'URL: {e}"
+
+def handle_process_url(entities):
+    """
+    Handles the 'process_url' action. Fetches content from the URL,
+    then uses Gemini to summarize or answer questions about it.
+    """
+    global generative_model # Ensure access to the Gemini model instance
+    url = entities.get("url")
+    question = entities.get("question")
+
+    if not url:
+        return "Veuillez fournir une URL à analyser."
+
+    if not (url.startswith("http://") or url.startswith("https://")):
+        url = 'http://' + url
+        
+    print(f"INFO: [handle_process_url] Début du traitement de l'URL: {url}")
+    content = fetch_url_content_for_processing(url)
+    
+    if not isinstance(content, str) or "Erreur" in content or "Contenu de type non supporté" in content or "désactivée" in content:
+        print(f"WARN: [handle_process_url] Échec de la récupération ou traitement initial du contenu de {url}. Message: {content}")
+        return content 
+
+    if not content.strip():
+        print(f"WARN: [handle_process_url] Contenu vide extrait de {url}.")
+        return "Le contenu de l'URL est vide ou n'a pas pu être extrait de manière significative."
+
+    max_content_length = 18000 # Gemini's context window can be large, but be mindful of performance and cost.
+    if len(content) > max_content_length:
+        content = content[:max_content_length] + "\n\n[Contenu tronqué en raison de la longueur]"
+        print(f"INFO: [handle_process_url] Contenu de {url} tronqué à {max_content_length} caractères.")
+
+    if question:
+        prompt_for_gemini_url_task = f"Analyse le texte suivant, extrait de l'URL {url}:\n\n'''{content}'''\n\nRéponds de manière concise et directe à la question suivante, en te basant UNIQUEMENT sur ce texte: \"{question}\"\nSi le texte ne permet pas de répondre, indique-le clairement."
+    else:
+        prompt_for_gemini_url_task = f"Voici le contenu textuel extrait de l'URL {url}:\n\n'''{content}'''\n\nFais un résumé concis de ce texte en 3 à 5 phrases clés. Mets en évidence les points les plus importants."
+
+    try:
+        if generative_model:
+            # print(f"DEBUG: [handle_process_url] Envoi du prompt à Gemini pour l'analyse de l'URL. Longueur du prompt: {len(prompt_for_gemini_url_task)}")
+            # This is a specific, one-off call. It should not use the main conversation history.
+            url_analysis_gemini_response = generative_model.generate_content(
+                [prompt_for_gemini_url_task],
+                # Consider adding safety_settings if specific content from URLs might be problematic
+                # safety_settings=[
+                #     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+                #     # etc.
+                # ]
+            )
+            
+            response_text = ""
+            if hasattr(url_analysis_gemini_response, 'text'):
+                response_text = url_analysis_gemini_response.text
+            elif hasattr(url_analysis_gemini_response, 'parts') and url_analysis_gemini_response.parts:
+                response_text = "".join([p.text for p in url_analysis_gemini_response.parts if hasattr(p, 'text')])
+            elif hasattr(url_analysis_gemini_response, 'candidates') and url_analysis_gemini_response.candidates and \
+                 hasattr(url_analysis_gemini_response.candidates[0], 'content') and hasattr(url_analysis_gemini_response.candidates[0].content, 'parts'):
+                response_text = "".join([p.text for p in url_analysis_gemini_response.candidates[0].content.parts if hasattr(p, 'text')])
+            else:
+                if hasattr(url_analysis_gemini_response, 'prompt_feedback') and url_analysis_gemini_response.prompt_feedback.block_reason:
+                     block_reason_msg = url_analysis_gemini_response.prompt_feedback.block_reason_message or url_analysis_gemini_response.prompt_feedback.block_reason
+                     print(f"WARN: [handle_process_url] Analyse de l'URL bloquée par Gemini: {block_reason_msg}")
+                     return f"Mon analyse du contenu de l'URL a été bloquée ({block_reason_msg})."
+                print(f"WARN: [handle_process_url] Réponse de Gemini pour l'URL non interprétable: {url_analysis_gemini_response}")
+                return "Je n'ai pas pu obtenir de réponse claire de mon module d'analyse pour cette URL."
+
+            # print(f"DEBUG: [handle_process_url] Réponse de Gemini pour {url}: {response_text[:250]}...")
+            return response_text.strip() if response_text else "L'analyse de l'URL n'a pas produit de résultat textuel."
+        else:
+            print("ERREUR: [handle_process_url] Instance generative_model non disponible.")
+            return "Le module d'analyse de contenu (Gemini) n'est pas disponible actuellement."
+    except Exception as e:
+        print(f"ERREUR: [handle_process_url] Erreur lors de l'appel à Gemini pour l'URL {url}: {e}")
+        traceback.print_exc()
+        return f"Une erreur s'est produite lors de l'analyse du contenu de l'URL avec mon module IA: {type(e).__name__}"
+
+
 # --- End of missing handler functions ---
 
 action_dispatcher = {
@@ -1440,7 +1579,7 @@ action_dispatcher = {
     "list_calendar_events": handle_list_calendar_events, 
     "send_email": handle_send_email,
     "list_emails": handle_list_emails, 
-    "get_contact_emails": handle_get_contact_emails, # New action
+    "get_contact_emails": handle_get_contact_emails, 
     "create_task": handle_create_task,
     "list_tasks": handle_list_tasks,   
     "add_contact": handle_add_contact,
@@ -1449,8 +1588,9 @@ action_dispatcher = {
     "get_contact_email": handle_get_contact_email, 
     "get_directions": handle_get_directions,
     "web_search": handle_web_search,
-    "google_keep_info": handle_google_keep_info, # Example for unsupported features
+    "google_keep_info": handle_google_keep_info, 
     "get_weather_forecast": handle_get_weather_forecast, 
+    "process_url": handle_process_url, # Nouvelle action
     "execute_python_code": handle_execute_python_code,
     "generate_3d_object": handle_generate_3d_object,
     "launch_application": handle_launch_application,
@@ -1605,16 +1745,18 @@ def chat_ws(ws):
                             final_text_response_for_action = action_dispatcher[parsed_command_action](entities) # This is data for the panel or a direct status message
                             action_taken_by_nlu = True
                             
-                            # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary
-                            if gemini_explanation_text and gemini_explanation_text.strip():
+                            # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary OR the direct result of process_url
+                            if parsed_command_action == "process_url":
+                                chat_display_message = str(final_text_response_for_action) # Result of URL processing is the main message
+                            elif gemini_explanation_text and gemini_explanation_text.strip():
                                 chat_display_message = gemini_explanation_text.strip()
-                            else: # Fallback if Gemini provides no separate explanation
+                            else: # Fallback if Gemini provides no separate explanation for other actions
                                 if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
                                     chat_display_message = final_text_response_for_action["summary"] # e.g. directions summary
                                 else:
                                     chat_display_message = str(final_text_response_for_action) # e.g. "Tâche ajoutée"
 
-                            # PANEL DATA LOGIC: Always use final_text_response_for_action for panel content
+                            # PANEL DATA LOGIC:
                             panel_data_content = None 
                             panel_target_id = None    
 
@@ -1656,58 +1798,46 @@ def chat_ws(ws):
                                     panel_data_content = final_text_response_for_action.get("summary", "Détails de l'itinéraire non disponibles.")
                                     panel_target_id = "mapContent"
                                     
-                                    # Format chat_display_message for directions
                                     if final_text_response_for_action.get("status") == "success":
                                         distance = final_text_response_for_action.get("distance", "distance inconnue")
                                         duration = final_text_response_for_action.get("duration", "durée inconnue")
                                         destination_entity = entities.get("destination", "votre destination")
                                         
-                                        # If chat_display_message came from Gemini's explanation (already set), try to format it
-                                        if chat_display_message and "{destination}" in chat_display_message: # Check for placeholder
+                                        if chat_display_message and "{destination}" in chat_display_message: 
                                             try:
                                                 chat_display_message = chat_display_message.format(distance=distance, duration=duration, destination=destination_entity)
                                             except KeyError:
                                                 print(f"WARN: Placeholders non trouvés ou incorrects dans chat_display_message (venant de Gemini) pour get_directions. Message: '{chat_display_message}'")
-                                                # Fallback: append details to Gemini's text if formatting failed
                                                 chat_display_message = f"{chat_display_message.strip()} (Trajet vers {destination_entity}: {distance}, environ {duration})."
-                                        else: # No Gemini explanation with placeholders, or it was an error message. Create/use default.
-                                            if gemini_explanation_text and gemini_explanation_text.strip(): # Gemini provided text, but not with placeholders for formatting
-                                                chat_display_message = f"{gemini_explanation_text.strip()} Le trajet vers {destination_entity} est de {distance} et durera environ {duration}."
-                                            else: # No Gemini explanation at all, create a default formatted message
-                                                chat_display_message = f"Voici l'itinéraire pour {destination_entity}. Le trajet est de {distance} et durera environ {duration}."
-                                    # else: chat_display_message is already an error summary from Gemini or fallback
+                                        elif not (gemini_explanation_text and gemini_explanation_text.strip()): 
+                                            chat_display_message = f"Voici l'itinéraire pour {destination_entity}. Le trajet est de {distance} et durera environ {duration}."
                                 
-                                elif isinstance(final_text_response_for_action, str): # Error string from handler
+                                elif isinstance(final_text_response_for_action, str): 
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
-                                    # chat_display_message would have been set to this string if no gemini_explanation_text
                                     if not (gemini_explanation_text and gemini_explanation_text.strip()):
                                         chat_display_message = final_text_response_for_action
                             
                             elif parsed_command_action == "web_search":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    query_entity = parsed_command_obj.get("entities", {}).get("query", "votre recherche")
-                                    chat_display_message = f"Voici les résultats de recherche pour '{query_entity}'." if "Aucun résultat pertinent" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                # chat_display_message is already set by Gemini's explanation or fallback
                             elif parsed_command_action == "get_weather_forecast":
                                 panel_data_content = str(final_text_response_for_action) 
                                 panel_target_id = "weatherForecastContent" 
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici les prévisions météo."
+                                # chat_display_message is already set by Gemini's explanation or fallback
+                            elif parsed_command_action == "process_url":
+                                panel_data_content = str(final_text_response_for_action) # The summary/answer from Gemini
+                                panel_target_id = "searchContent" # Display in search panel or create a new one
+                                chat_display_message = str(final_text_response_for_action) # This is the main spoken response
                             elif parsed_command_action == "execute_python_code":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "codeDisplayContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Résultat de l'exécution du code Python (voir onglet Code)."
+                                # chat_display_message already set
                             elif parsed_command_action == "generate_3d_object":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "codeDisplayContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Code OpenSCAD généré (voir onglet Code)."
-                            # For launch_application and open_webpage, panel_data_content remains None.
-                            # chat_display_message is already set to the handler's response or Gemini's text.
-                            # No specific panel target needed for these two.
+                                # chat_display_message already set
 
                         else: 
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
@@ -1731,7 +1861,7 @@ def chat_ws(ws):
                     chat_display_message = "Je ne suis pas sûr de pouvoir traiter cette demande."
                 
                 chat_display_message = str(chat_display_message) 
-                # Clean up potential JSON remnants in chat_display_message if it was supposed to be panel content
+                
                 if "```json" in chat_display_message and panel_target_id:
                     if gemini_explanation_text and gemini_explanation_text.strip() and extracted_json_command_str and extracted_json_command_str in gemini_raw_response:
                          chat_display_message = gemini_explanation_text.strip() if gemini_explanation_text.strip() else "Action effectuée."
@@ -1752,45 +1882,20 @@ def chat_ws(ws):
                 audio_data_url = None
                 text_for_gtts = chat_display_message # Base: speak what's in the chat
 
-                if action_taken_by_nlu: # Uniquement si une action NLU a été exécutée
+                # Specific TTS adjustments based on action, if Gemini's explanation wasn't the primary spoken part
+                if action_taken_by_nlu:
                     if parsed_command_action == "get_directions":
                         if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
-                            distance = final_text_response_for_action.get("distance", "distance inconnue")
-                            duration = final_text_response_for_action.get("duration", "durée inconnue")
-                            destination_entity = entities.get("destination", "votre destination") 
-
-                            # text_for_gtts is already chat_display_message (which should now be formatted)
-                            # If chat_display_message was formatted, TTS will use it.
-                            # If formatting failed for chat_display_message and it still contains placeholders,
-                            # this TTS specific formatting acts as a final fallback for voice.
-                            if "{destination}" in text_for_gtts: # Check if formatting is still needed for TTS
-                                try:
-                                    text_for_gtts = text_for_gtts.format(distance=distance, duration=duration, destination=destination_entity)
-                                except KeyError:
-                                    print(f"WARN: Placeholders non trouvés ou incorrects dans text_for_gtts pour get_directions. Message: '{text_for_gtts}'")
-                                    # Fallback for TTS if chat_display_message formatting also failed
-                                    text_for_gtts = f"Pour aller à {destination_entity}, le trajet est de {distance} et durera environ {duration}."
+                            # chat_display_message should already be formatted for TTS by Gemini or fallback.
+                            text_for_gtts = chat_display_message 
                         elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("summary"):
-                            text_for_gtts = final_text_response_for_action["summary"] # Error or not_found summary for TTS
-
-                    elif not (gemini_explanation_text and gemini_explanation_text.strip()):
-                        if parsed_command_action == "create_calendar_event" and "ajouté à votre calendrier" in chat_display_message.lower():
-                            text_for_gtts = "Événement ajouté au calendrier." 
-                        elif parsed_command_action == "web_search" and panel_target_id == "searchContent":
-                            text_for_gtts = "Voici les résultats de recherche."
-                        elif parsed_command_action == "list_contacts" and panel_target_id == "searchContent":
-                            text_for_gtts = "Voici la liste des contacts."
-                        elif parsed_command_action == "list_tasks" and panel_target_id == "taskContent":
-                            text_for_gtts = "Voici la liste des tâches."
-                        elif parsed_command_action == "list_calendar_events" and panel_target_id == "calendarContent":
-                             text_for_gtts = "Voici les événements du calendrier."
-                        elif parsed_command_action == "execute_python_code" and "ATTENTION" in chat_display_message:
-                             text_for_gtts = "Le code Python a été exécuté. Vérifiez les résultats."
-                        elif parsed_command_action == "generate_3d_object":
-                             text_for_gtts = "J'ai généré le code OpenSCAD pour votre objet."
-                        # For launch_application and open_webpage, chat_display_message is already the status.
-
-
+                            text_for_gtts = final_text_response_for_action["summary"] 
+                    elif parsed_command_action == "process_url":
+                        text_for_gtts = chat_display_message # Already the summary/answer
+                    # For other actions, if gemini_explanation_text was primary, it's already in chat_display_message.
+                    # If not, and a simple confirmation was generated, that's fine for TTS.
+                    # The goal is that chat_display_message (which becomes text_for_gtts) IS the summary.
+                
                 elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
                      text_for_gtts = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici le code que j'ai généré."
                 
@@ -1862,8 +1967,10 @@ if __name__ == '__main__':
     print(f"gTTS: {'Oui' if gtts_enabled else 'Non'}")
     print(f"SerpAPI: {'Oui' if serpapi_client_available and serpapi_api_key else 'Non'}")
     print(f"Google Maps API: {'Oui' if google_maps_api_key else 'Non'}")
+    print(f"Traitement d'URL: {'Oui' if url_processing_available else 'Non (requests/BeautifulSoup manquant)'}")
     print(f"Lien d'autorisation Google OAuth: http://localhost:5000/authorize_google")
     print(f"Fichier de tokens OAuth: {TOKEN_PICKLE_FILE}")
     print(f"Fichier de contacts: {CONTACTS_FILE}")
     print("-------------------------------------------")
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+
