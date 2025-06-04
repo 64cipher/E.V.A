@@ -194,18 +194,19 @@ EVA détecte une commande ➜ renvoie un JSON (voir `SYSTEM_MESSAGE_CONTENT` dan
 ## Dépendances principales
 
 ```text
-Flask
-Flask‑Sock
-Flask-CORS
-google‑generativeai
+requests
+flask
+flask‑sock
+flask-cors
 google‑auth‑oauthlib
 google‑api‑python‑client
-google-search-results
 googlemaps
 gtts
 pillow
 simple‑websocket
+google‑generativeai
 dotenv
+google-search-results
 beatifulsoup4
 ```
 
