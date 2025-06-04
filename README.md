@@ -196,6 +196,7 @@ serpapi
 google‑generativeai
 dotenv
 google-search-results
+beatifulsoup4
 ```
 
 Générez le fichier exact via :
