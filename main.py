@@ -406,7 +406,7 @@ Tu privilégies les réponses brèves et claires. Quand une information ou défi
 L'utilisateur s'appelle Silver.
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, ou analyser une URL), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
@@ -442,6 +442,10 @@ Exemples d'entités attendues pour chaque action :
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder')", "params": "dictionnaire de paramètres (ex: {'size': 10} ou {'radius': 5} ou {'height': 20, 'radius_top': 3, 'radius_bottom': 5})"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
+- "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
+- "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
+- "update_task": {"old_task_title": "titre de la tâche à modifier", "new_task_title": "nouveau titre pour la tâche"}
+- "delete_task": {"task_title": "titre de la tâche à supprimer"}
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -750,6 +754,196 @@ def list_google_tasks(max_results=10): # Added default value
         print(f"Erreur inattendue lors de l'accès à Tasks (lecture): {e}")
         traceback.print_exc()
         return f"Erreur inattendue lors de l'accès à Tasks: {type(e).__name__}"
+
+def find_event_id(service, summary_hint, start_dt_obj, original_datetime_str):
+    """
+    Trouve l'ID d'un événement.
+    Si une heure est spécifiée, la recherche est précise.
+    Sinon, la recherche s'étend sur toute la journée.
+    Retourne un tuple (status, data) où status peut être 'success', 'not_found', ou 'multiple_found'.
+    """
+    summary_hint_lower = summary_hint.lower()
+    
+    # Déterminer si la recherche doit être sur toute la journée ou à une heure précise
+    is_date_only_query = 'h' not in original_datetime_str.lower()
+
+    if is_date_only_query:
+        # Fenêtre de recherche pour la journée entière (en UTC)
+        time_min = start_dt_obj.replace(hour=0, minute=0, second=0).astimezone(datetime.timezone.utc).isoformat()
+        time_max = start_dt_obj.replace(hour=23, minute=59, second=59).astimezone(datetime.timezone.utc).isoformat()
+    else:
+        # Fenêtre de recherche précise de +/- 30 minutes autour de l'heure donnée
+        time_min = (start_dt_obj - datetime.timedelta(minutes=30)).astimezone(datetime.timezone.utc).isoformat()
+        time_max = (start_dt_obj + datetime.timedelta(minutes=30)).astimezone(datetime.timezone.utc).isoformat()
+
+    try:
+        events_result = service.events().list(
+            calendarId='primary', timeMin=time_min, timeMax=time_max,
+            singleEvents=True, orderBy='startTime'
+        ).execute()
+        events = events_result.get('items', [])
+        
+        # Filtrer par le titre
+        matching_events = [event for event in events if summary_hint_lower in event.get('summary', '').lower()]
+        
+        if len(matching_events) == 0:
+            return 'not_found', None
+        elif len(matching_events) == 1:
+            return 'success', matching_events[0]['id']
+        else:
+            # Plusieurs événements trouvés, retourner la liste pour que l'utilisateur puisse choisir
+            return 'multiple_found', matching_events
+
+    except Exception as e:
+        print(f"Erreur lors de la recherche de l'ID de l'événement : {e}")
+        traceback.print_exc()
+        return 'error', str(e)
+
+def delete_calendar_event(summary, datetime_str):
+    """Supprime un événement du calendrier en utilisant la logique de recherche améliorée."""
+    creds = get_google_credentials()
+    if not creds: return "Authentification Google requise."
+    
+    start_dt_obj = parse_french_datetime(datetime_str)
+    if not start_dt_obj: return f"Date '{datetime_str}' non comprise."
+
+    try:
+        service = build('calendar', 'v3', credentials=creds)
+        # On passe maintenant la chaîne de caractères originale pour analyse
+        status, data = find_event_id(service, summary, start_dt_obj, datetime_str)
+        
+        if status == 'not_found':
+            return f"Événement '{summary}' non trouvé pour le {start_dt_obj.strftime('%d %B %Y')}."
+        
+        if status == 'error':
+            return f"Une erreur est survenue lors de la recherche de l'événement : {data}"
+
+        if status == 'multiple_found':
+            # Formater un message clair pour l'utilisateur
+            response_text = f"J'ai trouvé plusieurs événements correspondant à '{summary}'. Lequel souhaitez-vous supprimer ?\n"
+            for event in data:
+                start_formatted = format_event_datetime(event['start'].get('dateTime', event['start'].get('date')))
+                response_text += f"- '{event['summary']}' le {start_formatted}\n"
+            response_text += "Veuillez être plus précis en indiquant l'heure."
+            return response_text
+
+        if status == 'success':
+            event_id = data
+            service.events().delete(calendarId='primary', eventId=event_id).execute()
+            return f"Événement '{summary}' supprimé avec succès."
+            
+    except Exception as e:
+        traceback.print_exc()
+        return f"Erreur lors de la suppression de l'événement : {e}"
+
+def update_calendar_event(old_summary, old_datetime_str, new_summary, new_datetime_str):
+    """Met à jour un événement existant en utilisant la logique de recherche améliorée."""
+    creds = get_google_credentials()
+    if not creds: return "Authentification Google requise."
+
+    old_start_dt = parse_french_datetime(old_datetime_str)
+    if not old_start_dt: return f"Ancienne date '{old_datetime_str}' non comprise."
+    
+    # Vérifier qu'il y a bien quelque chose à modifier
+    if not new_summary and not new_datetime_str:
+        return "Veuillez spécifier un nouveau titre ou une nouvelle date/heure pour la modification."
+
+    try:
+        service = build('calendar', 'v3', credentials=creds)
+        
+        # APPEL CORRIGÉ : On passe maintenant old_datetime_str comme 4ème argument
+        status, data = find_event_id(service, old_summary, old_start_dt, old_datetime_str)
+        
+        # GESTION DES ERREURS : On gère les différents retours de find_event_id
+        if status == 'not_found':
+            return f"Événement '{old_summary}' non trouvé pour le {old_start_dt.strftime('%d %B %Y')}."
+        
+        if status == 'error':
+            return f"Une erreur est survenue lors de la recherche de l'événement : {data}"
+
+        if status == 'multiple_found':
+            return f"J'ai trouvé plusieurs événements correspondants à '{old_summary}'. Veuillez être plus précis pour la modification."
+
+        if status == 'success':
+            event_id = data
+            # On récupère l'événement à modifier
+            event = service.events().get(calendarId='primary', eventId=event_id).execute()
+            
+            if new_summary:
+                event['summary'] = new_summary
+            
+            if new_datetime_str:
+                new_start_dt = parse_french_datetime(new_datetime_str)
+                if not new_start_dt: return f"Nouvelle date '{new_datetime_str}' non comprise."
+                
+                # Recalculer la durée pour la conserver
+                end_time_old = datetime.datetime.fromisoformat(event['end']['dateTime'])
+                start_time_old = datetime.datetime.fromisoformat(event['start']['dateTime'])
+                duration = end_time_old - start_time_old
+
+                event['start']['dateTime'] = new_start_dt.isoformat()
+                event['end']['dateTime'] = (new_start_dt + duration).isoformat()
+
+            updated_event = service.events().update(calendarId='primary', eventId=event_id, body=event).execute()
+            return f"Événement mis à jour : '{updated_event.get('summary', 'Sans titre')}'."
+
+    except Exception as e:
+        traceback.print_exc()
+        return f"Erreur lors de la mise à jour de l'événement : {e}"
+
+def find_task_id(service, task_title):
+    """Trouve l'ID d'une tâche par son titre exact (insensible à la casse)."""
+    try:
+        tasklists = service.tasklists().list().execute().get('items', [])
+        if not tasklists: return None, None
+        
+        for tasklist in tasklists:
+            tasks = service.tasks().list(tasklist=tasklist['id'], showCompleted=False).execute().get('items', [])
+            for task in tasks:
+                if task.get('title', '').lower() == task_title.lower():
+                    return task['id'], tasklist['id']
+        return None, None
+    except Exception as e:
+        print(f"Erreur lors de la recherche de l'ID de la tâche : {e}")
+        return None, None
+
+def delete_google_task(title):
+    """Supprime une tâche de Google Tasks."""
+    creds = get_google_credentials()
+    if not creds: return "Authentification Google requise."
+    
+    try:
+        service = build('tasks', 'v1', credentials=creds)
+        task_id, tasklist_id = find_task_id(service, title)
+        
+        if not task_id:
+            return f"Tâche '{title}' non trouvée dans les listes actives."
+            
+        service.tasks().delete(tasklist=tasklist_id, task=task_id).execute()
+        return f"Tâche '{title}' supprimée."
+    except Exception as e:
+        traceback.print_exc()
+        return f"Erreur lors de la suppression de la tâche : {e}"
+
+def update_google_task(old_title, new_title):
+    """Met à jour le titre d'une tâche."""
+    creds = get_google_credentials()
+    if not creds: return "Authentification Google requise."
+
+    try:
+        service = build('tasks', 'v1', credentials=creds)
+        task_id, tasklist_id = find_task_id(service, old_title)
+        
+        if not task_id:
+            return f"Tâche '{old_title}' non trouvée."
+            
+        task_body = {'id': task_id, 'title': new_title}
+        # Utiliser patch est plus efficace car il n'envoie que les champs modifiés
+        updated_task = service.tasks().patch(tasklist=tasklist_id, task=task_id, body=task_body).execute()
+        return f"Tâche renommée en '{updated_task['title']}'."
+    except Exception as e:
+        traceback.print_exc()
+        return f"Erreur lors de la mise à jour de la tâche : {e}"    
 
 # --- Fonctions Google Maps et Recherche Web ---
 def get_directions_from_google_maps_api(origin, destination):
@@ -1608,17 +1802,49 @@ def handle_process_url(entities):
         traceback.print_exc()
         return f"Une erreur s'est produite lors de l'analyse du contenu de l'URL avec mon module IA: {type(e).__name__}"
 
+def handle_delete_calendar_event(entities):
+    summary = entities.get("event_summary")
+    datetime_str = entities.get("datetime_str")
+    if summary and datetime_str:
+        return delete_calendar_event(summary, datetime_str)
+    return "Veuillez spécifier le titre et la date de l'événement à supprimer."
+
+def handle_update_calendar_event(entities):
+    old_summary = entities.get("old_event_summary")
+    old_datetime = entities.get("old_datetime_str")
+    new_summary = entities.get("new_summary")
+    new_datetime = entities.get("new_datetime_str")
+    if old_summary and old_datetime and (new_summary or new_datetime):
+        return update_calendar_event(old_summary, old_datetime, new_summary, new_datetime)
+    return "J'ai besoin de l'événement original et des nouvelles informations pour le mettre à jour."
+
+def handle_delete_task(entities):
+    title = entities.get("task_title")
+    if title:
+        return delete_google_task(title)
+    return "Quelle tâche souhaitez-vous supprimer ?"
+
+def handle_update_task(entities):
+    old_title = entities.get("old_task_title")
+    new_title = entities.get("new_task_title")
+    if old_title and new_title:
+        return update_google_task(old_title, new_title)
+    return "Veuillez me donner le titre actuel et le nouveau titre de la tâche."
 
 # --- End of missing handler functions ---
 
 action_dispatcher = {
     "create_calendar_event": handle_create_calendar_event,
     "list_calendar_events": handle_list_calendar_events,
+    "update_calendar_event": handle_update_calendar_event,
+    "delete_calendar_event": handle_delete_calendar_event,
     "send_email": handle_send_email,
     "list_emails": handle_list_emails,
     "get_contact_emails": handle_get_contact_emails,
     "create_task": handle_create_task,
     "list_tasks": handle_list_tasks,
+    "update_task": handle_update_task,
+    "delete_task": handle_delete_task,
     "add_contact": handle_add_contact,
     "list_contacts": handle_list_contacts,
     "remove_contact": handle_remove_contact,
@@ -1627,7 +1853,7 @@ action_dispatcher = {
     "web_search": handle_web_search,
     "google_keep_info": handle_google_keep_info,
     "get_weather_forecast": handle_get_weather_forecast,
-    "process_url": handle_process_url, # Nouvelle action
+    "process_url": handle_process_url,
     "execute_python_code": handle_execute_python_code,
     "generate_3d_object": handle_generate_3d_object,
     "launch_application": handle_launch_application,
@@ -1782,6 +2008,18 @@ def chat_ws(ws):
                             final_text_response_for_action = action_dispatcher[parsed_command_action](entities) # This is data for the panel or a direct status message
                             action_taken_by_nlu = True
 
+                            if parsed_command_action in ["create_task", "update_task", "delete_task"]:
+                                # Si l'action n'a pas retourné d'erreur, on rafraîchit la liste des tâches
+                                if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
+                                    panel_data_content = list_google_tasks() # On recharge la liste complète
+                                    panel_target_id = "taskContent" # On cible le panneau des tâches
+                            
+                            elif parsed_command_action in ["create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
+                                # Si l'action n'a pas retourné d'erreur, on rafraîchit la liste des événements
+                                if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
+                                    panel_data_content = handle_list_calendar_events(entities={}) # On recharge la liste des événements
+                                    panel_target_id = "calendarContent" # On cible le panneau du calendrier
+
                             # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary OR the direct result of process_url
                             if parsed_command_action == "process_url":
                                 chat_display_message = str(final_text_response_for_action) # Result of URL processing is the main message
@@ -1796,12 +2034,21 @@ def chat_ws(ws):
                             # PANEL DATA LOGIC:
                             panel_data_content = None
                             panel_target_id = None
-
-                            if parsed_command_action == "list_calendar_events":
-                                panel_data_content = str(final_text_response_for_action)
+                            
+                            # Logique pour le panneau Calendrier
+                            if parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
                                 panel_target_id = "calendarContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()): # Fallback chat message if no wit
-                                    chat_display_message = "Voici vos événements." if "Aucun événement" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                # Si c'est une action de modification, on recharge la liste.
+                                if parsed_command_action != "list_calendar_events":
+                                    if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
+                                        panel_data_content = handle_list_calendar_events({}) # On recharge la liste complète
+                                else: # Sinon (pour list_calendar_events), on utilise le résultat directement
+                                    panel_data_content = str(final_text_response_for_action)
+
+                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
+                                    chat_display_message = "Voici vos événements." if "Aucun événement" not in str(panel_data_content) else str(panel_data_content)
+
+                            # Logique pour le panneau Email
                             elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
@@ -1819,11 +2066,19 @@ def chat_ws(ws):
                                         chat_display_message = f"Voici le dernier email de {contact_id}."
                                     else:
                                         chat_display_message = f"Voici les emails pour {contact_id}."
-                            elif parsed_command_action == "list_tasks":
-                                panel_data_content = str(final_text_response_for_action)
+                            
+                            # Logique pour le panneau Tâches
+                            elif parsed_command_action in ["list_tasks", "create_task", "update_task", "delete_task"]:
                                 panel_target_id = "taskContent"
+                                # Si c'est une action de modification, on recharge la liste.
+                                if parsed_command_action != "list_tasks":
+                                     if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
+                                        panel_data_content = list_google_tasks() # On recharge la liste complète
+                                else: # Sinon (pour list_tasks), on utilise le résultat directement
+                                    panel_data_content = str(final_text_response_for_action)
+
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                    chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(panel_data_content) else str(panel_data_content)
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
@@ -2047,4 +2302,4 @@ if __name__ == '__main__':
     print(f"Fichier de contacts: {CONTACTS_FILE}")
     print("-------------------------------------------")
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
-
+    
