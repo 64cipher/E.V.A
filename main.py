@@ -416,6 +416,9 @@ def format_event_datetime(start_str):
         return start_str # Fallback to original string if parsing fails
 
 
+# =====================================================================================
+# SYSTEM PROMPT
+# =====================================================================================
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Enhanced Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
@@ -424,8 +427,13 @@ Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petit
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
 L'utilisateur s'appelle Silver.
 
+# --- Principe Fondamental sur la Connaissance Actuelle ---
+Ta base de connaissance interne s'arrête à ta dernière date d'entraînement. Pour toute question sur l'actualité, les événements récents, ou des informations nouvelles, les résultats fournis par l'action `web_search` DOIVENT être considérés comme la source de vérité la plus actuelle et la plus fiable. Tu dois baser ta réponse prioritairement sur ces résultats de recherche, même s'ils contredisent tes connaissances internes. Évite les phrases comme "Selon mes connaissances jusqu'en 2024..." lorsque tu disposes de résultats de recherche récents pour répondre.
+Utilises l'action' "get_current_datetime" pour récupérer la date exacte afin de donner un résumé de la recherche demandée pour cette date.
+# --- Fin du Principe ---
+
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage", "get_current_datetime") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions", "process_audio"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
@@ -435,7 +443,7 @@ Pour `web_search` : Fournir systématiquement un résumé concis des information
 3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
 5.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
-Ce commentaire doit être concis, spirituel et professionnel, et être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
+Ce commentaire doit être concis, spirituel et professionnel, et être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?", 'quel jour sommes-nous ?' peut utiliser 'get_current_datetime'), le JSON sera généré et ce commentaire suivra.
 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
 Pour l'action "generate_3d_object", le commentaire doit indiquer que le code OpenSCAD a été généré et peut être utilisé avec le logiciel OpenSCAD.
@@ -457,6 +465,7 @@ Exemples d'entités attendues pour chaque action :
 - "get_directions": {"origin": "lieu de départ (optionnel, défaut Thonon-les-Bains si non spécifié par l'utilisateur)", "destination": "lieu d'arrivée"}
 - "web_search": {"query": "la question ou les termes à rechercher"}
 - "get_weather_forecast": {} (les entités sont vides, la localisation est gérée côté client, mais tu dois fournir un résumé verbal)
+- "get_current_datetime": {} (ne nécessite aucune entité)
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
@@ -1031,86 +1040,99 @@ def get_directions_from_google_maps_api(origin, destination):
             "destination": destination
         }
 
-def perform_web_search(query, num_results=6):
+# =====================================================================================
+# MODIFICATION 1 : NOUVELLE ARCHITECTURE POUR LA RECHERCHE WEB (RAG)
+# =====================================================================================
+
+def _perform_raw_web_search(query, num_results=6):
     """
-    Effectue une recherche web en utilisant Google Custom Search API.
-    Retourne un dictionnaire avec 'panel_summary' et 'top_source_name'.
+    Effectue une recherche web BRUTE et retourne les résultats non traités.
+    C'est une fonction interne appelée par handle_web_search.
+    Retourne un dictionnaire avec les résultats bruts.
     """
     global google_custom_search_available, google_custom_search_api_key, google_custom_search_cx
     if not google_custom_search_available:
-        return {"panel_summary": "Service de recherche web Google Custom Search non configuré ou clé/CX manquant.", "top_source_name": "N/A"}
+        return {"raw_results": "Service de recherche web Google Custom Search non configuré.", "top_source_name": "N/A"}
 
     try:
-        # Le service 'build' est déjà importé via 'from googleapiclient.discovery import build'
         service = build("customsearch", "v1", developerKey=google_custom_search_api_key)
-        # Exécute la requête de recherche
-        # Limite num_results à 10 max car c'est la limite par requête de l'API Custom Search
         num_results_api = min(num_results, 10)
         results = service.cse().list(
             q=query,
             cx=google_custom_search_cx,
             num=num_results_api,
-            hl='fr',  # Langue des résultats souhaitée
-            gl='fr'   # Géolocalisation pour biaiser les résultats (France)
+            hl='fr',
+            gl='fr'
         ).execute()
 
         search_items = results.get('items', [])
-        top_source_name = "Source inconnue"
-        summary_details_text = f"Résultats web pour '{query}':\n"
-
         if not search_items:
-            return {"panel_summary": f"Aucun résultat pertinent trouvé pour '{query}'.", "top_source_name": "N/A"}
+            return {"raw_results": f"Aucun résultat pertinent trouvé pour '{query}'.", "top_source_name": "N/A"}
 
-        # Déterminer la source principale à partir du premier résultat
-        if search_items:
-            try:
-                first_item_link = search_items[0].get('link')
-                if first_item_link:
-                    # Essayer d'extraire le nom de domaine
-                    domain_match = re.search(r"https?://(?:www\.)?([^/]+)", first_item_link)
-                    if domain_match:
-                        top_source_name = domain_match.group(1)
-                    else:
-                        # Fallback sur displayLink si l'extraction du domaine échoue
-                        top_source_name = search_items[0].get('displayLink', "Source inconnue")
-                else:
-                    top_source_name = search_items[0].get('displayLink', "Source inconnue")
-            except Exception:
-                # top_source_name reste "Source inconnue" en cas d'erreur
-                pass
-
-        # Construire le résumé des résultats pour affichage
+        # Formatage des résultats bruts pour le panel
+        summary_details_text = f"Résultats web bruts pour '{query}':\n\n"
         for i, item in enumerate(search_items):
             title = item.get('title', 'Sans titre')
-            snippet = item.get('snippet', 'N/A') # 'snippet' contient un résumé du contenu
-            link = item.get('link', '#') # URL de la page
-            display_link = item.get('displayLink', link) # Souvent le nom de domaine
-
+            snippet = item.get('snippet', 'N/A')
+            link = item.get('link', '#')
             summary_details_text += f"{i+1}. {title}\n"
-            if snippet:
-                summary_details_text += f"   Extrait: {snippet}\n"
+            summary_details_text += f"   Extrait: {snippet}\n"
             summary_details_text += f"   Source: {link}\n\n"
-
-        # L'API Google Custom Search ne fournit pas d'équivalent direct à "answer_box" ou "knowledge_graph"
-        # comme SerpApi. Le 'panel_summary' sera la liste formatée des résultats.
-        return {"panel_summary": summary_details_text.strip(), "top_source_name": top_source_name}
-
-    except HttpError as e:
-        # Gérer les erreurs spécifiques à l'API Google
-        error_details_str = e.content.decode('utf-8') if e.content else "{}"
-        try:
-            error_details = json.loads(error_details_str)
-            error_message = error_details.get("error", {}).get("message", str(e))
-        except json.JSONDecodeError:
-            error_message = error_details_str if error_details_str else str(e)
         
-        print(f"Erreur API Google Custom Search: {error_message}")
-        traceback.print_exc()
-        return {"panel_summary": f"Erreur lors de la recherche web (Google Custom Search): {error_message}", "top_source_name": "Erreur"}
+        top_source_name = search_items[0].get('displayLink', "Source inconnue")
+        return {"raw_results": summary_details_text.strip(), "top_source_name": top_source_name}
+
     except Exception as e:
-        print(f"Erreur inattendue lors de la recherche web (Google Custom Search): {e}")
+        print(f"Erreur inattendue lors de la recherche web brute: {e}")
         traceback.print_exc()
-        return {"panel_summary": f"Erreur inattendue lors de la recherche web: {type(e).__name__}", "top_source_name": "Erreur"}
+        return {"raw_results": f"Erreur inattendue lors de la recherche web: {type(e).__name__}", "top_source_name": "Erreur"}
+
+def handle_web_search(entities):
+    """
+    Orchestre la recherche web et la synthèse de la réponse.
+    Appelle la recherche brute, puis envoie les résultats à Gemini pour la synthèse.
+    """
+    query = entities.get("query")
+    if not query:
+        return {"synthesized_answer": "Que souhaitez-vous rechercher sur le web ?", "raw_results": "", "top_source_name": "N/A"}
+
+    # 1. Obtenir les résultats de recherche bruts
+    search_result_dict = _perform_raw_web_search(query)
+    raw_search_results = search_result_dict.get("raw_results")
+
+    # Si la recherche a échoué, on retourne l'erreur directement
+    if "Erreur" in raw_search_results or "Aucun résultat" in raw_search_results or "non configuré" in raw_search_results:
+        return {"synthesized_answer": raw_search_results, "raw_results": raw_search_results, "top_source_name": "N/A"}
+
+    # 2. Préparer un prompt pour la synthèse
+    synthesis_prompt = (
+        f"En te basant EXCLUSIVEMENT sur les résultats de recherche suivants pour la question de l'utilisateur \"{query}\", "
+        "fournis une réponse directe et concise. Ne mentionne pas que tu te bases sur des résultats de recherche, "
+        "énonce simplement le fait comme si tu le savais. Ignore tes connaissances antérieures.\n\n"
+        "--- RÉSULTATS DE RECHERCHE ---\n"
+        f"{raw_search_results}\n\n"
+        "--- TA RÉPONSE SYNTHÉTISÉE ---\n"
+    )
+
+    # 3. Envoyer le prompt de synthèse à Gemini
+    try:
+        if not generative_model:
+            raise Exception("Client Gemini non configuré.")
+        
+        # Cet appel est spécifique et ne doit pas utiliser l'historique de conversation principal
+        synthesis_response = generative_model.generate_content([synthesis_prompt])
+        synthesized_answer = synthesis_response.text
+
+    except Exception as e:
+        print(f"Erreur lors de la synthèse de la recherche web : {e}")
+        synthesized_answer = "J'ai trouvé des résultats, mais je n'ai pas pu les synthétiser."
+
+    # 4. Retourner un dictionnaire complet avec la réponse synthétisée et les résultats bruts
+    return {
+        "synthesized_answer": synthesized_answer,
+        "raw_results": raw_search_results,
+        "top_source_name": search_result_dict.get("top_source_name")
+    }
 
 
 # --- Fonctions Gemini et gTTS ---
@@ -1585,13 +1607,6 @@ def handle_get_directions(entities):
         "destination": destination
     }
 
-
-def handle_web_search(entities):
-    query = entities.get("query")
-    if query:
-        return perform_web_search(query) # Appel de la nouvelle fonction
-    return {"panel_summary": "Que souhaitez-vous rechercher sur le web ?", "top_source_name": "N/A"} # Assurer un retour dict
-
 def handle_google_keep_info(entities): # Example of a graceful "not supported"
     return "Désolé, Google Keep n'a pas d'API publique officielle, je ne peux donc pas gérer vos notes Keep directement."
 
@@ -1600,6 +1615,36 @@ def handle_get_weather_forecast(entities):
     # The Gemini system prompt now instructs it to provide a verbal summary.
     return "Prévisions météo pour votre localisation." # Generic message for panel, client handles display, Gemini handles verbal summary.
 
+def handle_get_current_datetime(entities):
+    """
+    Retourne la date et l'heure actuelles dans un format textuel en français.
+    """
+    # Dictionnaires pour la traduction en français
+    jours = {
+        "Monday": "lundi", "Tuesday": "mardi", "Wednesday": "mercredi",
+        "Thursday": "jeudi", "Friday": "vendredi", "Saturday": "samedi", "Sunday": "dimanche"
+    }
+    mois = {
+        "January": "janvier", "February": "février", "March": "mars", "April": "avril",
+        "May": "mai", "June": "juin", "July": "juillet", "August": "août",
+        "September": "septembre", "October": "octobre", "November": "novembre", "December": "décembre"
+    }
+
+    # Obtenir la date et l'heure actuelles
+    now = datetime.datetime.now()
+
+    # Traduire le jour et le mois
+    jour_en = now.strftime('%A')
+    mois_en = now.strftime('%B')
+    jour_fr = jours.get(jour_en, jour_en)
+    mois_fr = mois.get(mois_en, mois_en)
+
+    # Formater la chaîne finale
+    # Exemple: "Nous sommes le dimanche 8 juin 2025 et il est 14h30."
+    date_heure_str = f"Nous sommes le {jour_fr} {now.day} {mois_fr} {now.year} et il est {now.strftime('%Hh%M')}."
+    
+    return date_heure_str
+    
 # --- Handlers for new functionalities ---
 def handle_process_audio(entities):
     """
@@ -1894,6 +1939,9 @@ def handle_update_task(entities):
 
 # --- End of missing handler functions ---
 
+# =====================================================================================
+# ACTION DISPATCHER
+# =====================================================================================
 action_dispatcher = {
     "create_calendar_event": handle_create_calendar_event,
     "list_calendar_events": handle_list_calendar_events,
@@ -1914,6 +1962,7 @@ action_dispatcher = {
     "web_search": handle_web_search,
     "google_keep_info": handle_google_keep_info,
     "get_weather_forecast": handle_get_weather_forecast,
+    "get_current_datetime": handle_get_current_datetime,
     "process_url": handle_process_url,
     "process_audio": handle_process_audio,
     "execute_python_code": handle_execute_python_code,
@@ -2086,33 +2135,40 @@ def chat_ws(ws):
                             final_text_response_for_action = action_dispatcher[parsed_command_action](entities) 
                             action_taken_by_nlu = True
 
-                            if parsed_command_action in ["create_task", "update_task", "delete_task"]:
-                                if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                    panel_data_content = list_google_tasks()
-                                    panel_target_id = "taskContent" 
                             
-                            elif parsed_command_action in ["create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
-                                if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                    panel_data_content = handle_list_calendar_events(entities={})
-                                    panel_target_id = "calendarContent"
-
-                            if parsed_command_action == "process_url":
-                                chat_display_message = str(final_text_response_for_action) 
-                            elif parsed_command_action == "process_audio":
+                            # --- LOGIQUE D'AFFICHAGE DU CHAT ---
+                            # D'abord, on traite les cas où le résultat de l'action EST la réponse directe.
+                            if parsed_command_action == "get_current_datetime":
                                 chat_display_message = str(final_text_response_for_action)
+                            
+                            # Cas spécifique pour la recherche web qui retourne un dictionnaire complexe
+                            elif parsed_command_action == "web_search":
+                                chat_display_message = final_text_response_for_action.get("synthesized_answer", "Erreur de synthèse.")
+                            
+                            # Ensuite, on vérifie si Gemini a fourni un commentaire pertinent pour les autres actions.
                             elif gemini_explanation_text and gemini_explanation_text.strip():
                                 chat_display_message = gemini_explanation_text.strip()
-                            else: 
+                            
+                            # En dernier recours, on formate le résultat de l'action.
+                            else:
                                 if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
                                     chat_display_message = final_text_response_for_action["summary"]
                                 else:
                                     chat_display_message = str(final_text_response_for_action)
 
-                            # PANEL DATA LOGIC:
+                            
+                            # --- LOGIQUE D'AFFICHAGE DES PANNEAUX ---
                             panel_data_content = None
                             panel_target_id = None
                             
-                            if parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
+                            # =====================================================================================
+                            # MODIFICATION 2 : LOGIQUE DU PANNEAU DE RECHERCHE MISE A JOUR
+                            # =====================================================================================
+                            if parsed_command_action == "web_search":
+                                panel_data_content = final_text_response_for_action.get("raw_results", "Aucun résultat brut à afficher.")
+                                panel_target_id = "searchContent"
+                            
+                            elif parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
                                 panel_target_id = "calendarContent"
                                 if parsed_command_action != "list_calendar_events":
                                     if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
@@ -2120,26 +2176,13 @@ def chat_ws(ws):
                                 else: 
                                     panel_data_content = str(final_text_response_for_action)
 
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici vos événements." if "Aucun événement" not in str(panel_data_content) else str(panel_data_content)
-
                             elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici vos e-mails non lus." if "Aucun e-mail non lu" not in str(final_text_response_for_action) else str(final_text_response_for_action)
+                                
                             elif parsed_command_action == "get_contact_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    mode = entities.get("retrieve_mode", "summary")
-                                    contact_id = entities.get("contact_identifier", "le contact")
-                                    if "Aucun email trouvé" in panel_data_content or "non trouvé" in panel_data_content.lower():
-                                        chat_display_message = panel_data_content
-                                    elif mode == "full_last":
-                                        chat_display_message = f"Voici le dernier email de {contact_id}."
-                                    else:
-                                        chat_display_message = f"Voici les emails pour {contact_id}."
                             
                             elif parsed_command_action in ["list_tasks", "create_task", "update_task", "delete_task"]:
                                 panel_target_id = "taskContent"
@@ -2149,13 +2192,9 @@ def chat_ws(ws):
                                 else: 
                                     panel_data_content = str(final_text_response_for_action)
 
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici la liste des tâches." if "Aucune tâche active" not in str(panel_data_content) else str(panel_data_content)
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
-                                if not (gemini_explanation_text and gemini_explanation_text.strip()):
-                                    chat_display_message = "Voici la liste de vos contacts." if "carnet d'adresses est vide" not in str(final_text_response_for_action) else str(final_text_response_for_action)
 
                             elif parsed_command_action == "get_directions":
                                 if isinstance(final_text_response_for_action, dict):
@@ -2166,19 +2205,11 @@ def chat_ws(ws):
                                         distance = final_text_response_for_action.get("distance", "distance inconnue")
                                         duration = final_text_response_for_action.get("duration", "durée inconnue")
                                         destination_entity = entities.get("destination", "votre destination")
-
                                         default_formatted_message = f"En route pour {destination_entity}! Le trajet est de {distance} et devrait prendre environ {duration}. Bon voyage !"
-
                                         if gemini_explanation_text and gemini_explanation_text.strip():
-                                            if "{distance}" in gemini_explanation_text or \
-                                               "{duration}" in gemini_explanation_text or \
-                                               "{destination}" in gemini_explanation_text:
+                                            if "{distance}" in gemini_explanation_text or "{duration}" in gemini_explanation_text or "{destination}" in gemini_explanation_text:
                                                 try:
-                                                    chat_display_message = gemini_explanation_text.format(
-                                                        destination=destination_entity,
-                                                        distance=distance,
-                                                        duration=duration
-                                                    )
+                                                    chat_display_message = gemini_explanation_text.format(destination=destination_entity, distance=distance, duration=duration)
                                                 except Exception as e_fmt:
                                                     print(f"WARN: Erreur lors du formatage du message de Gemini pour get_directions: {e_fmt}. Original: '{gemini_explanation_text}'")
                                                     chat_display_message = default_formatted_message
@@ -2186,33 +2217,10 @@ def chat_ws(ws):
                                                 chat_display_message = gemini_explanation_text
                                         else:
                                             chat_display_message = default_formatted_message
-
                                 elif isinstance(final_text_response_for_action, str): 
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
 
-                            elif parsed_command_action == "web_search":
-                                top_source = "Source inconnue" # Default
-                                if isinstance(final_text_response_for_action, dict):
-                                    panel_data_content = final_text_response_for_action.get("panel_summary", "Impossible d'afficher les résultats de recherche.")
-                                    top_source = final_text_response_for_action.get("top_source_name", "Source inconnue")
-                                    if isinstance(top_source, str) and top_source.startswith("http"):
-                                        try:
-                                            domain_match = re.search(r"https?://(?:www\.)?([^/]+)", top_source)
-                                            if domain_match:
-                                                top_source = domain_match.group(1)
-                                        except Exception:
-                                            pass 
-                                else:
-                                    panel_data_content = str(final_text_response_for_action)
-
-                                panel_target_id = "searchContent"
-
-                                if chat_display_message and isinstance(chat_display_message, str):
-                                    if "[Source]" in chat_display_message:
-                                        chat_display_message = chat_display_message.replace("[Source]", top_source)
-                                    elif "[source]" in chat_display_message: 
-                                        chat_display_message = chat_display_message.replace("[source]", top_source)
                             elif parsed_command_action == "get_weather_forecast":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "weatherForecastContent"
