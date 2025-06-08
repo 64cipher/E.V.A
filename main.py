@@ -476,7 +476,7 @@ Exemples d'entités attendues pour chaque action :
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
-- "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}"}
+- "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
@@ -1851,15 +1851,6 @@ def cleanup_temp_file(path, delay=2.0):
 
 # REMPLACEZ L'ANCIENNE FONCTION PAR CELLE-CI
 def handle_generate_3d_object(entities):
-    global pyglet_available # Assurez-vous que cette ligne est bien présente si elle ne l'était pas
-    # La ligne ci-dessus est pour la compatibilité avec votre code original, le viewer.py est maintenant indépendant.
-
-    # Le viewer est maintenant PyVista, donc la vérification pyglet n'est plus pertinente pour le lancement.
-    # On la garde pour informer l'utilisateur si la bibliothèque 3D est conceptuellement "activée".
-
-    # NOTE : Idéalement, on vérifierait si PyVista est disponible.
-    # Pour l'instant, on se base sur le fait qu'il a été installé.
-
     object_type = entities.get("object_type", "").lower()
     params = entities.get("params", {})
 
@@ -1870,39 +1861,39 @@ def handle_generate_3d_object(entities):
     command = [sys.executable, viewer_script_path, object_type]
 
     # Construire les arguments de la commande en fonction du type d'objet
-    if object_type == "cube":
+    if object_type == "model":
+        model_name = params.get("name")
+        if not model_name:
+            return "Veuillez spécifier un nom de modèle à charger (ex: 'table', 'chaise')."
+        command.append(model_name)
+
+    elif object_type in ["cube", "sphere", "plane"]:
+        # Ces formes prennent un seul paramètre numérique
         size = str(params.get("size", 1.0))
         command.append(size)
-    elif object_type == "sphere":
-        # Notre viewer.py pour la sphère prend le diamètre comme 'size'
-        size = str(params.get("size", 1.0))
-        command.append(size)
-    elif object_type == "cylinder":
-        radius = str(params.get("radius", 0.5))
-        height = str(params.get("height", 2.0))
-        command.append(radius)
-        command.append(height)
-    elif object_type == "cone":
-        radius = str(params.get("radius", 1.0))
-        height = str(params.get("height", 2.0))
-        command.append(radius)
-        command.append(height)
-    elif object_type == "plane":
-        size = str(params.get("size", 2.0))
-        command.append(size)
-    elif object_type == "torus":
-        radius = str(params.get("radius", 1.0))
-        thickness = str(params.get("thickness", 0.3))
-        command.append(radius)
-        command.append(thickness)
+
+    elif object_type in ["cylinder", "cone", "torus"]:
+        # Ces formes peuvent prendre un ou deux paramètres numériques
+        # Pour simplifier, nous extrayons les valeurs et laissons viewer.py gérer les valeurs par défaut
+        # Note : une logique plus complexe pourrait extraire 'radius', 'height', 'thickness' spécifiquement
+        # mais pour l'instant, on se base sur l'ordre des valeurs.
+        param1 = str(params.get("radius", params.get("size", 1.0))) # Accepte radius ou size
+        command.append(param1)
+
+        # Pour le deuxième paramètre
+        if 'height' in params:
+            command.append(str(params['height']))
+        elif 'thickness' in params:
+            command.append(str(params['thickness']))
+
     else:
-        return f"Type d'objet 3D non reconnu: '{object_type}'. Formes supportées : cube, sphere, cylinder, cone, plane, tore."
+        return f"Type d'objet 3D non reconnu: '{object_type}'. Formes supportées : cube, sphere, cylinder, cone, plane, tore, model."
 
     try:
         print(f"INFO: Lancement du visualiseur 3D avec la commande: {' '.join(command)}")
-        # Pas besoin de logs pour PyVista, il est stable.
         subprocess.Popen(command)
-        return f"Parfait, je lance la fenêtre de visualisation pour un(e) {object_type}."
+        # Le message de confirmation est maintenant plus générique
+        return f"Parfait, je lance la fenêtre de visualisation pour afficher : {object_type}."
     except Exception as e:
         traceback.print_exc()
         return f"Erreur lors du lancement du visualiseur 3D : {e}"
