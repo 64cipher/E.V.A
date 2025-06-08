@@ -15,6 +15,7 @@ import calendar # Ajouté pour la gestion des mois
 import subprocess # Pour exécuter des scripts et lancer des applications
 import webbrowser # Pour ouvrir des pages web
 import contextlib # Pour redirect_stdout avec exec
+import tempfile # Pour gérer les fichiers temporaires
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -25,6 +26,21 @@ load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 print("ATTENTION: OAUTHLIB_INSECURE_TRANSPORT activé. Pour développement local uniquement.")
 # !!!!! FIN DE L'AVERTISSEMENT !!!!!
+
+# --- Configuration de Whisper ---
+try:
+    import whisper
+    whisper_available = True
+    whisper_model = whisper.load_model("base") # "tiny", "base", "small", "medium", "large"
+    print("DEBUG: Modèle Whisper chargé.")
+except ImportError:
+    print("AVERTISSESEMENT: Bibliothèque 'openai-whisper' non trouvée.")
+    print("             Pour l'installer: pip install openai-whisper")
+    print("             La fonctionnalité de transcription audio sera DÉSACTIVÉE.")
+    whisper_available = False
+except Exception as e:
+    print(f"ERREUR lors du chargement du modèle Whisper: {e}")
+    whisper_available = False
 
 # --- Bibliothèques pour le traitement d'URL ---
 try:
@@ -56,6 +72,7 @@ from flask import Flask, request, jsonify, redirect, session, url_for
 from flask_cors import CORS
 from PIL import Image # Pillow pour la manipulation d'images
 from flask_sock import Sock
+from werkzeug.utils import secure_filename
 
 # --- Imports pour Google OAuth et API Client ---
 from google_auth_oauthlib.flow import Flow
@@ -112,6 +129,8 @@ TOKEN_PICKLE_FILE = 'token.pickle'
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 CONTACTS_FILE = os.path.join(BASE_DIR, 'contacts.json')
+TEMP_AUDIO_DIR = os.path.join(BASE_DIR, 'temp_audio')
+os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 # print(f"DEBUG: Chemin absolu pour contacts.json: {CONTACTS_FILE}")
 
 # Variable globale pour le carnet d'adresses
@@ -405,16 +424,17 @@ Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petit
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
 L'utilisateur s'appelle Silver.
 
-Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, ou analyser une URL), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
-TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
+TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions", "process_audio"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
 Ce commentaire doit :
 Pour `web_search` : Fournir systématiquement un résumé concis des informations clés trouvées (environ 2-3 phrases). Ce résumé doit clairement indiquer la source principale des informations sous la forme : 'Selon [Source], [résumé des découvertes].' Évite les blagues ou commentaires non directement liés aux résultats de la recherche.
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
 3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
-4.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
+4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
+5.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
 Ce commentaire doit être concis, spirituel et professionnel, et être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?"), le JSON sera généré et ce commentaire suivra.
 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
@@ -438,6 +458,7 @@ Exemples d'entités attendues pour chaque action :
 - "web_search": {"query": "la question ou les termes à rechercher"}
 - "get_weather_forecast": {} (les entités sont vides, la localisation est gérée côté client, mais tu dois fournir un résumé verbal)
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
+- "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder')", "params": "dictionnaire de paramètres (ex: {'size': 10} ou {'radius': 5} ou {'height': 20, 'radius_top': 3, 'radius_bottom': 5})"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
@@ -454,7 +475,8 @@ Si une question générale PEUT être résolue par une commande (par exemple, 'q
 
 Si l'utilisateur fournit une URL pour analyse (avec ou sans question spécifique dessus), tu généreras l'action `process_url`. Le système (Python) te fournira ensuite le contenu textuel de cette page. Ta réponse textuelle subséquente (qui sera énoncée par EVA) devra être soit un résumé du contenu de la page (si aucune question n'est posée), soit la réponse à la question basée sur le contenu. Ce texte ne doit pas être dans le JSON de commande `process_url` lui-même, mais faire partie de ta réponse conversationnelle globale.
 
-Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et intègre tes observations dans ta réponse si c'est pertinent. Si l'utilisateur joint un fichier texte, son contenu te sera fourni précédé d'une note indiquant son nom. Utilise ce contenu textuel comme partie intégrante de la requête de l'utilisateur. Pour les commandes, les images ou fichiers ne sont généralement pas utilisés directement pour remplir les entités, mais peuvent fournir un contexte.
+Si le système vient de confirmer la réception d'un fichier audio et que l'utilisateur donne une commande générique pour le traiter (ex: "transcris-le", "analyse ça"), tu dois générer une action 'process_audio'. **Le système se chargera de retrouver le fichier, tu n'as pas besoin de spécifier l'entité `file_path`.**
+Si l'utilisateur fournit une image (via webcam ou fichier joint), analyse-la et intègre tes observations dans ta réponse si c'est pertinent. Si l'utilisateur joint un fichier texte ou audio, son contenu te sera fourni précédé d'une note indiquant son nom. Utilise ce contenu textuel ou audio comme partie intégrante de la requête de l'utilisateur. Pour les commandes, les images ou fichiers ne sont généralement pas utilisés directement pour remplir les entités, mais peuvent fournir un contexte. Si un fichier audio est détecté, l'action `process_audio` doit être déclenchée.
 
 Tu t'exprimes toujours en français, de manière claire, concise et professionnelle, tout en restant amicale.
 N'écris jamais d'émojis.
@@ -1579,6 +1601,45 @@ def handle_get_weather_forecast(entities):
     return "Prévisions météo pour votre localisation." # Generic message for panel, client handles display, Gemini handles verbal summary.
 
 # --- Handlers for new functionalities ---
+def handle_process_audio(entities):
+    """
+    Handles the 'process_audio' action. Transcribes the audio file using Whisper.
+    """
+    global whisper_available, whisper_model
+    if not whisper_available:
+        return "La fonctionnalité de transcription audio n'est pas disponible sur le serveur."
+    
+    file_path = entities.get("file_path")
+    
+    # Enhanced error checking
+    if not file_path:
+        print(f"ERREUR [handle_process_audio]: Action 'process_audio' appelée sans l'entité 'file_path'. Entités reçues: {entities}")
+        return "Chemin du fichier audio manquant pour la transcription."
+
+    print(f"INFO [handle_process_audio]: Tentative de transcription du fichier au chemin : {file_path}")
+
+    if not os.path.exists(file_path):
+        print(f"ERREUR [handle_process_audio]: Le chemin du fichier n'existe pas sur le serveur: '{file_path}'")
+        return f"Fichier audio non trouvé au chemin spécifié. Le chemin '{os.path.basename(file_path)}' est peut-être invalide ou le fichier a été supprimé."
+    
+    try:
+        print(f"INFO: [handle_process_audio] Début de la transcription pour: {file_path}")
+        result = whisper_model.transcribe(file_path, fp16=False)
+        transcribed_text = result["text"]
+        print(f"INFO: [handle_process_audio] Transcription terminée.")
+        
+        # Clean up the temporary file
+        try:
+            os.remove(file_path)
+            print(f"INFO: [handle_process_audio] Fichier temporaire supprimé: {file_path}")
+        except Exception as e:
+            print(f"AVERTISSEMENT: [handle_process_audio] Échec de la suppression du fichier temporaire {file_path}: {e}")
+            
+        return transcribed_text
+    except Exception as e:
+        print(f"ERREUR: [handle_process_audio] Erreur lors de la transcription avec Whisper: {e}")
+        traceback.print_exc()
+        return f"Une erreur est survenue lors de la transcription de l'audio: {type(e).__name__}"
 
 def handle_execute_python_code(entities):
     code_to_execute = entities.get("code")
@@ -1854,6 +1915,7 @@ action_dispatcher = {
     "google_keep_info": handle_google_keep_info,
     "get_weather_forecast": handle_get_weather_forecast,
     "process_url": handle_process_url,
+    "process_audio": handle_process_audio,
     "execute_python_code": handle_execute_python_code,
     "generate_3d_object": handle_generate_3d_object,
     "launch_application": handle_launch_application,
@@ -1867,8 +1929,11 @@ def chat_ws(ws):
     last_activity_time = time.time()
     server_ping_interval = 30 # seconds for server to ping client
     client_receive_timeout = 5 # seconds to wait for client message before server pings
+    # La session est maintenant gérée par Flask, il n'est pas nécessaire de la passer ici
 
     try:
+        session.pop('last_uploaded_file_path', None)
+
         while True:
             current_time = time.time()
             raw_data = None
@@ -1876,14 +1941,12 @@ def chat_ws(ws):
                 # Receive data from client with a timeout
                 raw_data = ws.receive(timeout=client_receive_timeout)
             except (ConnectionClosed, ConnectionResetError):
-                # print("[INFO WebSocket Handler] Connection closed by client (expected).")
                 raise # Re-raise to exit the loop and handler
-            except Exception: # Catches timeout errors from ws.receive specifically
-                # This is expected if client is idle, server will then ping
+            except Exception: # Catches timeout errors
                 pass
 
             if raw_data is not None:
-                last_activity_time = current_time # Update activity time on receiving data
+                last_activity_time = current_time 
                 try:
                     data = json.loads(raw_data)
                 except json.JSONDecodeError:
@@ -1893,45 +1956,54 @@ def chat_ws(ws):
 
                 current_user_parts_for_gemini = []
                 user_text = data.get('text', '')
+                
+                temp_audio_path_from_ws = None
 
                 if user_text:
                     current_user_parts_for_gemini.append(user_text)
 
-                # Handle file attachments from client
-                file_data_from_client = data.get('fileData')
-                file_name_from_client = data.get('fileName')
-                file_type_from_client = data.get('fileType') # 'image' or 'text'
+                # --- Handle file data from client ---
+                file_data_b64 = data.get('fileData')
+                file_name = data.get('fileName')
+                file_type = data.get('fileType')
+                
+                if file_data_b64 and file_name and file_type == 'audio':
+                    try:
+                        header, encoded = file_data_b64.split(",", 1)
+                        audio_bytes = base64.b64decode(encoded)
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3", dir=TEMP_AUDIO_DIR) as tmp:
+                            tmp.write(audio_bytes)
+                            temp_audio_path_from_ws = tmp.name
+                    except Exception as e:
+                        print(f"Erreur lors du traitement du fichier audio base64 '{file_name}': {e}")
+                        current_user_parts_for_gemini.append(f"(Erreur: Impossible de traiter le fichier audio '{file_name}')")
 
-                if file_data_from_client and file_name_from_client and file_type_from_client:
-                    if file_type_from_client == 'image':
+                # Handle other file types if no audio file was processed
+                if file_data_b64 and file_name and file_type != 'audio':
+                    if file_type == 'image':
                         try:
-                            # Assuming file_data_from_client is a base64 data URL
-                            header, encoded = file_data_from_client.split(",", 1)
+                            header, encoded = file_data_b64.split(",", 1)
                             image_bytes = base64.b64decode(encoded)
                             img = Image.open(io.BytesIO(image_bytes))
-                            MAX_SIZE = (1024, 1024) # Définissez une taille maximale appropriée
+                            MAX_SIZE = (1024, 1024)
                             img.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
-                            # Add a textual description and the image object for Gemini
-                            current_user_parts_for_gemini.append(f"L'utilisateur a joint une image nommée '{file_name_from_client}'. Voici l'image :")
+                            current_user_parts_for_gemini.append(f"L'utilisateur a joint une image nommée '{file_name}'. Voici l'image :")
                             current_user_parts_for_gemini.append(img)
                         except Exception as e:
-                            print(f"Erreur lors du décodage de l'image jointe '{file_name_from_client}': {e}")
-                            current_user_parts_for_gemini.append(f"(Erreur: Impossible de traiter l'image jointe '{file_name_from_client}')")
-                    elif file_type_from_client == 'text':
-                        text_content = file_data_from_client # Already text content
-                        current_user_parts_for_gemini.append(f"L'utilisateur a joint un fichier texte nommé '{file_name_from_client}'. Voici son contenu :\n```\n{text_content}\n```")
-                    else:
-                        print(f"WARN: Type de fichier joint non supporté '{file_type_from_client}' pour '{file_name_from_client}'.")
-                        current_user_parts_for_gemini.append(f"(Note: Fichier '{file_name_from_client}' de type non supporté '{file_type_from_client}' reçu mais non traité.)")
+                            print(f"Erreur lors du décodage de l'image jointe '{file_name}': {e}")
+                            current_user_parts_for_gemini.append(f"(Erreur: Impossible de traiter l'image jointe '{file_name}')")
+                    
+                    elif file_type == 'text':
+                        text_content = file_data_b64
+                        current_user_parts_for_gemini.append(f"L'utilisateur a joint un fichier texte nommé '{file_name}'. Voici son contenu :\n```\n{text_content}\n```")
 
-                # Handle webcam image data if no file is attached (file takes precedence)
-                elif data.get('imageData'): # imageData is from webcam
+                elif data.get('imageData'):
                     image_data_url = data.get('imageData')
                     try:
                         header, encoded = image_data_url.split(",", 1)
                         image_bytes = base64.b64decode(encoded)
                         img = Image.open(io.BytesIO(image_bytes))
-                        MAX_SIZE = (1024, 1024) # Définissez une taille maximale appropriée
+                        MAX_SIZE = (1024, 1024)
                         img.thumbnail(MAX_SIZE, Image.Resampling.LANCZOS)
                         current_user_parts_for_gemini.append("L'utilisateur a fourni une image via la webcam. Voici l'image :")
                         current_user_parts_for_gemini.append(img)
@@ -1939,14 +2011,15 @@ def chat_ws(ws):
                         print(f"Erreur lors du décodage de l'image webcam: {e}")
                         current_user_parts_for_gemini.append("(Erreur: Impossible de traiter l'image de la webcam)")
 
+
                 # --- Initialize response variables ---
-                final_text_response_for_action = None # Result from action dispatcher (data for panel)
+                final_text_response_for_action = None 
                 action_taken_by_nlu = False
                 parsed_command_action = None
-                chat_display_message = None # What EVA says in chat (witty summary or general response)
+                chat_display_message = None 
                 panel_data_content = None
                 panel_target_id = None
-                gemini_explanation_text = None # Text from Gemini (potentially the witty summary)
+                gemini_explanation_text = None 
                 extracted_code_block = None
 
                 # --- Process with Gemini ---
@@ -1956,7 +2029,6 @@ def chat_ws(ws):
                     gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
 
                     extracted_json_command_str = None
-                    # Default gemini_explanation_text to the full response, it will be refined if JSON is found
                     gemini_explanation_text = str(gemini_raw_response)
 
                     if isinstance(gemini_raw_response, str):
@@ -1996,7 +2068,6 @@ def chat_ws(ws):
                             parsed_command_obj = json.loads(extracted_json_command_str)
                         except json.JSONDecodeError:
                             print(f"WARN: Extracted JSON string failed to parse: {extracted_json_command_str}")
-                            # If JSON parsing fails, gemini_explanation_text (the full raw response) will be used as chat_display_message later
                             if gemini_explanation_text is None : gemini_explanation_text = str(gemini_raw_response)
 
 
@@ -2004,51 +2075,54 @@ def chat_ws(ws):
                         parsed_command_action = parsed_command_obj.get("action", "").strip()
                         entities = parsed_command_obj.get("entities", {})
 
+                        if parsed_command_action == "process_audio":
+                            if temp_audio_path_from_ws:
+                                print(f"INFO [chat_ws]: Utilisation du chemin de fichier de ce tour pour 'process_audio': {temp_audio_path_from_ws}")
+                                entities["file_path"] = temp_audio_path_from_ws
+                            else:
+                                print("WARN [chat_ws]: 'process_audio' action called but no audio file was sent in this message.")
+            
                         if parsed_command_action in action_dispatcher:
-                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities) # This is data for the panel or a direct status message
+                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities) 
                             action_taken_by_nlu = True
 
                             if parsed_command_action in ["create_task", "update_task", "delete_task"]:
-                                # Si l'action n'a pas retourné d'erreur, on rafraîchit la liste des tâches
                                 if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                    panel_data_content = list_google_tasks() # On recharge la liste complète
-                                    panel_target_id = "taskContent" # On cible le panneau des tâches
+                                    panel_data_content = list_google_tasks()
+                                    panel_target_id = "taskContent" 
                             
                             elif parsed_command_action in ["create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
-                                # Si l'action n'a pas retourné d'erreur, on rafraîchit la liste des événements
                                 if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                    panel_data_content = handle_list_calendar_events(entities={}) # On recharge la liste des événements
-                                    panel_target_id = "calendarContent" # On cible le panneau du calendrier
+                                    panel_data_content = handle_list_calendar_events(entities={})
+                                    panel_target_id = "calendarContent"
 
-                            # CHAT DISPLAY MESSAGE: Prioritize Gemini's witty commentary OR the direct result of process_url
                             if parsed_command_action == "process_url":
-                                chat_display_message = str(final_text_response_for_action) # Result of URL processing is the main message
+                                chat_display_message = str(final_text_response_for_action) 
+                            elif parsed_command_action == "process_audio":
+                                chat_display_message = str(final_text_response_for_action)
                             elif gemini_explanation_text and gemini_explanation_text.strip():
                                 chat_display_message = gemini_explanation_text.strip()
-                            else: # Fallback if Gemini provides no separate explanation for other actions
+                            else: 
                                 if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
-                                    chat_display_message = final_text_response_for_action["summary"] # e.g. directions summary
+                                    chat_display_message = final_text_response_for_action["summary"]
                                 else:
-                                    chat_display_message = str(final_text_response_for_action) # e.g. "Tâche ajoutée"
+                                    chat_display_message = str(final_text_response_for_action)
 
                             # PANEL DATA LOGIC:
                             panel_data_content = None
                             panel_target_id = None
                             
-                            # Logique pour le panneau Calendrier
                             if parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
                                 panel_target_id = "calendarContent"
-                                # Si c'est une action de modification, on recharge la liste.
                                 if parsed_command_action != "list_calendar_events":
                                     if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = handle_list_calendar_events({}) # On recharge la liste complète
-                                else: # Sinon (pour list_calendar_events), on utilise le résultat directement
+                                        panel_data_content = handle_list_calendar_events({})
+                                else: 
                                     panel_data_content = str(final_text_response_for_action)
 
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
                                     chat_display_message = "Voici vos événements." if "Aucun événement" not in str(panel_data_content) else str(panel_data_content)
 
-                            # Logique pour le panneau Email
                             elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "emailContent"
@@ -2067,14 +2141,12 @@ def chat_ws(ws):
                                     else:
                                         chat_display_message = f"Voici les emails pour {contact_id}."
                             
-                            # Logique pour le panneau Tâches
                             elif parsed_command_action in ["list_tasks", "create_task", "update_task", "delete_task"]:
                                 panel_target_id = "taskContent"
-                                # Si c'est une action de modification, on recharge la liste.
                                 if parsed_command_action != "list_tasks":
                                      if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = list_google_tasks() # On recharge la liste complète
-                                else: # Sinon (pour list_tasks), on utilise le résultat directement
+                                        panel_data_content = list_google_tasks() 
+                                else: 
                                     panel_data_content = str(final_text_response_for_action)
 
                                 if not (gemini_explanation_text and gemini_explanation_text.strip()):
@@ -2098,7 +2170,6 @@ def chat_ws(ws):
                                         default_formatted_message = f"En route pour {destination_entity}! Le trajet est de {distance} et devrait prendre environ {duration}. Bon voyage !"
 
                                         if gemini_explanation_text and gemini_explanation_text.strip():
-                                            # Try to format Gemini's text if it contains any of the known placeholders
                                             if "{distance}" in gemini_explanation_text or \
                                                "{duration}" in gemini_explanation_text or \
                                                "{destination}" in gemini_explanation_text:
@@ -2112,61 +2183,55 @@ def chat_ws(ws):
                                                     print(f"WARN: Erreur lors du formatage du message de Gemini pour get_directions: {e_fmt}. Original: '{gemini_explanation_text}'")
                                                     chat_display_message = default_formatted_message
                                             else:
-                                                # Gemini text exists but no common placeholders, use it as is (it was already set to chat_display_message)
                                                 chat_display_message = gemini_explanation_text
                                         else:
-                                            # No text from Gemini, or it was empty
                                             chat_display_message = default_formatted_message
-                                    # If status is not "success", chat_display_message would have already been set to
-                                    # gemini_explanation_text (if any) or str(final_text_response_for_action) by the general logic above.
-                                    # So, if it's an error summary from final_text_response_for_action, it will be used.
 
-                                elif isinstance(final_text_response_for_action, str): # Error string from handler
+                                elif isinstance(final_text_response_for_action, str): 
                                     panel_data_content = final_text_response_for_action
                                     panel_target_id = "mapContent"
-                                    # chat_display_message is already final_text_response_for_action if gemini_explanation_text was None
 
                             elif parsed_command_action == "web_search":
                                 top_source = "Source inconnue" # Default
                                 if isinstance(final_text_response_for_action, dict):
                                     panel_data_content = final_text_response_for_action.get("panel_summary", "Impossible d'afficher les résultats de recherche.")
                                     top_source = final_text_response_for_action.get("top_source_name", "Source inconnue")
-                                    # Nettoyer un peu top_source si c'est une URL simple
                                     if isinstance(top_source, str) and top_source.startswith("http"):
                                         try:
                                             domain_match = re.search(r"https?://(?:www\.)?([^/]+)", top_source)
                                             if domain_match:
                                                 top_source = domain_match.group(1)
                                         except Exception:
-                                            pass # Garder l'URL si regex échoue
+                                            pass 
                                 else:
-                                    # Fallback si perform_web_search n'a pas retourné un dict
                                     panel_data_content = str(final_text_response_for_action)
 
                                 panel_target_id = "searchContent"
 
-                                # Remplacer [Source] dans le message de Gemini (chat_display_message)
                                 if chat_display_message and isinstance(chat_display_message, str):
                                     if "[Source]" in chat_display_message:
                                         chat_display_message = chat_display_message.replace("[Source]", top_source)
-                                    elif "[source]" in chat_display_message: # Au cas où Gemini utilise une casse différente
+                                    elif "[source]" in chat_display_message: 
                                         chat_display_message = chat_display_message.replace("[source]", top_source)
                             elif parsed_command_action == "get_weather_forecast":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "weatherForecastContent"
-                                # chat_display_message is already set by Gemini's explanation or fallback
                             elif parsed_command_action == "process_url":
-                                panel_data_content = str(final_text_response_for_action) # The summary/answer from Gemini
-                                panel_target_id = "searchContent" # Display in search panel or create a new one
-                                chat_display_message = str(final_text_response_for_action) # This is the main spoken response
+                                panel_data_content = str(final_text_response_for_action) 
+                                panel_target_id = "searchContent" 
+                                chat_display_message = str(final_text_response_for_action) 
+                            elif parsed_command_action == "process_audio":
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "searchContent" 
+                                chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici la transcription de l'audio."
+                                panel_data_content = f"**Transcription Audio:**\n\n{final_text_response_for_action}"
+
                             elif parsed_command_action == "execute_python_code":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "codeDisplayContent"
-                                # chat_display_message already set
                             elif parsed_command_action == "generate_3d_object":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "codeDisplayContent"
-                                # chat_display_message already set
 
                         else:
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
@@ -2180,7 +2245,7 @@ def chat_ws(ws):
                         panel_target_id = "codeDisplayContent"
                         chat_display_message = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Code généré et affiché dans l'onglet Code."
 
-                    else: # No command, no code -> general conversation or Gemini failed to provide JSON + text as instructed
+                    else: 
                         action_taken_by_nlu = False
                         chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Je n'ai pas compris la demande."
 
@@ -2209,21 +2274,18 @@ def chat_ws(ws):
 
                 # --- TTS Logic ---
                 audio_data_url = None
-                text_for_gtts = chat_display_message # Base: speak what's in the chat
+                text_for_gtts = chat_display_message 
 
-                # Specific TTS adjustments based on action, if Gemini's explanation wasn't the primary spoken part
                 if action_taken_by_nlu:
                     if parsed_command_action == "get_directions":
                         if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
-                            # chat_display_message should already be formatted for TTS by Gemini or fallback.
                             text_for_gtts = chat_display_message
                         elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("summary"):
                             text_for_gtts = final_text_response_for_action["summary"]
                     elif parsed_command_action == "process_url":
-                        text_for_gtts = chat_display_message # Already the summary/answer
-                    # For other actions, if gemini_explanation_text was primary, it's already in chat_display_message.
-                    # If not, and a simple confirmation was generated, that's fine for TTS.
-                    # The goal is that chat_display_message (which becomes text_for_gtts) IS the summary.
+                        text_for_gtts = chat_display_message 
+                    elif parsed_command_action == "process_audio":
+                        text_for_gtts = chat_display_message 
 
                 elif parsed_command_action == "code_generation" and panel_target_id == "codeDisplayContent" and extracted_code_block:
                      text_for_gtts = gemini_explanation_text if gemini_explanation_text and gemini_explanation_text.strip() else "Voici le code que j'ai généré."
@@ -2240,6 +2302,9 @@ def chat_ws(ws):
                 if any(keyword in lower_chat_message_for_tts_check for keyword in suppress_audio_keywords):
                     if text_for_gtts == chat_display_message:
                             should_speak = False
+                            
+                if parsed_command_action == "process_audio" and str(final_text_response_for_action) in text_for_gtts:
+                    should_speak = False
 
                 if text_for_gtts.strip() == "" or lower_chat_message_for_tts_check == "ok.":
                     should_speak = False
@@ -2294,6 +2359,7 @@ if __name__ == '__main__':
     print(f"Mode debug Flask: {'Activé' if app.debug else 'Désactivé'}")
     print(f"Modèle Gemini: {gemini_model_name}")
     print(f"gTTS: {'Oui' if gtts_enabled else 'Non'}")
+    print(f"Whisper: {'Oui' if whisper_available else 'Non'}")
     print(f"Google Custom Search: {'Oui' if google_custom_search_available else 'Non'}") # Modifié ici
     print(f"Google Maps API: {'Oui' if google_maps_api_key else 'Non'}")
     print(f"Traitement d'URL: {'Oui' if url_processing_available else 'Non (requests/BeautifulSoup manquant)'}")
@@ -2302,4 +2368,3 @@ if __name__ == '__main__':
     print(f"Fichier de contacts: {CONTACTS_FILE}")
     print("-------------------------------------------")
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
-    
