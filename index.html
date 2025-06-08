@@ -237,7 +237,16 @@
         .listening-indicator-inner { width: 50px; height: 50px; border-radius: 50%; background-color: #D1FAE5; }
         @keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
         @keyframes speak-pulse { 0% { transform: scale(1); background-color: #6EE7B7; } 50% { transform: scale(1.1); background-color: #10B981; } 100% { transform: scale(1); background-color: #6EE7B7; } }
-        #webcamVideo { object-fit: cover; transform: scaleX(-1); border-radius: 50%; width: 150px; height: 150px; }
+        #webcamVideo { 
+            object-fit: cover; 
+            border-radius: 50%; 
+            width: 150px; 
+            height: 150px;
+            transition: transform 0.3s;
+        }
+        #webcamVideo.mirrored {
+            transform: scaleX(-1);
+        }
         #chatbox { scroll-behavior: smooth; }
         .user-message { text-align: right; margin-left: auto; background-color: #3B82F6; color: white; }
         .assistant-message { text-align: left; margin-right: auto; background-color: #4B5563; color: white; }
@@ -774,6 +783,10 @@
                 </button>
                 <button id="muteButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver le son (ou touche 'M')">Muet</button>
                 <button id="camButton" class="p-3 bg-gray-600 hover:bg-gray-700 rounded-lg text-white focus:outline-none" title="Activer/Désactiver la caméra (ou touche 'C')">Cam</button>
+                <!-- NEW CAMERA SWITCH BUTTON -->
+                <button id="switchCamButton" class="p-3 bg-teal-600 hover:bg-teal-700 rounded-lg text-white focus:outline-none hidden" title="Changer de caméra">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
             </div>
             <div id="filePreview" class="w-full mb-2"></div> 
             
@@ -799,6 +812,7 @@
         const micButton = document.getElementById('micButton');
         const muteButton = document.getElementById('muteButton');
         const camButton = document.getElementById('camButton');
+        const switchCamButton = document.getElementById('switchCamButton'); // New button
         const chatbox = document.getElementById('chatbox');
         const statusText = document.getElementById('statusText');
         const audioPlayer = document.getElementById('audioPlayer');
@@ -885,6 +899,8 @@
         // --- Application State ---
         let isMuted = false;
         let isCamOn = false;
+        let availableCameras = [];
+        let currentCameraIndex = 0;
         
         let commandRecognizer = null; 
         let wakeWordRecognizer = null; 
@@ -1010,7 +1026,7 @@
                 "03d": "☁️", "03n": "☁️", "04d": "☁️", "04n": "☁️", 
                 "09d": "🌧️", "09n": "🌧️", "10d": "🌦️", "10n": "🌧️", 
                 "11d": "⛈️", "11n": "⛈️", "13d": "❄️", "13n": "❄️", 
-                "50d": "🌫️", "50n": "🌫️" 
+                "50d": "🌫️", "50n": "�️" 
             };
             return emojiMap[iconCode] || "❓";
         }
@@ -1581,7 +1597,19 @@
 
         function getWebcamFrameData() {
             if (!isCamOn || !webcamVideo.srcObject || webcamVideo.readyState < 3) return null; 
-            try { const context = snapshotCanvas.getContext('2d'); snapshotCanvas.width = webcamVideo.videoWidth; snapshotCanvas.height = webcamVideo.videoHeight; context.translate(snapshotCanvas.width, 0); context.scale(-1, 1); context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height); return snapshotCanvas.toDataURL('image/jpeg', 0.8); } catch (error) { console.error("Error getting webcam frame:", error); return null; }
+            try { 
+                const context = snapshotCanvas.getContext('2d'); 
+                snapshotCanvas.width = webcamVideo.videoWidth; 
+                snapshotCanvas.height = webcamVideo.videoHeight; 
+                context.save();
+                if (webcamVideo.classList.contains('mirrored')) {
+                    context.translate(snapshotCanvas.width, 0); 
+                    context.scale(-1, 1);
+                }
+                context.drawImage(webcamVideo, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
+                context.restore(); 
+                return snapshotCanvas.toDataURL('image/jpeg', 0.8); 
+            } catch (error) { console.error("Error getting webcam frame:", error); return null; }
         }
         function extractCodeInfo(markdownText) {
             const infos = []; const regex = /```([a-zA-Z0-9]*)\n([\s\S]*?)\n```/g; let match;
@@ -1779,49 +1807,99 @@
             }
         }
 
-
         // --- Webcam & Mute ---
-        async function toggleWebcam(playSound = true) { 
-            webcamError.classList.add('hidden'); 
-            const camActionPromise = new Promise(async (resolve, reject) => {
-                if (!isCamOn) { 
-                    try { 
-                        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
-                        webcamVideo.srcObject = mediaStream; 
-                        webcamVideo.onloadedmetadata = () => { 
-                            webcamVideo.classList.remove('hidden'); listeningIndicator.classList.add('hidden'); isCamOn = true; 
-                            camButton.textContent = 'Off Cam'; camButton.classList.replace('bg-gray-600', 'bg-red-600'); camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700'); 
-                            resolve(true); 
-                        }; 
-                        webcamVideo.onerror = (e) => { 
-                             webcamError.textContent = `Erreur video: ${e.message || 'Inconnue'}`; webcamError.classList.remove('hidden'); isCamOn = false; 
-                             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
-                             listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
-                             camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
-                             reject(new Error('Erreur élément vidéo'));
-                        }
-                    } catch (err) { 
-                        webcamError.textContent = `Erreur: ${err.name || err.message}`; webcamError.classList.remove('hidden'); isCamOn = false; 
-                        if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); webcamVideo.srcObject = null; 
-                        listeningIndicator.classList.remove('hidden'); camButton.textContent = 'Cam'; 
-                        camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
-                        reject(err); 
-                    } 
-                } else { 
-                    if (mediaStream) mediaStream.getTracks().forEach(track => track.stop()); 
-                    webcamVideo.srcObject = null; webcamVideo.classList.add('hidden'); listeningIndicator.classList.remove('hidden'); 
-                    isCamOn = false; camButton.textContent = 'Cam'; 
-                    camButton.classList.replace('bg-red-600', 'bg-gray-600'); camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700'); 
-                    resolve(false); 
-                }
-            });
+        async function startStream() {
+            webcamError.classList.add('hidden');
+            // Stop any existing stream before starting a new one
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+
+            const deviceId = availableCameras[currentCameraIndex]?.deviceId;
+            const constraints = {
+                video: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined
+                },
+                audio: false
+            };
 
             try {
-                await camActionPromise;
-                if (playSound) cameraToggleSound(); 
-            } catch (error) {
-                console.error("Erreur lors du basculement de la webcam:", error);
+                mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                webcamVideo.srcObject = mediaStream;
+                webcamVideo.onloadedmetadata = () => {
+                    webcamVideo.classList.remove('hidden');
+                    listeningIndicator.classList.add('hidden');
+                    // Mirror front camera (usually index 0), not back camera
+                    webcamVideo.classList.toggle('mirrored', currentCameraIndex === 0);
+                    isCamOn = true;
+                    camButton.textContent = 'Off Cam';
+                    camButton.classList.replace('bg-gray-600', 'bg-red-600');
+                    camButton.classList.replace('hover:bg-gray-700', 'hover:bg-red-700');
+                    // Show switch button if more than one camera
+                    if (availableCameras.length > 1) {
+                        switchCamButton.classList.remove('hidden');
+                    }
+                };
+            } catch (err) {
+                handleCameraError(err);
             }
+        }
+
+        function handleCameraError(err) {
+            webcamError.textContent = `Erreur: ${err.name || err.message}`;
+            webcamError.classList.remove('hidden');
+            isCamOn = false;
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            webcamVideo.srcObject = null;
+            webcamVideo.classList.add('hidden');
+            listeningIndicator.classList.remove('hidden');
+            camButton.textContent = 'Cam';
+            camButton.classList.replace('bg-red-600', 'bg-gray-600');
+            camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700');
+            switchCamButton.classList.add('hidden');
+        }
+        
+        async function toggleWebcam(playSound = true) {
+            if (isCamOn) {
+                if (mediaStream) {
+                    mediaStream.getTracks().forEach(track => track.stop());
+                }
+                isCamOn = false;
+                webcamVideo.srcObject = null;
+                webcamVideo.classList.add('hidden');
+                listeningIndicator.classList.remove('hidden');
+                camButton.textContent = 'Cam';
+                camButton.classList.replace('bg-red-600', 'bg-gray-600');
+                camButton.classList.replace('hover:bg-red-700', 'hover:bg-gray-700');
+                switchCamButton.classList.add('hidden');
+                webcamError.classList.add('hidden');
+                if(playSound) cameraToggleSound();
+            } else {
+                // If we don't have the list of cameras yet, get it.
+                if (availableCameras.length === 0) {
+                    try {
+                        const devices = await navigator.mediaDevices.enumerateDevices();
+                        availableCameras = devices.filter(device => device.kind === 'videoinput');
+                        if (availableCameras.length === 0) {
+                             handleCameraError({name: "NoCamera", message: "Aucune caméra trouvée."});
+                             return;
+                        }
+                    } catch (err) {
+                        handleCameraError(err);
+                        return;
+                    }
+                }
+                await startStream();
+                if(playSound) cameraToggleSound();
+            }
+        }
+
+        async function switchCamera() {
+            if (!isCamOn || availableCameras.length <= 1) return;
+            currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+            await startStream();
         }
 
         function toggleMute() {
@@ -2215,7 +2293,8 @@
         });
 
         muteButton.addEventListener('click', toggleMute); 
-        camButton.addEventListener('click', () => { initAudioContext(); toggleWebcam(); }); 
+        camButton.addEventListener('click', () => { initAudioContext(); toggleWebcam(); });
+        switchCamButton.addEventListener('click', () => { initAudioContext(); switchCamera(); });
         schedulePromptButton.addEventListener('click', schedulePrompt);
         attachFileButton.addEventListener('click', () => fileInput.click()); 
         fileInput.addEventListener('change', handleFileSelect);
