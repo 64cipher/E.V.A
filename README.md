@@ -208,6 +208,8 @@ google‑generativeai
 dotenv
 google-search-results
 beatifulsoup4
+openai-whisper
+ffmpeg
 ```
 
 Générez le fichier exact via :
