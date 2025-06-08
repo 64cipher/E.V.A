@@ -24,11 +24,13 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
 | **NLP/IA**        | Appels direct au modèle Gemini 2 (configurable).                              |
 | **Voix**          | Synthèse vocale via gTTS (facultatif) & Web Speech API côté navigateur.       |
 | **Google API**    | OAuth 2 offline + Calendar, Gmail, Tasks, Maps Directions.                    |
-| **Recherche Web** | Résumés API (fallback answer‑box / knowledge graph).                      |
+| **Recherche Web** | Résumés API (fallback answer‑box / knowledge graph).                          |
 | **Météo**         | OpenWeatherMap affiché dans le tableau de bord.                               |
 | **Contact book**  | Carnet d’adresses local (JSON).                                               |
 | **WebSocket**     | Dialogue temps‑réel entre front (HTML/JS) et backend (Flask + Flask‑Sock).    |
 | **Interface**     | Panneau latéral (carte, recherche, e‑mails, tâches, calendrier, code généré). |
+| **Transcript Audio Whisper**  | Convertisserz un audio MP3 ou WAV en texte.                       |
+| **Visualiseur 3D**     | Demandez à E.V.A de créer un objet comme un cube, une sphere, un cône ou un tore en 3D.    |
 
 ---
 
