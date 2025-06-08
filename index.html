@@ -766,7 +766,8 @@
                 <button id="attachFileButton" class="p-3 bg-teal-600 hover:bg-teal-700 rounded-lg text-white focus:outline-none" title="Joindre un fichier">
                     <i class="fas fa-paperclip"></i>
                 </button>
-                <input type="file" id="fileInput" class="hidden" accept="image/*,text/*,.py,.js,.html,.css,.json,.md">
+                <!-- MODIFICATION: Ajout de audio/* et video/* à l'attribut accept -->
+                <input type="file" id="fileInput" class="hidden" accept="image/*,text/*,.py,.js,.html,.css,.json,.md,audio/*,video/*">
                 <button id="sendButton" class="p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold focus:outline-none">Envoyer</button>
                 <button id="interruptModeButton" class="p-3 bg-yellow-500 hover:bg-yellow-600 rounded-lg text-white focus:outline-none" title="Activer l'interruption d'EVA (Désactivé) (ou touche 'i')">
                     <i class="fas fa-comment-slash"></i>
@@ -1699,22 +1700,30 @@
             ws.onerror = (error) => { console.error("WebSocket Error:", error); statusText.textContent = "Erreur connexion WebSocket."; addMessageToChat("Erreur connexion chat.", "assistant"); wsReady = false; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; };
             ws.onclose = () => { wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
         }
+        
         function sendMessageViaWebSocket(speechTranscript = null) {
             let messageTextToSend = speechTranscript ? speechTranscript.trim() : messageInput.value.trim();
-            const requestData = { text: messageTextToSend, imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, fileData: null, fileName: null, fileType: null };
-
-            if (attachedFile) {
-                requestData.fileData = attachedFile.data;
-                requestData.fileName = attachedFile.name;
-                requestData.fileType = attachedFile.type;
-                if (!messageTextToSend) messageTextToSend = `Fichier joint : ${attachedFile.name}`; 
-            }
+            
+            const requestData = { 
+                text: messageTextToSend, 
+                imageData: (isCamOn && !attachedFile) ? getWebcamFrameData() : null, 
+                fileData: attachedFile ? attachedFile.data : null, 
+                fileName: attachedFile ? attachedFile.name : null, 
+                fileType: attachedFile ? attachedFile.type : null 
+            };
 
             if (!messageTextToSend && !requestData.imageData && !requestData.fileData) { 
                 statusText.textContent = speechTranscript ? 'Rien compris.' : 'Rien à envoyer.'; 
-                messageInput.value = ''; if (attachedFile) clearAttachedFile(); restartRecognitionAfterEva(); return; 
+                messageInput.value = ''; 
+                if (attachedFile) clearAttachedFile(); 
+                restartRecognitionAfterEva(); 
+                return; 
             }
-            if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) { addMessageToChat("Non connecté. Reconnexion...", "assistant"); connectWebSocket(); return; }
+            if (!wsReady || !ws || ws.readyState !== WebSocket.OPEN) { 
+                addMessageToChat("Non connecté. Reconnexion...", "assistant"); 
+                connectWebSocket(); 
+                return; 
+            }
             
             addMessageToChat(messageTextToSend || `Fichier : ${requestData.fileName}`, 'user');
 
@@ -1723,9 +1732,17 @@
                 if (recognitionActive && commandRecognizer) commandRecognizer.abort(); 
                 statusText.textContent = 'Traitement...'; 
             }
-            try { ws.send(JSON.stringify(requestData)); messageInput.value = ''; clearAttachedFile(); } 
-            catch (error) { addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
+            try { 
+                ws.send(JSON.stringify(requestData)); 
+                messageInput.value = ''; 
+                clearAttachedFile(); 
+            } 
+            catch (error) { 
+                addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); 
+                restartRecognitionAfterEva(); 
+            }
         }
+
         function playAudio(audioSource) {
             if (isMuted) { evaIsCurrentlySpeaking = false; restartRecognitionAfterEva(); return; }
             if (isSpeakingClientSide) { evaIsCurrentlySpeaking = false; return; } 
@@ -1959,7 +1976,7 @@
                 const date = new Date(prompt.time);
                 let detailsText = `"${prompt.text}" - ${prompt.isActive ? 'Prochaine exécution' : 'PAUSE (Prévu'}: ${date.toLocaleString('fr-FR')})`;
                 if (prompt.frequency !== 'once') detailsText += ` (${translateFrequency(prompt.frequency)}${!prompt.indefinite ? `, ${prompt.executedCount}/${prompt.repetitions}ex` : `, ${prompt.executedCount}ex - Indéfini`})`;
-                listItem.innerHTML = `<div class="prompt-details">${detailsText}</div><div class="prompt-actions">${prompt.frequency !== 'once' ? `<button data-id="${prompt.id}" class="${prompt.isActive ? 'pause' : 'resume'}-prompt-button">${prompt.isActive ? 'Pause' : 'Reprendre'}</button>` : ''}<button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button></div>`;
+                listItem.innerHTML = `<div class="prompt-details">${detailsText}</div><div class="prompt-actions">${prompt.frequency !== 'once' ? `<button data-id="${prompt.id}" class="${prompt.isActive ? 'pause' : 'resume'}-prompt-button">${prompt.isActive ? 'Reprendre' : 'Pause'}</button>` : ''}<button data-id="${prompt.id}" class="cancel-prompt-button">Annuler</button></div>`;
                 scheduledPromptsListUI.appendChild(listItem);
             });
             document.querySelectorAll('.cancel-prompt-button, .pause-prompt-button, .resume-prompt-button').forEach(button => {
@@ -1971,27 +1988,51 @@
             });
         }
 
-        // --- File Handling Functions ---
+        // --- MODIFICATION: Logique de gestion des fichiers mise à jour ---
         function handleFileSelect(event) {
             const file = event.target.files[0];
-            if (!file) { clearAttachedFile(); return; }
-            const reader = new FileReader();
-            const fileName = file.name; const fileType = file.type;
+            if (!file) { 
+                clearAttachedFile(); 
+                return; 
+            }
+            
+            const fileType = file.type;
+            const fileName = file.name;
 
-            if (fileType.startsWith('image/')) { 
-                reader.onload = (e) => { attachedFile = { name: fileName, type: 'image', data: e.target.result }; displayFilePreview(fileName, e.target.result); };
+            const reader = new FileReader();
+            reader.onload = (e) => { 
+                attachedFile = { name: fileName, type: fileType.startsWith('image/') ? 'image' : 'audio', data: e.target.result }; 
+                displayFilePreview(fileName, fileType.startsWith('image/') ? e.target.result : null); 
+                // Pour les fichiers audio, on envoie directement après sélection et prévisualisation
+                if (fileType.startsWith('audio/')) {
+                    sendMessageViaWebSocket(`transcrire le fichier ${fileName}`);
+                }
+            };
+
+            if (fileType.startsWith('image/') || fileType.startsWith('audio/')) {
                 reader.readAsDataURL(file);
             } else if (fileType.startsWith('text/') || ['.py','.js','.html','.css','.json','.md'].some(ext => fileName.endsWith(ext))) { 
-                reader.onload = (e) => { attachedFile = { name: fileName, type: 'text', data: e.target.result }; displayFilePreview(fileName, null); };
+                reader.onload = (e) => { 
+                    attachedFile = { name: fileName, type: 'text', data: e.target.result }; 
+                    displayFilePreview(fileName, null); 
+                };
                 reader.readAsText(file);
-            } else { addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant"); clearAttachedFile(); }
+            } else { 
+                addMessageToChat(`Type de fichier non supporté: ${fileName}`, "assistant"); 
+                clearAttachedFile(); 
+            }
             fileInput.value = ''; 
         }
+
         function displayFilePreview(fileName, imageSrc = null) {
             filePreviewContainer.innerHTML = `${imageSrc ? `<img src="${imageSrc}" alt="Aperçu de ${fileName}"><br>` : ''}<span class="mr-2">${fileName}</span> <button id="removeFileButton" class="text-red-500 hover:text-red-700 text-xs">&times;</button>`;
             document.getElementById('removeFileButton').addEventListener('click', clearAttachedFile);
         }
-        function clearAttachedFile() { attachedFile = null; filePreviewContainer.innerHTML = ''; fileInput.value = ''; }
+        function clearAttachedFile() { 
+            attachedFile = null; 
+            filePreviewContainer.innerHTML = ''; 
+            fileInput.value = ''; 
+        }
 
         // --- Calculator Logic ---
         function updateCalculatorDisplay() {
