@@ -16,6 +16,8 @@ import subprocess # Pour exécuter des scripts et lancer des applications
 import webbrowser # Pour ouvrir des pages web
 import contextlib # Pour redirect_stdout avec exec
 import tempfile # Pour gérer les fichiers temporaires
+import math # Pour la visualisation 3D
+import threading # Pour le nettoyage des fichiers temporaires
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -111,6 +113,11 @@ if not google_custom_search_available:
 # else:
     # print("DEBUG: Clés API et CX Google Custom Search trouvées et prêtes à l'emploi.")
 
+import multiprocessing
+
+
+
+# --- Fin du code du visualiseur ---
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://127.0.0.1:8080", "http://localhost:8080"]}}, supports_credentials=True)
@@ -442,12 +449,12 @@ Pour `web_search` : Fournir systématiquement un résumé concis des information
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
 3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
-5.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
+5.  Pour `generate_3d_object`: Annoncer que la fenêtre de visualisation 3D va se lancer.
+6.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
 Ce commentaire doit être concis, spirituel et professionnel, et être séparé du bloc JSON. Si la requête est une simple question qui mène à l'une de ces actions (ex: "Quel temps fait-il?", 'quel jour sommes-nous ?' peut utiliser 'get_current_datetime'), le JSON sera généré et ce commentaire suivra.
 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
-Pour l'action "generate_3d_object", le commentaire doit indiquer que le code OpenSCAD a été généré et peut être utilisé avec le logiciel OpenSCAD.
-Pour "launch_application", le commentaire doit confirmer le lancement (ou l'échec).
+Pour l'action "launch_application", le commentaire doit confirmer le lancement (ou l'échec).
 Pour "open_webpage", le commentaire doit confirmer l'ouverture de la page.
 
 Exemples d'entités attendues pour chaque action :
@@ -469,7 +476,7 @@ Exemples d'entités attendues pour chaque action :
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
-- "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder')", "params": "dictionnaire de paramètres (ex: {'size': 10} ou {'radius': 5} ou {'height': 20, 'radius_top': 3, 'radius_bottom': 5})"}
+- "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
@@ -491,7 +498,7 @@ Tu t'exprimes toujours en français, de manière claire, concise et professionne
 N'écris jamais d'émojis.
 Les fonctionnalités pour Google Keep ne sont pas disponibles (informe l'utilisateur si demandé).
 ATTENTION : L'exécution de code Python via 'execute_python_code' peut présenter des risques de sécurité si le code provient de sources non fiables. Utilise cette fonctionnalité avec prudence.
-La génération d'objets 3D produit du code OpenSCAD. L'utilisateur devra utiliser OpenSCAD pour visualiser/rendre l'objet.
+La génération d'objets 3D lance une fenêtre de visualisation externe.
 Le lancement d'applications dépend des applications installées sur l'ordinateur de l'utilisateur et de la configuration du PATH système.
 Le système principal (Python) gère l'authentification Google et l'appel aux API Google (Calendar, Gmail, Tasks, Maps) et la recherche web.
 Le système principal gère un carnet d'adresses local.
@@ -1040,9 +1047,6 @@ def get_directions_from_google_maps_api(origin, destination):
             "destination": destination
         }
 
-# =====================================================================================
-# MODIFICATION 1 : NOUVELLE ARCHITECTURE POUR LA RECHERCHE WEB (RAG)
-# =====================================================================================
 
 def _perform_raw_web_search(query, num_results=6):
     """
@@ -1644,7 +1648,118 @@ def handle_get_current_datetime(entities):
     date_heure_str = f"Nous sommes le {jour_fr} {now.day} {mois_fr} {now.year} et il est {now.strftime('%Hh%M')}."
     
     return date_heure_str
+
+# --- 3D Viewer Script (as a string) ---
+VIEWER_3D_SCRIPT = """
+import pyglet
+from pyglet.gl import *
+from pyglet.gl import glu
+import sys
+import math
+
+def get_cube_vertices(x, y, z, n):
+    return [
+        x-n,y+n,z-n, x-n,y+n,z+n, x+n,y+n,z+n, x+n,y+n,z-n,  # top
+        x-n,y-n,z-n, x+n,y-n,z-n, x+n,y-n,z+n, x-n,y-n,z+n,  # bottom
+        x-n,y-n,z-n, x-n,y-n,z+n, x-n,y+n,z+n, x-n,y+n,z-n,  # left
+        x+n,y-n,z+n, x+n,y-n,z-n, x+n,y+n,z-n, x+n,y+n,z+n,  # right
+        x-n,y-n,z+n, x+n,y-n,z+n, x+n,y+n,z+n, x-n,y+n,z+n,  # front
+        x+n,y-n,z-n, x-n,y-n,z-n, x-n,y+n,z-n, x+n,y+n,z-n   # back
+    ]
+
+def get_sphere_vertices(radius, slices, stacks):
+    vertices = []
+    for i in range(stacks + 1):
+        lat = math.pi * (-0.5 + i / stacks)
+        z = radius * math.sin(lat)
+        zr = radius * math.cos(lat)
+        for j in range(slices + 1):
+            lng = 2 * math.pi * j / slices
+            x = zr * math.cos(lng)
+            y = zr * math.sin(lng)
+            vertices.extend([x, y, z])
+    return vertices
+
+class Window(pyglet.window.Window):
+    def __init__(self, *args, **kwargs):
+        super(Window, self).__init__(*args, **kwargs)
+        self.set_minimum_size(300, 200)
+        self.set_caption('Visualiseur 3D EVA')
+        glClearColor(0.1, 0.12, 0.15, 1)
+        glEnable(GL_DEPTH_TEST)
+        self.rotation_x = 30
+        self.rotation_y = -45
+        self.zoom = 5
+        self.shape_type = kwargs.get('shape_type', 'cube')
+        self.shape_params = kwargs.get('shape_params', {})
+        self.batch = pyglet.graphics.Batch()
+        self.vertex_list = None
+        self.create_shape()
+
+    def create_shape(self):
+        if self.shape_type == 'cube':
+            size = self.shape_params.get('size', 1)
+            vertices = get_cube_vertices(0, 0, 0, size / 2)
+            self.vertex_list = self.batch.add(24, GL_QUADS, None, ('v3f', vertices), ('c3B', (100, 100, 255) * 24))
+        elif self.shape_type == 'sphere':
+            radius = self.shape_params.get('radius', 1)
+            slices = 32
+            stacks = 16
+            vertices = get_sphere_vertices(radius, slices, stacks)
+            indices = []
+            for i in range(stacks):
+                for j in range(slices):
+                    p1 = i * (slices + 1) + j
+                    p2 = p1 + 1
+                    p3 = (i + 1) * (slices + 1) + j
+                    p4 = p3 + 1
+                    indices.extend([p1, p2, p4, p3])
+            # We need to flatten the vertices for indexed drawing
+            flat_vertices = []
+            for i in range(int(len(vertices)/3)):
+                 flat_vertices.extend([vertices[i*3], vertices[i*3+1], vertices[i*3+2]])
+            self.vertex_list = self.batch.add_indexed(len(flat_vertices) // 3, GL_QUADS, None, indices, ('v3f', flat_vertices), ('c3B', (100, 100, 255) * (len(flat_vertices) // 3)))
+
+
+    def on_draw(self):
+        self.clear()
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glu.gluPerspective(60.0, self.width / float(self.height or 1), 0.1, 1000.0)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        glTranslatef(0, 0, -self.zoom)
+        glRotatef(self.rotation_x, 1, 0, 0)
+        glRotatef(self.rotation_y, 0, 1, 0)
+        self.batch.draw()
+
+    def on_mouse_drag(self, x, y, dx, dy, buttons, modifiers):
+        if buttons & pyglet.window.mouse.LEFT:
+            self.rotation_x -= dy * 0.5
+            self.rotation_y += dx * 0.5
     
+    def on_mouse_scroll(self, x, y, scroll_x, scroll_y):
+        self.zoom -= scroll_y * 0.5
+        if self.zoom < 1: self.zoom = 1
+
+    def on_resize(self, width, height):
+        glViewport(0, 0, width, height)
+
+if __name__ == '__main__':
+    shape = sys.argv[1] if len(sys.argv) > 1 else 'cube'
+    params = {}
+    if shape == 'cube':
+        params['size'] = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
+    elif shape == 'sphere':
+        params['radius'] = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
+    
+    try:
+        window = Window(width=800, height=600, resizable=True, shape_type=shape, shape_params=params)
+        pyglet.app.run()
+    except Exception as e:
+        print(f"Erreur lors du lancement de la fenêtre Pyglet: {e}")
+"""
+
 # --- Handlers for new functionalities ---
 def handle_process_audio(entities):
     """
@@ -1722,32 +1837,76 @@ def handle_execute_python_code(entities):
     except Exception as e:
         return f"ATTENTION : L'exécution de code Python peut être risquée.\nErreur lors de l'exécution du code Python:\n{traceback.format_exc()}"
 
+def cleanup_temp_file(path, delay=2.0):
+    """Waits for a delay then deletes a file."""
+    def target():
+        time.sleep(delay)
+        try:
+            os.remove(path)
+            # print(f"INFO: Fichier temporaire de visualisation nettoyé: {path}")
+        except OSError as e:
+            print(f"ERREUR lors du nettoyage du fichier temporaire {path}: {e}")
+
+    threading.Thread(target=target).start()
+
+# REMPLACEZ L'ANCIENNE FONCTION PAR CELLE-CI
 def handle_generate_3d_object(entities):
+    global pyglet_available # Assurez-vous que cette ligne est bien présente si elle ne l'était pas
+    # La ligne ci-dessus est pour la compatibilité avec votre code original, le viewer.py est maintenant indépendant.
+
+    # Le viewer est maintenant PyVista, donc la vérification pyglet n'est plus pertinente pour le lancement.
+    # On la garde pour informer l'utilisateur si la bibliothèque 3D est conceptuellement "activée".
+
+    # NOTE : Idéalement, on vérifierait si PyVista est disponible.
+    # Pour l'instant, on se base sur le fait qu'il a été installé.
+
     object_type = entities.get("object_type", "").lower()
     params = entities.get("params", {})
-    scad_code = ""
 
+    viewer_script_path = os.path.join(BASE_DIR, 'viewer.py')
+    if not os.path.exists(viewer_script_path):
+        return "Erreur critique : le script 'viewer.py' est introuvable."
+
+    command = [sys.executable, viewer_script_path, object_type]
+
+    # Construire les arguments de la commande en fonction du type d'objet
     if object_type == "cube":
-        size = params.get("size", params.get("côté", 10)) # Default size 10
-        scad_code = f"cube({size});"
-    elif object_type == "sphere" or object_type == "sphère":
-        radius = params.get("radius", params.get("rayon", 5)) # Default radius 5
-        scad_code = f"sphere(r={radius});"
-    elif object_type == "cylinder" or object_type == "cylindre":
-        height = params.get("height", params.get("hauteur", 20)) # Default height 20
-        radius = params.get("radius", params.get("rayon", params.get("r", 5))) # Default radius 5
-        # OpenSCAD cylinder can have r, r1, r2. For simplicity, one radius or r1/r2.
-        radius_top = params.get("radius_top", params.get("r1"))
-        radius_bottom = params.get("radius_bottom", params.get("r2"))
-        if radius_top is not None and radius_bottom is not None:
-            scad_code = f"cylinder(h={height}, r1={radius_top}, r2={radius_bottom});"
-        else:
-            scad_code = f"cylinder(h={height}, r={radius});"
+        size = str(params.get("size", 1.0))
+        command.append(size)
+    elif object_type == "sphere":
+        # Notre viewer.py pour la sphère prend le diamètre comme 'size'
+        size = str(params.get("size", 1.0))
+        command.append(size)
+    elif object_type == "cylinder":
+        radius = str(params.get("radius", 0.5))
+        height = str(params.get("height", 2.0))
+        command.append(radius)
+        command.append(height)
+    elif object_type == "cone":
+        radius = str(params.get("radius", 1.0))
+        height = str(params.get("height", 2.0))
+        command.append(radius)
+        command.append(height)
+    elif object_type == "plane":
+        size = str(params.get("size", 2.0))
+        command.append(size)
+    elif object_type == "torus":
+        radius = str(params.get("radius", 1.0))
+        thickness = str(params.get("thickness", 0.3))
+        command.append(radius)
+        command.append(thickness)
     else:
-        return "Type d'objet 3D non reconnu ou paramètres manquants. Je peux générer des 'cube', 'sphere', ou 'cylinder'."
+        return f"Type d'objet 3D non reconnu: '{object_type}'. Formes supportées : cube, sphere, cylinder, cone, plane, tore."
 
-    return f"// Code OpenSCAD généré par EVA\n// Type: {object_type}, Paramètres: {params}\n{scad_code}"
-
+    try:
+        print(f"INFO: Lancement du visualiseur 3D avec la commande: {' '.join(command)}")
+        # Pas besoin de logs pour PyVista, il est stable.
+        subprocess.Popen(command)
+        return f"Parfait, je lance la fenêtre de visualisation pour un(e) {object_type}."
+    except Exception as e:
+        traceback.print_exc()
+        return f"Erreur lors du lancement du visualiseur 3D : {e}"
+    
 def handle_launch_application(entities):
     app_name_alias = entities.get("app_name") # Nom potentiellement court/alias
     args = entities.get("args", [])
@@ -2161,9 +2320,6 @@ def chat_ws(ws):
                             panel_data_content = None
                             panel_target_id = None
                             
-                            # =====================================================================================
-                            # MODIFICATION 2 : LOGIQUE DU PANNEAU DE RECHERCHE MISE A JOUR
-                            # =====================================================================================
                             if parsed_command_action == "web_search":
                                 panel_data_content = final_text_response_for_action.get("raw_results", "Aucun résultat brut à afficher.")
                                 panel_target_id = "searchContent"
@@ -2238,9 +2394,9 @@ def chat_ws(ws):
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "codeDisplayContent"
                             elif parsed_command_action == "generate_3d_object":
-                                panel_data_content = str(final_text_response_for_action)
-                                panel_target_id = "codeDisplayContent"
-
+                                # La visualisation 3D n'a pas besoin de mettre à jour de panneau
+                                panel_data_content = None
+                                panel_target_id = None
                         else:
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
