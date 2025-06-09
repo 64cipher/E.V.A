@@ -1,4 +1,4 @@
-# E.V.A – Enhanced Virtual Assistant 
+# E.V.A – Evolved Virtual Assistant 
 
 Python3.11 requis
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
@@ -12,7 +12,7 @@ Merci à lui pour son travail.
 
 ## Présentation
 
-EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, Custom Search API pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
+EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, Custom Search API pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
 
 **Use‑case principal :** un hub productivité « tout‑en‑un » piloté à la voix : créer des événements calendrier, envoyer des e‑mails, obtenir un itinéraire, lancer une recherche Web, gérer contacts & tâches… et obtenir la réponse parlée.
 
