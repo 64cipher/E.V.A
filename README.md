@@ -1,5 +1,6 @@
 # E.V.A – Enhanced Virtual Assistant 
 
+Python3.11 requis
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
 
 Inspiré par le projet ada_app de Nlouis38
@@ -31,7 +32,7 @@ EVA (Enhanced Virtual Assistant) est un assistant personnel vocal et textuel fra
 | **Interface**     | Panneau latéral (carte, recherche, e‑mails, tâches, calendrier, code généré). |
 | **Transcript Audio Whisper**  | Convertisserz un audio MP3 ou WAV en texte.                       |
 | **Visualiseur 3D**     | Demandez à E.V.A de créer un objet comme un cube, une sphere, un cône ou un tore en 3D.    |
-
+| **Execution de codes** | E.V.A peux executer du code python et intéragir avec le shell            |
 ---
 
 ## Architecture rapide
