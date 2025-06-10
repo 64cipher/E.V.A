@@ -211,9 +211,9 @@ simple‑websocket
 google‑generativeai
 dotenv
 google-search-results
-beatifulsoup4
+beautifulsoup4
 openai-whisper
-ffmpeg
+ffmpeg-python
 pyvista
 ```
 
