@@ -13,5 +13,5 @@ dotenv
 google-search-results
 beautifulsoup4
 openai-whisper
-ffmpeg
+ffmpeg-python
 pyvista
