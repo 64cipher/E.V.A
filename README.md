@@ -33,7 +33,7 @@ EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel fran
 | **Interface**     | Panneau latéral (carte, recherche, e‑mails, tâches, calendrier, code généré). |
 | **Transcript Audio Whisper**  | Convertisserz un audio MP3 ou WAV en texte.                       |
 | **Visualiseur 3D**     | Demandez à E.V.A de créer un objet comme un cube, une sphere, un cône ou un tore en 3D.    |
-| **Execution de codes** | E.V.A peux executer du code python et intéragir avec le shell            |
+| **Execution de code** | E.V.A peux executer du code python et intéragir avec le shell            |
 ---
 
 ## Architecture rapide
