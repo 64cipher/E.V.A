@@ -1,7 +1,8 @@
 # E.V.A – Evolved Virtual Assistant 
 
-Python3.11 requis
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
+
+Python3.11 requis.
 
 Inspiré par le projet ada_app de Nlouis38
 https://github.com/Nlouis38/ada 
