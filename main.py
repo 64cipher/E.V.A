@@ -115,10 +115,7 @@ if not google_custom_search_available:
 
 import multiprocessing
 
-
-
-# --- Fin du code du visualiseur ---
-
+# Configuration des SCOPES Google
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://127.0.0.1:8080", "http://localhost:8080"]}}, supports_credentials=True)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "une_cle_secrete_par_defaut_tres_forte")
@@ -513,6 +510,7 @@ L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spéci
 Les prévisions météo sont gérées par le client (JavaScript) pour l'affichage, mais tu dois fournir un résumé verbal comme indiqué plus haut.
 """
 
+# Gestion du LLM Gemini
 import google.generativeai as genai
 generative_model = None
 try:
@@ -529,6 +527,7 @@ except Exception as e:
 gemini_conversation_history = []
 MAX_HISTORY_ITEMS = 4
 
+# Gestion des identifiants OAuth via Pickle
 def get_google_credentials():
     creds = None
     if os.path.exists(TOKEN_PICKLE_FILE):
@@ -603,7 +602,7 @@ def oauth2callback_google():
     <body><h1>Authentification Google Réussie!</h1><p>Vous pouvez fermer cette fenêtre.</p>
     <script>setTimeout(function() { window.close(); }, 1000);</script></body></html>
     """
-
+# Liste des E-Mails (envoi et lecture)
 def list_unread_emails(max_results=10): # Added default value
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour Gmail. Veuillez autoriser via /authorize_google."
@@ -710,7 +709,7 @@ def get_email_body_from_payload(payload):
         return text.strip()
     return None
 
-
+# Google Task
 def create_google_task(title, notes=None):
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour créer des tâches. Veuillez autoriser via /authorize_google."
@@ -844,6 +843,7 @@ def find_event_id(service, summary_hint, start_dt_obj, original_datetime_str):
         traceback.print_exc()
         return 'error', str(e)
 
+# Google Calendar
 def delete_calendar_event(summary, datetime_str):
     """Supprime un événement du calendrier en utilisant la logique de recherche améliorée."""
     creds = get_google_credentials()
@@ -936,6 +936,7 @@ def update_calendar_event(old_summary, old_datetime_str, new_summary, new_dateti
         traceback.print_exc()
         return f"Erreur lors de la mise à jour de l'événement : {e}"
 
+# Google Task
 def find_task_id(service, task_title):
     """Trouve l'ID d'une tâche par son titre exact (insensible à la casse)."""
     try:
