@@ -142,7 +142,7 @@ EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel fran
      ```
 
      Remplacez `GOOGLE_MAPS_API_KEY` par la clé réelle.
-   * Ligne 609, remplacez `const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';` par votre clé OpenWeatherMap.
+   * Ligne 584, remplacez `const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY';` par votre clé OpenWeatherMap.
 7. **Lancer le backend**
 
    ```bash
