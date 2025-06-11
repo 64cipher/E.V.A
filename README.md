@@ -9,7 +9,8 @@ https://github.com/Nlouis38/ada
 
 Merci à lui pour son travail.
 
-![image](https://github.com/user-attachments/assets/4d4282a7-5980-496d-b9ec-858169f5a0b4)
+![image](https://github.com/user-attachments/assets/ba8ed8bf-6940-4392-a14d-8bda586f59c3)
+
 
 ## Présentation
 
