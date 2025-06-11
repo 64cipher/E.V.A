@@ -173,10 +173,10 @@ EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel fran
 
 N'hésitez pas à rentrer des informations selon votre situation pro/perso pour donner du contexte dans `SYSTEM_MESSAGE_CONTENT`
 
-Ligne 399:
+Ligne 435:
 ```L'utilisateur s'appelle 'VOTRE_PRENOM'.```
 
-Ligne 408:
+Ligne 457:
 ```par exemple : 'En route pour {destination}, VOTRE_PRENOM```
 
 ---
