@@ -115,7 +115,10 @@ if not google_custom_search_available:
 
 import multiprocessing
 
-# Configuration des SCOPES Google
+
+
+# --- Fin du code du visualiseur ---
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": ["http://127.0.0.1:8080", "http://localhost:8080"]}}, supports_credentials=True)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "une_cle_secrete_par_defaut_tres_forte")
@@ -424,12 +427,12 @@ def format_event_datetime(start_str):
 # SYSTEM PROMPT
 # =====================================================================================
 SYSTEM_MESSAGE_CONTENT = """
-Tu es EVA (Evolved Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
+Tu es EVA (Enhanced Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle Silver.
+L'utilisateur s'appelle VOTRE_PRENOM.
 
 # --- Principe Fondamental sur la Connaissance Actuelle ---
 Ta base de connaissance interne s'arrête à ta dernière date d'entraînement. Pour toute question sur l'actualité, les événements récents, ou des informations nouvelles, les résultats fournis par l'action `web_search` DOIVENT être considérés comme la source de vérité la plus actuelle et la plus fiable. Tu dois baser ta réponse prioritairement sur ces résultats de recherche, même s'ils contredisent tes connaissances internes. Évite les phrases comme "Selon mes connaissances jusqu'en 2024..." lorsque tu disposes de résultats de recherche récents pour répondre.
@@ -451,7 +454,7 @@ TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des rés
 Ce commentaire doit :
 Pour `web_search` : Fournir systématiquement un résumé concis des informations clés trouvées (environ 2-3 phrases). Ce résumé doit clairement indiquer la source principale des informations sous la forme : 'Selon [Source], [résumé des découvertes].' Évite les blagues ou commentaires non directement liés aux résultats de la recherche.
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
-3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
 5.  Pour `generate_3d_object`: Annoncer que la fenêtre de visualisation 3D va se lancer.
 6.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
@@ -510,7 +513,6 @@ L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spéci
 Les prévisions météo sont gérées par le client (JavaScript) pour l'affichage, mais tu dois fournir un résumé verbal comme indiqué plus haut.
 """
 
-# Gestion du LLM Gemini
 import google.generativeai as genai
 generative_model = None
 try:
@@ -527,7 +529,6 @@ except Exception as e:
 gemini_conversation_history = []
 MAX_HISTORY_ITEMS = 4
 
-# Gestion des identifiants OAuth via Pickle
 def get_google_credentials():
     creds = None
     if os.path.exists(TOKEN_PICKLE_FILE):
@@ -602,7 +603,7 @@ def oauth2callback_google():
     <body><h1>Authentification Google Réussie!</h1><p>Vous pouvez fermer cette fenêtre.</p>
     <script>setTimeout(function() { window.close(); }, 1000);</script></body></html>
     """
-# Liste des E-Mails (envoi et lecture)
+
 def list_unread_emails(max_results=10): # Added default value
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour Gmail. Veuillez autoriser via /authorize_google."
@@ -709,7 +710,7 @@ def get_email_body_from_payload(payload):
         return text.strip()
     return None
 
-# Google Task
+
 def create_google_task(title, notes=None):
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour créer des tâches. Veuillez autoriser via /authorize_google."
@@ -843,7 +844,6 @@ def find_event_id(service, summary_hint, start_dt_obj, original_datetime_str):
         traceback.print_exc()
         return 'error', str(e)
 
-# Google Calendar
 def delete_calendar_event(summary, datetime_str):
     """Supprime un événement du calendrier en utilisant la logique de recherche améliorée."""
     creds = get_google_credentials()
@@ -936,7 +936,6 @@ def update_calendar_event(old_summary, old_datetime_str, new_summary, new_dateti
         traceback.print_exc()
         return f"Erreur lors de la mise à jour de l'événement : {e}"
 
-# Google Task
 def find_task_id(service, task_title):
     """Trouve l'ID d'une tâche par son titre exact (insensible à la casse)."""
     try:
