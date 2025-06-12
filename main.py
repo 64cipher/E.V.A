@@ -489,6 +489,10 @@ Exemples d'entités attendues pour chaque action :
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
 - "update_task": {"old_task_title": "titre de la tâche à modifier", "new_task_title": "nouveau titre pour la tâche"}
 - "delete_task": {"task_title": "titre de la tâche à supprimer"}
+- "spotify_play": {"query": "nom de la piste, de l'artiste ou de l'album, une musique d'ambiance, une musique de concentration, une musique dubstep, etc..."}
+- "spotify_pause": {} (les entités peuvent être vides)
+- "spotify_next": {} (les entités peuvent être vides)
+- "spotify_stop": {} (les entités peuvent être vides, sera traité comme une pause)
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -2117,6 +2121,39 @@ def handle_update_task(entities):
         return update_google_task(old_title, new_title)
     return "Veuillez me donner le titre actuel et le nouveau titre de la tâche."
 
+# --- Fonctions de contrôle Spotify ---
+def handle_spotify_play(entities):
+    query = entities.get("query")
+    if not query:
+        return "Quelle musique souhaitez-vous écouter ?"
+    try:
+        # Commande pour lancer le script externe
+        command = [sys.executable, "spotify_controller.py", "play", query]
+        subprocess.Popen(command)
+        return f"Je lance la recherche pour '{query}' sur Spotify."
+    except Exception as e:
+        return f"Erreur lors du lancement du contrôleur Spotify : {e}"
+
+def handle_spotify_pause(entities):
+    try:
+        command = [sys.executable, "spotify_controller.py", "pause"]
+        subprocess.Popen(command)
+        return "Musique mise en pause."
+    except Exception as e:
+        return f"Erreur lors de la mise en pause : {e}"
+
+def handle_spotify_next(entities):
+    try:
+        command = [sys.executable, "spotify_controller.py", "next"]
+        subprocess.Popen(command)
+        return "Passage à la musique suivante."
+    except Exception as e:
+        return f"Erreur lors du changement de piste : {e}"
+
+# Note: Spotify n'a pas de "stop", on utilise donc "pause".
+def handle_spotify_stop(entities):
+    return handle_spotify_pause(entities)
+
 # --- End of missing handler functions ---
 
 # =====================================================================================
@@ -2149,6 +2186,10 @@ action_dispatcher = {
     "generate_3d_object": handle_generate_3d_object,
     "launch_application": handle_launch_application,
     "open_webpage": handle_open_webpage,
+    "spotify_play": handle_spotify_play,
+    "spotify_pause": handle_spotify_pause,
+    "spotify_next": handle_spotify_next,
+    "spotify_stop": handle_spotify_stop,
 }
 
 # --- WebSocket Handler ---
@@ -2316,25 +2357,47 @@ def chat_ws(ws):
                             action_taken_by_nlu = True
 
                             
-                            # --- LOGIQUE D'AFFICHAGE DU CHAT ---
-                            # D'abord, on traite les cas où le résultat de l'action EST la réponse directe.
+                            # --- LOGIQUE D'AFFICHAGE DU CHAT (CORRIGÉE ET INDENTÉE) ---
+            
+                            # Cas 1: Actions spécifiques où le résultat de l'action est le message direct.
                             if parsed_command_action == "get_current_datetime":
                                 chat_display_message = str(final_text_response_for_action)
                             
-                            # Cas spécifique pour la recherche web qui retourne un dictionnaire complexe
+                            # Cas 2: La recherche web utilise la synthèse de Gemini.
                             elif parsed_command_action == "web_search":
                                 chat_display_message = final_text_response_for_action.get("synthesized_answer", "Erreur de synthèse.")
                             
-                            # Ensuite, on vérifie si Gemini a fourni un commentaire pertinent pour les autres actions.
+                            # Cas 3: La gestion des itinéraires a une logique de formatage complexe.
+                            elif parsed_command_action == "get_directions":
+                                if isinstance(final_text_response_for_action, dict):
+                                    if final_text_response_for_action.get("status") == "success":
+                                        distance = final_text_response_for_action.get("distance", "distance inconnue")
+                                        duration = final_text_response_for_action.get("duration", "durée inconnue")
+                                        destination_entity = entities.get("destination", "votre destination")
+                                        
+                                        # On utilise le commentaire de Gemini s'il contient les placeholders, sinon un message par défaut.
+                                        if gemini_explanation_text and "{destination}" in gemini_explanation_text:
+                                            try:
+                                                chat_display_message = gemini_explanation_text.format(destination=destination_entity, distance=distance, duration=duration)
+                                            except KeyError:
+                                                chat_display_message = f"En route pour {destination_entity}! Le trajet de {distance} devrait prendre {duration}."
+                                        else:
+                                            chat_display_message = f"En route pour {destination_entity}! Le trajet de {distance} devrait prendre {duration}."
+                                    else:
+                                        # En cas d'erreur de direction, on affiche le résumé de l'erreur dans le chat.
+                                        chat_display_message = final_text_response_for_action.get("summary", "Impossible de calculer l'itinéraire.")
+                                else: 
+                                    # Fallback si la réponse n'est pas un dictionnaire
+                                    chat_display_message = str(final_text_response_for_action)
+                            
+                            # Cas 4: Pour toutes les autres actions, on privilégie le commentaire concis de Gemini.
                             elif gemini_explanation_text and gemini_explanation_text.strip():
                                 chat_display_message = gemini_explanation_text.strip()
                             
-                            # En dernier recours, on formate le résultat de l'action.
+                            # Cas 5 (Fallback): Si aucun des cas ci-dessus ne correspond, on met un message générique.
+                            # Ceci évite d'afficher le contenu long d'une liste dans le chat.
                             else:
-                                if isinstance(final_text_response_for_action, dict) and "summary" in final_text_response_for_action:
-                                    chat_display_message = final_text_response_for_action["summary"]
-                                else:
-                                    chat_display_message = str(final_text_response_for_action)
+                                chat_display_message = "C'est fait. Les informations ont été mises à jour dans le panneau correspondant."
 
                             
                             # --- LOGIQUE D'AFFICHAGE DES PANNEAUX ---
