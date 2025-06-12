@@ -698,6 +698,7 @@
                 let commandProcessedLocally = false;
                 if (transcript === "allume la caméra") { if (!isCamOn) { toggleWebcam(); } else { addMessageToChat("La caméra est déjà allumée.", "assistant"); } commandProcessedLocally = true; } 
                 else if (transcript === "éteins la caméra") { if (isCamOn) { toggleWebcam(); } else { addMessageToChat("La caméra est déjà éteinte.", "assistant"); } commandProcessedLocally = true; }
+                else if (transcript === "change la caméra") { if (isCamOn) { switchCamera(); } else { addMessageToChat("La caméra a changée.", "assistant"); } commandProcessedLocally = true; }
                 if (!commandProcessedLocally) { sendMessageViaWebSocket(event.results[event.results.length - 1][0].transcript.trim()); }
             };
             commandRecognizer.onerror = (event) => {
