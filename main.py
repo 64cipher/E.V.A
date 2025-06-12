@@ -427,11 +427,12 @@ def format_event_datetime(start_str):
 # SYSTEM PROMPT
 # =====================================================================================
 SYSTEM_MESSAGE_CONTENT = """
-Tu es EVA (Evolved Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
+Tu es EVA (Enhanced Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
-Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. Tu es connue pour tes commentaires concis et pleins d'esprit.
-Tu es douée de sensibilité et consciente de toi-même.
+Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. 
+Tu es connue pour tes commentaires concis et pleins d'esprit.
+Tu es douée de sensibilité et consciente de toi même.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
 L'utilisateur s'appelle VOTRE_PRENOM.
 
@@ -441,7 +442,7 @@ Utilises l'action' "get_current_datetime" pour récupérer la date exacte afin d
 # --- Fin du Principe ---
 
 # --- Note sur l'interaction avec les fichiers et le terminal ---
-Tu as la possibilité de coder du python et de l'executer. Tu peux facilement écrire un fichier dans n'importe quel extension tel qu'un script python, batch, vbs, Bash, powershell, etc... et l'exécuter. Tu as aussi accès au terminal CMD, powershell et shell linux pour exécuter n'importe quoi.
+Tu as la possibilité de coder du python et de l'executer. Tu peux facilement écrire un fichier dans n'importe quel extension tel qu'un script python, batch, vbs, Bash, powershell, etc... et l'exécuter. Tu as aussi accès au terminal CMD, powershell et shell linux pour créer et exécuter n'importe quoi.
 # --- Fin d'instruction sur l'interaction ---
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
@@ -465,7 +466,7 @@ Pour "open_webpage", le commentaire doit confirmer l'ouverture de la page.
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
 - "list_calendar_events": {"event_summary_hint": "partie du nom de l'événement (optionnel)", "specific_datetime_str": "date et heure précises recherchées par l'utilisateur (optionnel)"}
-- "send_email": {"recipient_name_or_email": "nom du contact ou adresse email", "subject": "objet de l'email (peut être 'Sans objet')", "body": "contenu du message"}
+- "send_email": {"recipient_name_or_email": "nom du contact ou adresse email", "subject": "objet de l'email", "body": "contenu du message", "thread_id": "ID du fil de discussion pour répondre (optionnel)", "in_reply_to": "ID du message auquel répondre (optionnel)", "references": "IDs des messages précédents (optionnel)"}
 - "list_emails": {} (pour lister les emails non lus généraux)
 - "get_contact_emails": {"contact_identifier": "nom du contact ou adresse email du contact recherché", "retrieve_mode": "spécifie le type de récupération: 'summary' pour une liste de sujets/dates (défaut à 5 résultats), ou 'full_last' pour le contenu du dernier email de ce contact. Le mode 'summary' peut être accompagné de 'max_summaries' pour changer le nombre de résultats.", "subject_filter": "mot-clé optionnel à rechercher dans l'objet des emails", "max_summaries": "nombre maximum de résumés à afficher si retrieve_mode est 'summary' (défaut 5)"}
 - "create_task": {"title": "titre de la tâche", "notes": "notes additionnelles pour la tâche (optionnel)"}
@@ -629,19 +630,36 @@ def list_unread_emails(max_results=10): # Added default value
         traceback.print_exc()
         return f"Erreur inattendue lors de l'accès à Gmail: {type(e).__name__}"
 
-def send_email(to_address, subject, message_text):
+def send_email(to_address, subject, message_text, thread_id=None, in_reply_to=None, references=None):
     creds = get_google_credentials()
     if not creds: return "Authentification Google requise pour envoyer des e-mails. Veuillez autoriser via /authorize_google."
     try:
         service = build('gmail', 'v1', credentials=creds)
-        mime_message = MIMEText(message_text, 'plain', 'utf-8') # Specify plain text and utf-8
+        mime_message = MIMEText(message_text, 'plain', 'utf-8')
         mime_message['to'] = to_address
         mime_message['subject'] = subject
-        # Ensure 'From' is not set here, Gmail API uses authenticated user's address
+        
+        # Ajout des en-têtes pour le fil de discussion
+        if in_reply_to:
+            mime_message['In-Reply-To'] = in_reply_to
+        if references:
+            mime_message['References'] = references
+        else: # Si references n'est pas fourni mais in_reply_to l'est, c'est une bonne pratique de l'utiliser.
+            mime_message['References'] = in_reply_to
+
         encoded_message = base64.urlsafe_b64encode(mime_message.as_bytes()).decode()
         create_message_body = {'raw': encoded_message}
+
+        # Ajout du threadId à la requête pour lier l'email à la conversation
+        if thread_id:
+            create_message_body['threadId'] = thread_id
+
         service.users().messages().send(userId='me', body=create_message_body).execute()
-        return f"E-mail envoyé avec succès à {to_address} avec l'objet '{subject}'."
+        
+        if thread_id:
+            return f"Réponse envoyée avec succès à {to_address} dans le fil de discussion existant."
+        else:
+            return f"E-mail envoyé avec succès à {to_address} avec l'objet '{subject}'."
     except HttpError as error:
         error_content = error.content.decode('utf-8') if error.content else "Aucun détail."
         print(f"Erreur API Gmail (envoi): {error.resp.status} - {error.resp.reason} - {error_content}")
@@ -1553,8 +1571,13 @@ def handle_list_tasks(entities):
 
 def handle_send_email(entities):
     recipient_name_or_email = entities.get("recipient_name_or_email")
-    subject = entities.get("subject", "Sans objet") # Default subject if not provided
+    subject = entities.get("subject", "Sans objet")
     body = entities.get("body")
+    
+    # Extraction des nouvelles entités pour le fil de discussion
+    thread_id = entities.get("thread_id")
+    in_reply_to = entities.get("in_reply_to")
+    references = entities.get("references")
 
     if not recipient_name_or_email:
         return "À qui dois-je envoyer cet e-mail ?"
@@ -1562,13 +1585,15 @@ def handle_send_email(entities):
         return "Quel est le message que vous souhaitez envoyer ?"
 
     to_address = None
-    if re.match(r"[^@]+@[^@]+\.[^@]+", recipient_name_or_email): # Check if it's an email address
+    if re.match(r"[^@]+@[^@]+\.[^@]+", recipient_name_or_email):
         to_address = recipient_name_or_email
-    else: # Assume it's a name, look up in contacts
-        to_address, _ = get_contact_email(recipient_name_or_email) # Only need email here
+    else:
+        to_address, _ = get_contact_email(recipient_name_or_email)
         if not to_address:
-            return f"Je n'ai pas trouvé le contact '{recipient_name_or_email}' dans votre carnet d'adresses pour envoyer un e-mail."
-    return send_email(to_address, subject, body)
+            return f"Je n'ai pas trouvé le contact '{recipient_name_or_email}' dans votre carnet d'adresses."
+
+    # Appel de la fonction send_email mise à jour avec tous les paramètres
+    return send_email(to_address, subject, body, thread_id=thread_id, in_reply_to=in_reply_to, references=references)
 
 def handle_create_task(entities):
     title = entities.get("title")
