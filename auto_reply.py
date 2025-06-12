@@ -234,7 +234,7 @@ async def main(token_file, silent_mode, reply_all_mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Agent de réponse automatique pour EVA.")
     parser.add_argument(
-        '--token', type=str, default='eva.pickle',
+        '--token', type=str, default='token.pickle',
         help="Chemin vers le fichier .pickle d'authentification."
     )
     parser.add_argument(
