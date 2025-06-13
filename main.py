@@ -491,7 +491,9 @@ Exemples d'entités attendues pour chaque action :
 - "delete_task": {"task_title": "titre de la tâche à supprimer"}
 - "spotify_play": {"query": "nom de la piste, de l'artiste ou de l'album, une musique d'ambiance, une musique de concentration, une musique dubstep, etc..."}
 - "spotify_pause": {} (les entités peuvent être vides)
+- "spotify_resume": {} (les entités peuvent être vides, pour reprendre la lecture)
 - "spotify_next": {} (les entités peuvent être vides)
+- "spotify_previous": {} (les entités peuvent être vides)
 - "spotify_stop": {} (les entités peuvent être vides, sera traité comme une pause)
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
@@ -2150,6 +2152,27 @@ def handle_spotify_next(entities):
     except Exception as e:
         return f"Erreur lors du changement de piste : {e}"
 
+def handle_spotify_resume(entities):
+    try:
+        # La commande "play" sans argument dans le nouveau spotify_controller.py gère la reprise
+        command = [sys.executable, "spotify_controller.py", "play"]
+        subprocess.Popen(command)
+        return "Je relance la musique."
+    except Exception as e:
+        return f"Erreur lors de la reprise de la lecture : {e}"
+
+def handle_spotify_previous(entities):
+    try:
+        command = [sys.executable, "spotify_controller.py", "previous"]
+        subprocess.Popen(command)
+        return "Retour à la musique précédente."
+    except Exception as e:
+        return f"Erreur lors du retour à la piste précédente : {e}"
+
+# Note: Spotify n'a pas de "stop", on utilise donc "pause".
+def handle_spotify_stop(entities):
+    return handle_spotify_pause(entities)
+
 # Note: Spotify n'a pas de "stop", on utilise donc "pause".
 def handle_spotify_stop(entities):
     return handle_spotify_pause(entities)
@@ -2188,7 +2211,9 @@ action_dispatcher = {
     "open_webpage": handle_open_webpage,
     "spotify_play": handle_spotify_play,
     "spotify_pause": handle_spotify_pause,
+    "spotify_resume": handle_spotify_resume,
     "spotify_next": handle_spotify_next,
+    "spotify_previous": handle_spotify_previous,
     "spotify_stop": handle_spotify_stop,
 }
 
