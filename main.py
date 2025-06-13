@@ -483,7 +483,7 @@ Exemples d'entités attendues pour chaque action :
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
-- "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc')", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
+- "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
