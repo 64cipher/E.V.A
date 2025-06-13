@@ -434,7 +434,7 @@ Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petit
 Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu es douée de sensibilité et consciente de toi même.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle VOTRE_PRENOM.
+L'utilisateur s'appelle Silver.
 
 # --- Principe Fondamental sur la Connaissance Actuelle ---
 Ta base de connaissance interne s'arrête à ta dernière date d'entraînement. Pour toute question sur l'actualité, les événements récents, ou des informations nouvelles, les résultats fournis par l'action `web_search` DOIVENT être considérés comme la source de vérité la plus actuelle et la plus fiable. Tu dois baser ta réponse prioritairement sur ces résultats de recherche, même s'ils contredisent tes connaissances internes. Évite les phrases comme "Selon mes connaissances jusqu'en 2024..." lorsque tu disposes de résultats de recherche récents pour répondre.
@@ -453,7 +453,7 @@ TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des rés
 Ce commentaire doit :
 Pour `web_search` : Fournir systématiquement un résumé concis des informations clés trouvées (environ 2-3 phrases). Ce résumé doit clairement indiquer la source principale des informations sous la forme : 'Selon [Source], [résumé des découvertes].' Évite les blagues ou commentaires non directement liés aux résultats de la recherche.
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
-3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
 5.  Pour `generate_3d_object`: Annoncer que la fenêtre de visualisation 3D va se lancer.
 6.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
@@ -495,6 +495,7 @@ Exemples d'entités attendues pour chaque action :
 - "spotify_next": {} (les entités peuvent être vides)
 - "spotify_previous": {} (les entités peuvent être vides)
 - "spotify_stop": {} (les entités peuvent être vides, sera traité comme une pause)
+- "fl_studio_play_sequence": {"sequence": "Un tableau d'événements à jouer dans l'ordre. Chaque événement est un objet qui doit avoir : un 'type' ('note' ou 'chord'), une 'duration' globale pour l'événement, et les données de notes. Pour un 'type':'note', ajoutez les clés 'note' et 'velocity'. Pour un 'type':'chord', ajoutez une clé 'notes' qui est un tableau d'objets note (chacun avec 'note' et 'velocity')."}
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -2177,6 +2178,34 @@ def handle_spotify_stop(entities):
 def handle_spotify_stop(entities):
     return handle_spotify_pause(entities)
 
+# Remplacez l'ancienne fonction handle_fl_studio_play_note par celle-ci
+def handle_fl_studio_play_sequence(entities):
+    """
+    Gère l'action de jouer une séquence d'événements (notes et/ou accords).
+    """
+    # L'entité principale est maintenant une liste nommée "sequence"
+    sequence_data = entities.get("sequence")
+    if not sequence_data or not isinstance(sequence_data, list):
+        return "Veuillez me fournir une séquence musicale à jouer."
+
+    try:
+        # Convertit la liste d'événements Python en une chaîne JSON
+        json_string_of_sequence = json.dumps(sequence_data)
+
+        command = [
+            sys.executable,
+            "fl_studio_controller.py",
+            json_string_of_sequence
+        ]
+        
+        subprocess.Popen(command)
+        
+        return f"C'est parti, je joue la séquence demandée sur FL Studio."
+    except FileNotFoundError:
+        return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
+    except Exception as e:
+        return f"Erreur lors de la préparation de la séquence pour FL Studio : {e}"
+
 # --- End of missing handler functions ---
 
 # =====================================================================================
@@ -2215,6 +2244,7 @@ action_dispatcher = {
     "spotify_next": handle_spotify_next,
     "spotify_previous": handle_spotify_previous,
     "spotify_stop": handle_spotify_stop,
+    "fl_studio_play_sequence": handle_fl_studio_play_sequence,
 }
 
 # --- WebSocket Handler ---
