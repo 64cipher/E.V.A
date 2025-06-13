@@ -495,7 +495,6 @@ Exemples d'entités attendues pour chaque action :
 - "spotify_next": {} (les entités peuvent être vides)
 - "spotify_previous": {} (les entités peuvent être vides)
 - "spotify_stop": {} (les entités peuvent être vides, sera traité comme une pause)
-- "fl_studio_play_sequence": {"sequence": "Un tableau d'événements à jouer dans l'ordre. Chaque événement est un objet qui doit avoir : un 'type' ('note' ou 'chord'), une 'duration' globale pour l'événement, et les données de notes. Pour un 'type':'note', ajoutez les clés 'note' et 'velocity'. Pour un 'type':'chord', ajoutez une clé 'notes' qui est un tableau d'objets note (chacun avec 'note' et 'velocity')."}
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -2178,34 +2177,6 @@ def handle_spotify_stop(entities):
 def handle_spotify_stop(entities):
     return handle_spotify_pause(entities)
 
-# Remplacez l'ancienne fonction handle_fl_studio_play_note par celle-ci
-def handle_fl_studio_play_sequence(entities):
-    """
-    Gère l'action de jouer une séquence d'événements (notes et/ou accords).
-    """
-    # L'entité principale est maintenant une liste nommée "sequence"
-    sequence_data = entities.get("sequence")
-    if not sequence_data or not isinstance(sequence_data, list):
-        return "Veuillez me fournir une séquence musicale à jouer."
-
-    try:
-        # Convertit la liste d'événements Python en une chaîne JSON
-        json_string_of_sequence = json.dumps(sequence_data)
-
-        command = [
-            sys.executable,
-            "fl_studio_controller.py",
-            json_string_of_sequence
-        ]
-        
-        subprocess.Popen(command)
-        
-        return f"C'est parti, je joue la séquence demandée sur FL Studio."
-    except FileNotFoundError:
-        return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
-    except Exception as e:
-        return f"Erreur lors de la préparation de la séquence pour FL Studio : {e}"
-
 # --- End of missing handler functions ---
 
 # =====================================================================================
@@ -2244,7 +2215,6 @@ action_dispatcher = {
     "spotify_next": handle_spotify_next,
     "spotify_previous": handle_spotify_previous,
     "spotify_stop": handle_spotify_stop,
-    "fl_studio_play_sequence": handle_fl_studio_play_sequence,
 }
 
 # --- WebSocket Handler ---
