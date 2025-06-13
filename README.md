@@ -205,6 +205,7 @@ flask‑sock
 flask-cors
 google‑auth‑oauthlib
 google‑api‑python‑client
+google-auth-httplib2
 googlemaps
 gtts
 pillow
@@ -216,6 +217,7 @@ beautifulsoup4
 openai-whisper
 ffmpeg-python
 pyvista
+spotipy
 ```
 
 Générez le fichier exact via :
