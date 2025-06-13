@@ -1,14 +1,18 @@
 #.env file
 
+SPOTIPY_CLIENT_ID=YOUR_CLIENT
+SPOTIPY_CLIENT_SECRET=YOUR_CLIENT_SECRET
+SPOTIPY_REDIRECT_URI='http://127.0.0.1:8888/callback'
+
 GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
+
 GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 GOOGLE_CUSTOM_SEARCH_API_KEY=YOUR_GOOGLE_CUSTOM_SEARCH_API_KEY
 GOOGLE_CUSTOM_SEARCH_CX=YOUR_CX_KEY
+
 APP_CODE_PATH="C:\Users\VOTRE_USERNAME\AppData\Local\Programs\Microsoft VS Code\Code.exe"
 APP_CODE_PATH="C:\\Users\\VOTRE_USERNAME\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
 APP_VLC_PATH="C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
 APP_OBS_PATH="C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
 APP_STUDIO_PATH="C:\\Program Files\\Image-Line\\FL Studio 2024\\FL64.exe"
 APP_CHROME_PATH="C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-
-
