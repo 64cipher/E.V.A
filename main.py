@@ -18,6 +18,7 @@ import contextlib # Pour redirect_stdout avec exec
 import tempfile # Pour gérer les fichiers temporaires
 import math # Pour la visualisation 3D
 import threading # Pour le nettoyage des fichiers temporaires
+import urllib.parse
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -446,7 +447,7 @@ Tu as la possibilité de coder du python et de l'executer. Tu peux facilement é
 # --- Fin d'instruction sur l'interaction ---
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage", "get_current_datetime") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage","open_youtube_video", "get_current_datetime") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions", "process_audio"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
@@ -462,6 +463,7 @@ Ce commentaire doit être concis, spirituel et professionnel, et être séparé 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
 Pour l'action "launch_application", le commentaire doit confirmer le lancement (ou l'échec).
 Pour "open_webpage", le commentaire doit confirmer l'ouverture de la page.
+Pour jouer du piano, utilise l'action "fl_studio_play_sequence" (ex: "joue une mélodie sur le piano", "joue des accords sur le piano)
 
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
@@ -485,6 +487,7 @@ Exemples d'entités attendues pour chaque action :
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
+- "open_youtube_video": {"query": "le sujet de la vidéo à rechercher sur YouTube"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
 - "update_task": {"old_task_title": "titre de la tâche à modifier", "new_task_title": "nouveau titre pour la tâche"}
@@ -1977,6 +1980,51 @@ def handle_open_webpage(entities):
     except Exception as e:
         return f"Erreur lors de l'ouverture de l'URL '{url}': {e}"
 
+def handle_open_youtube_video(entities):
+    """
+    Recherche une vidéo sur YouTube et lance le premier résultat.
+    """
+    global url_processing_available # Vérifie si requests et bs4 sont dispo
+    if not url_processing_available:
+        return "La recherche de vidéo est indisponible car les bibliothèques requises (requests, beautifulsoup4) sont manquantes."
+
+    query = entities.get("query")
+    if not query:
+        return "Veuillez spécifier ce que je dois rechercher sur YouTube."
+
+    try:
+        # 1. Construire l'URL de recherche YouTube
+        encoded_query = urllib.parse.quote_plus(query)
+        search_url = f"https://www.youtube.com/results?search_query={encoded_query}"
+        print(f"INFO: [YouTube] Recherche sur l'URL : {search_url}")
+
+        # 2. Récupérer la page de résultats
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        response = requests.get(search_url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        # 3. Parser la page pour trouver le premier lien de vidéo
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Le sélecteur cible les liens dans les titres de vidéos.
+        # Il ignore les Shorts, les playlists et les chaînes.
+        first_video_link = soup.find('a', id='video-title', href=lambda href: href and href.startswith("/watch?v="))
+        
+        if first_video_link and first_video_link.has_attr('href'):
+            video_url = "https://www.youtube.com" + first_video_link['href']
+            print(f"INFO: [YouTube] Lancement de l'URL de la vidéo : {video_url}")
+            webbrowser.open_new_tab(video_url)
+            return f"Je lance la meilleure vidéo que j'ai trouvée pour '{query}' sur YouTube."
+        else:
+            print(f"WARN: [YouTube] Aucune vidéo correspondante trouvée pour '{query}'. Ouverture de la page de recherche.")
+            webbrowser.open_new_tab(search_url)
+            return f"Je n'ai pas trouvé de vidéo spécifique, mais voici les résultats de recherche pour '{query}'."
+
+    except Exception as e:
+        print(f"ERREUR [handle_open_youtube_video]: {e}")
+        traceback.print_exc()
+        return f"Une erreur est survenue lors de la recherche de la vidéo : {type(e).__name__}"
+
 def fetch_url_content_for_processing(url_to_fetch):
     """
     Fetches and extracts text content from a given URL.
@@ -2238,6 +2286,7 @@ action_dispatcher = {
     "generate_3d_object": handle_generate_3d_object,
     "launch_application": handle_launch_application,
     "open_webpage": handle_open_webpage,
+    "open_youtube_video": handle_open_youtube_video,
     "spotify_play": handle_spotify_play,
     "spotify_pause": handle_spotify_pause,
     "spotify_resume": handle_spotify_resume,
