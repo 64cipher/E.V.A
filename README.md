@@ -12,6 +12,9 @@ Merci à lui pour son travail.
 ![image](https://github.com/user-attachments/assets/ba8ed8bf-6940-4392-a14d-8bda586f59c3)
 
 
+[EVA avec Mode Agent Experimental](https://github.com/64cipher/E.V.A/tree/mode-agent)
+
+
 ## Présentation
 
 EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, Custom Search API pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
@@ -253,4 +256,3 @@ pip freeze > requirements.txt
 
 ---
 
-[EVA avec Mode Agent](https://github.com/64cipher/E.V.A/tree/mode-agent)
