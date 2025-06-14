@@ -7,13 +7,15 @@ import re
 import requests # Pour les appels à l'API de recherche Google
 import io
 import contextlib
+import subprocess # Ajouté pour lancer des processus externes
 
 import google.generativeai as genai
 from dotenv import load_dotenv
 
 # --- Configuration ---
 load_dotenv()
-gemini_api_key = os.getenv("GEMINI2_API_KEY")
+# Assurez-vous que la clé API pour ce modèle est bien définie
+gemini_api_key = os.getenv("GEMINI2_API_KEY") 
 if not gemini_api_key:
     print(json.dumps({"type": "error", "content": "Clé API Gemini manquante pour l'agent."}), flush=True)
     sys.exit(1)
@@ -25,7 +27,7 @@ google_search_enabled = bool(google_custom_search_api_key and google_custom_sear
 
 
 genai.configure(api_key=gemini_api_key)
-# Utilisation d'un modèle plus apte au raisonnement complexe et à l'utilisation d'outils
+# Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
 agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # --- Boîte à Outils de l'Agent ---
@@ -94,6 +96,31 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"Erreur lors de l'exécution du code:\n{traceback.format_exc()}"
 
+def play_fl_studio_sequence(sequence_json: str) -> str:
+    """
+    Joue une séquence de notes ou d'accords sur FL Studio.
+    Le paramètre 'sequence_json' doit être une chaîne de caractères contenant un JSON valide
+    qui représente une liste d'événements musicaux.
+    """
+    try:
+        controller_path = "fl_studio_controller.py"
+        if not os.path.exists(controller_path):
+            return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
+
+        # Valider que l'entrée est bien un JSON
+        try:
+            json.loads(sequence_json)
+        except json.JSONDecodeError:
+            return "Erreur : le paramètre 'sequence_json' n'est pas une chaîne JSON valide."
+
+        # Lance le script contrôleur dans un autre processus
+        command = [sys.executable, controller_path, sequence_json]
+        subprocess.Popen(command)
+
+        return f"La séquence musicale a été envoyée à FL Studio."
+    except Exception as e:
+        return f"Erreur lors du lancement de la séquence musicale : {e}"
+
 
 AVAILABLE_TOOLS = {
     "web_search": {
@@ -105,11 +132,14 @@ AVAILABLE_TOOLS = {
         "function": execute_python,
         "description": "Exécute du code Python. Utilise-le pour des calculs complexes, la manipulation de chaînes de caractères, ou pour créer du contenu structuré (ex: HTML, SVG). Le code est exécuté dans un environnement isolé.",
         "params": {"code": "string (doit être un bloc de code Python valide)"}
+    },
+    "play_music_sequence": {
+        "function": play_fl_studio_sequence,
+        "description": "Joue une séquence de notes ou d'accords sur FL Studio via le script 'fl_studio_controller.py'. L'agent doit générer lui-même la chaîne JSON de la séquence à jouer.",
+        "params": {"sequence_json": "string (une chaîne JSON qui représente une liste d'événements musicaux)"}
     }
 }
 
-# Le script d'analyse d'image est retiré car il était simulé et non demandé.
-# Si vous en avez besoin, il peut être ajouté à nouveau.
 
 AGENT_SYSTEM_PROMPT = f"""
 Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donnée en utilisant une chaîne de pensée (Thought) et d'action (Action).
