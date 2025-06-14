@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # --- Configuration ---
 load_dotenv()
 # Assurez-vous que la clé API pour ce modèle est bien définie
-gemini_api_key = os.getenv("GEMINI2_API_KEY") 
+gemini_api_key = os.getenv("GEMINI_API_KEY") 
 if not gemini_api_key:
     print(json.dumps({"type": "error", "content": "Clé API Gemini manquante pour l'agent."}), flush=True)
     sys.exit(1)
