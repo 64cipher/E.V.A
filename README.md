@@ -1,4 +1,4 @@
-# E.V.A – Evolved Virtual Assistant avec Mode Agent
+# E.V.A – Evolved Virtual Assistant avec Mode Agent (Instable)
 
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
 
