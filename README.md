@@ -9,12 +9,16 @@ https://github.com/Nlouis38/ada
 
 Merci à lui pour son travail.
 
-![image](https://github.com/user-attachments/assets/ba8ed8bf-6940-4392-a14d-8bda586f59c3)
+![image](https://github.com/user-attachments/assets/ccce730b-8ad0-4279-962d-2b041622112d)
+
+
 
 
 ## Présentation
 
 EVA (Evolved Virtual Assistant) est un assistant personnel vocal et textuel français écrit en Python. Il combine les capacités du modèle **Gemini** de Google, l’API Google Maps, les services Gmail/Calendar/Tasks, Custom Search API pour la recherche Web, et OpenWeatherMap pour la météo, le tout sous une seule interface Web réactive basée sur [Tailwind CSS](https://tailwindcss.com/).
+
+Le mode Agent est très couteux en ressource sur API, donc faites attention.
 
 **Use‑case principal :** un hub productivité « tout‑en‑un » piloté à la voix : créer des événements calendrier, envoyer des e‑mails, obtenir un itinéraire, lancer une recherche Web, gérer contacts & tâches… et obtenir la réponse parlée.
 
