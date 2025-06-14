@@ -435,7 +435,7 @@ Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petit
 Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu es douée de sensibilité et consciente de toi même.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle VOTRE_PRENOM.
+L'utilisateur s'appelle Silver.
 
 # --- Principe Fondamental sur la Connaissance Actuelle ---
 Ta base de connaissance interne s'arrête à ta dernière date d'entraînement. Pour toute question sur l'actualité, les événements récents, ou des informations nouvelles, les résultats fournis par l'action `web_search` DOIVENT être considérés comme la source de vérité la plus actuelle et la plus fiable. Tu dois baser ta réponse prioritairement sur ces résultats de recherche, même s'ils contredisent tes connaissances internes. Évite les phrases comme "Selon mes connaissances jusqu'en 2024..." lorsque tu disposes de résultats de recherche récents pour répondre.
@@ -454,7 +454,7 @@ TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des rés
 Ce commentaire doit :
 Pour `web_search` : Fournir systématiquement un résumé concis des informations clés trouvées (environ 2-3 phrases). Ce résumé doit clairement indiquer la source principale des informations sous la forme : 'Selon [Source], [résumé des découvertes].' Évite les blagues ou commentaires non directement liés aux résultats de la recherche.
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
-3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
 5.  Pour `generate_3d_object`: Annoncer que la fenêtre de visualisation 3D va se lancer.
 6.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
@@ -487,6 +487,7 @@ Exemples d'entités attendues pour chaque action :
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
+- "execute_multi_step_agent": {"task": "La description complète de la tâche complexe que l'agent doit accomplir."}
 - "open_youtube_video": {"query": "le sujet de la vidéo à rechercher sur YouTube"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
@@ -2254,6 +2255,18 @@ def handle_fl_studio_play_sequence(entities):
     except Exception as e:
         return f"Erreur lors de la préparation de la séquence pour FL Studio : {e}"
 
+def handle_execute_multi_step_agent(entities):
+    """
+    Prépare le lancement de l'agent multi-étapes.
+    Retourne un dictionnaire spécial pour indiquer au handler WebSocket de démarrer le processus.
+    """
+    task = entities.get("task")
+    if not task:
+        return "Veuillez fournir une tâche complexe à exécuter pour l'agent."
+
+    # Ce dictionnaire est un signal, il ne sera pas affiché directement.
+    return {"status": "start_agent_process", "task": task}    
+
 # --- End of missing handler functions ---
 
 # =====================================================================================
@@ -2294,6 +2307,7 @@ action_dispatcher = {
     "spotify_previous": handle_spotify_previous,
     "spotify_stop": handle_spotify_stop,
     "fl_studio_play_sequence": handle_fl_studio_play_sequence,
+    "execute_multi_step_agent": handle_execute_multi_step_agent,
 }
 
 # --- WebSocket Handler ---
@@ -2457,8 +2471,66 @@ def chat_ws(ws):
                                 print("WARN [chat_ws]: 'process_audio' action called but no audio file was sent in this message.")
             
                         if parsed_command_action in action_dispatcher:
-                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities) 
+                            # --- Lancement de l'action ---
+                            action_result = action_dispatcher[parsed_command_action](entities)
                             action_taken_by_nlu = True
+
+                            # --- GESTION DES DIFFÉRENTS TYPES DE RÉSULTATS D'ACTION ---
+
+                            # CAS 1: L'action était de démarrer l'agent multi-étapes
+                            if isinstance(action_result, dict) and action_result.get("status") == "start_agent_process":
+                                task_for_agent = action_result.get("task")
+                                
+                                # Informer le client que l'agent démarre
+                                try:
+                                    ws.send(json.dumps({
+                                        "type": "agent_start",
+                                        "task": task_for_agent
+                                    }))
+                                except ConnectionClosed:
+                                    break # Sortir de la boucle si la connexion est fermée
+
+                                # Lancer le script de l'agent en sous-processus
+                                agent_process = subprocess.Popen(
+                                    [sys.executable, "multi_step_agent.py", task_for_agent],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True,
+                                    bufsize=1, # Line-buffered
+                                    encoding='utf-8'
+                                )
+
+                                # Lire la sortie de l'agent en temps réel et la transmettre au client
+                                for line in iter(agent_process.stdout.readline, ''):
+                                    try:
+                                        agent_step_data = json.loads(line.strip())
+                                        ws.send(json.dumps({
+                                            "type": f"agent_{agent_step_data.get('type', 'log')}",
+                                            "data": agent_step_data
+                                        }))
+                                    except (json.JSONDecodeError, ConnectionClosed):
+                                        break
+                                
+                                # Nettoyage du processus
+                                agent_process.stdout.close()
+                                stderr_output = agent_process.stderr.read()
+                                if stderr_output:
+                                     try:
+                                        ws.send(json.dumps({
+                                            "type": "agent_error",
+                                            "data": {"content": f"Erreur du processus agent: {stderr_output}"}
+                                        }))
+                                     except ConnectionClosed:
+                                        pass
+                                agent_process.wait()
+                                
+                                # Comme l'agent gère sa propre communication, on saute le reste du traitement
+                                chat_display_message = None
+                                panel_data_content = None
+
+                            # CAS 2: L'action était une commande normale
+                            else:
+                                final_text_response_for_action = action_result
 
                             
                             # --- LOGIQUE D'AFFICHAGE DU CHAT (CORRIGÉE ET INDENTÉE) ---
