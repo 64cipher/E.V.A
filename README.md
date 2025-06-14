@@ -252,3 +252,5 @@ pip freeze > requirements.txt
 | Frontend rapide      | `python -m http.server 8080` |
 
 ---
+
+[EVA avec Mode Agent](https://github.com/64cipher/E.V.A/tree/mode-agent)
