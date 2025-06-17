@@ -10,7 +10,7 @@ import io
 import contextlib
 import subprocess
 import googlemaps # Ajouté pour le géocodage
-
+import urllib.parse
 # Nouveaux imports pour l'analyse d'images
 from PIL import Image
 
@@ -123,6 +123,9 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
     multimodal pour répondre à une question à son sujet ou pour la décrire.
     """
     try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
         response = requests.get(url, timeout=15)
         response.raise_for_status()
         
@@ -134,7 +137,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         image = Image.open(image_bytes)
 
         # Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        vision_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt_parts = [question, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
@@ -223,6 +226,38 @@ def locate_on_map(location_name: str) -> str:
     except Exception as e:
         return json.dumps({"type": "error", "content": f"Erreur API Google Maps: {e}"})
 
+def get_street_view_image(latitude: float, longitude: float, heading: int = 0, pitch: int = 0, fov: int = 90) -> str:
+    """
+    Obtient une image statique de Google Street View pour des coordonnées géographiques données.
+    Retourne un objet JSON contenant l'URL de l'image et une légende.
+    """
+    if not Maps_enabled:
+        return json.dumps({"type": "error", "content": "La clé API Google Maps n'est pas configurée."})
+
+    try:
+        base_url = "https://maps.googleapis.com/maps/api/streetview"
+        params = {
+            'size': '600x400',
+            'location': f'{latitude},{longitude}',
+            'heading': heading,
+            'pitch': pitch,
+            'fov': fov,
+            'key': Maps_api_key
+        }
+        
+        # L'URL construite avec les paramètres est l'URL de l'image elle-même.
+        image_url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        
+        # Retourne un objet JSON structuré que le frontend peut interpréter
+        return json.dumps({
+            "type": "image",
+            "url": image_url,
+            "caption": f"Aperçu Street View pour les coordonnées ({latitude:.4f}, {longitude:.4f})"
+        })
+        
+    except Exception as e:
+        return json.dumps({"type": "error", "content": f"Erreur API Street View: {e}"})    
+
 
 AVAILABLE_TOOLS = {
     "web_search": {
@@ -240,6 +275,16 @@ AVAILABLE_TOOLS = {
         "function": locate_on_map,
         "description": "Trouve et affiche un lieu sur une carte. Utilise cet outil lorsque l'utilisateur demande de montrer, localiser ou afficher un endroit.",
         "params": {"location_name": "string (Le nom de la ville, du monument, ou de l'adresse à localiser)"}
+    },
+    # NOUVEL OUTIL POUR STREET VIEW
+    "get_street_view_image": {
+        "function": get_street_view_image,
+        "description": "Obtient une image statique de Google Street View pour des coordonnées géographiques (latitude, longitude). Utile pour visualiser à quoi ressemble un endroit. Doit être utilisé APRÈS avoir obtenu des coordonnées avec 'locate_on_map'.",
+        "params": {
+            "latitude": "float (coordonnée de latitude)",
+            "longitude": "float (coordonnée de longitude)",
+            "heading": "integer (optionnel, direction de la caméra de 0 à 360)",
+            "pitch": "integer (optionnel, inclinaison verticale de la caméra de -90 à 90)"}
     },
     "analyze_image": {
         "function": analyze_image,
@@ -261,16 +306,26 @@ AVAILABLE_TOOLS = {
 
 AGENT_SYSTEM_PROMPT = f"""
 Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donnée en utilisant une chaîne de pensée (Thought) et d'action (Action).
-À chaque étape, tu dois :
-1.  **Thought**: Réfléchir à la tâche, analyser les informations disponibles, et planifier ta prochaine action. Explique ton raisonnement.
-2.  **Action**: Choisir UN outil parmi ceux disponibles et fournir les paramètres nécessaires.
-Tu dois formater ta réponse exclusivement en JSON avec les clés "thought" et "action".
-L'objet "action" doit contenir "tool_name" et "parameters".
 
-Outils disponibles :
+# INSTRUCTIONS DE BASE
+1.  **Thought**: À chaque étape, réfléchis à la tâche, analyse les informations disponibles, et planifie ta prochaine action. Explique ton raisonnement de manière concise.
+2.  **Action**: Choisis UN seul outil parmi ceux disponibles et fournis les paramètres nécessaires.
+3.  **Format**: Ta réponse doit être exclusivement en JSON avec les clés "thought" et "action". L'objet "action" doit contenir "tool_name" et "parameters".
+
+# STRATÉGIE ET RAISONNEMENT
+- **Décomposition Logique**: Décompose les problèmes complexes en une séquence d'étapes logiques où la sortie d'une action devient l'entrée de la suivante. Ne saute pas d'étapes.
+- **Utilisation des Données Initiales**: Si la tâche initiale que l'on te donne contient des données spécifiques (comme une URL), tu DOIS les utiliser comme paramètres pour tes premières actions. N'invente pas de nouvelles données si elles sont déjà fournies.
+- **Vérification Critique**: Ne te contente pas de la première réponse plausible. Après avoir identifié un lieu potentiel, effectue une étape de VÉRIFICATION. Utilise `web_search` une seconde fois avec une requête comme "photo de [nom du lieu trouvé]" pour trouver des images de ce lieu. Compare mentalement les détails de ces nouvelles images avec la description de l'image originale. Si les détails ne correspondent pas, revois tes hypothèses et cherche d'autres pistes.
+- **Exemple de tâche complexe : "Où cette photo a-t-elle été prise ?"**
+    1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices uniques.
+    2.  **Utilise ces indices** avec `web_search` pour trouver un nom de lieu probable.
+    3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
+    4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
+    5.  **Utilise `get_street_view_image`** pour la visualisation finale.
+- **Réponse Finale**: Lorsque tu as la réponse complète et VÉRIFIÉE, utilise l'outil spécial "finish".
+
+# OUTILS DISPONIBLES
 {json.dumps({name: {"description": tool["description"], "params": tool["params"]} for name, tool in AVAILABLE_TOOLS.items()}, indent=2, ensure_ascii=False)}
-
-Lorsque tu as terminé et que tu as la réponse finale, utilise l'outil spécial "finish" avec le paramètre "answer" contenant la solution complète.
 """
 
 def run_agent_loop(initial_task: str):
