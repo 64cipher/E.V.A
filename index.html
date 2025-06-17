@@ -536,6 +536,14 @@
     }
     addAgentStepToTable('🔬 Observation', finalDetailHtml);
     break;
+
+                case 'agent_final_answer':
+            const finalAnswerHtml = `<pre class="whitespace-pre-wrap font-semibold">${message.data.content}</pre>`;
+            addAgentStepToTable('✔️ Réponse Finale', finalAnswerHtml, 'bg-green-600/30');
+            addMessageToChat(`Réponse de l'agent : ${message.data.content}`, 'assistant');
+            agentTaskTitle.textContent = 'Agent Inactif';
+            break;
+
             }
         }
 
