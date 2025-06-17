@@ -363,6 +363,7 @@
         let gMap; 
         let directionsService;
         let directionsRenderer;
+        let gMarker = null;
         const defaultMapCenter = { lat: 48.8566, lng: 2.3522 }; 
         let currentMapCenter = defaultMapCenter;
         let currentMapZoom = 12;
@@ -442,25 +443,53 @@
         }
         
         function createMapDisplay(location) {
-            if (!googleMapsApiKey) {
-                return '<div class="p-2 text-red-400">Erreur: Clé API Google Maps non trouvée côté client pour l\'intégration.</div>';
-            }
-            const embedUrl = `https://www.google.com/maps/embed/v1/view?key=${googleMapsApiKey}&center=${location.lat},${location.lng}&zoom=15&maptype=roadmap`;
-            
-            // Le style garantit un format carré et réactif, jusqu'à une largeur maximale de 300px.
-            return `<div style="aspect-ratio: 1 / 1; width: 100%; max-width: 300px; margin: auto; border-radius: 0.5rem; overflow: hidden;">
-                        <p class="text-center text-xs p-1 bg-gray-900">${location.name}</p>
-                        <iframe
-                            width="100%"
-                            height="100%"
-                            style="border:0;"
-                            loading="lazy"
-                            allowfullscreen
-                            referrerpolicy="no-referrer-when-downgrade"
-                            src="${embedUrl}">
-                        </iframe>
-                    </div>`;
+    // --- PARTIE 1 : Mettre à jour la carte interactive principale ---
+    const newPosition = { lat: location.lat, lng: location.lng };
+    currentMapCenter = newPosition;
+    currentMapZoom = 15; 
+
+    if (gMap) {
+        gMap.setCenter(currentMapCenter);
+        gMap.setZoom(currentMapZoom);
+
+        // Crée ou déplace le marqueur rouge
+        if (gMarker) {
+            gMarker.setPosition(newPosition);
+            gMarker.setTitle(location.name);
+        } else {
+            gMarker = new google.maps.Marker({
+                position: newPosition,
+                map: gMap,
+                title: location.name,
+                animation: google.maps.Animation.DROP
+            });
         }
+    }
+    // S'assure que le panneau de la carte est visible
+    setActiveInfoPanel('mapContent', true);
+
+    // --- PARTIE 2 : Retourner le code HTML pour l'affichage dans l'historique ---
+    if (!googleMapsApiKey) {
+        return '<div class="p-2 text-red-400">Erreur: Clé API Google Maps manquante pour la carte intégrée.</div>';
+    }
+
+    // Construit l'URL pour l'API Google Maps Embed
+    const embedUrl = `https://www.google.com/maps/embed/v1/view?key=${googleMapsApiKey}&center=${location.lat},${location.lng}&zoom=14&maptype=roadmap`;
+
+    // Retourne le code HTML qui sera affiché dans la ligne "Observation" de l'agent
+    return `<div class="p-1 bg-gray-700 rounded-lg shadow-md">
+                <p class="text-center text-xs p-1 text-gray-200 truncate">${location.name}</p>
+                <iframe
+                    width="100%"
+                    height="200"
+                    style="border:0; border-radius: 0.375rem;"
+                    loading="lazy"
+                    allowfullscreen
+                    referrerpolicy="no-referrer-when-downgrade"
+                    src="${embedUrl}">
+                </iframe>
+            </div>`;
+}
 
         // --- Agent Logic (NOUVELLES FONCTIONS) ---
         function handleAgentMessage(message) {
@@ -479,34 +508,34 @@
                     const actionDetail = `Outil: <strong>${message.data.tool}</strong><br><pre class="bg-gray-900 p-1 rounded mt-1 whitespace-pre-wrap">${paramsString}</pre>`;
                     addAgentStepToTable('⚡ Action', actionDetail);
                     break;
+                // Dans la fonction handleAgentMessage, à l'intérieur du case 'agent_observation':
                 case 'agent_observation':
                     let finalDetailHtml;
-                    try {
-                        // Tente de parser le contenu de l'observation comme du JSON
-                        const parsedData = JSON.parse(message.data.content);
-                        // Vérifie si c'est notre objet de localisation de carte
-                        if (parsedData.type === 'map_location' && parsedData.location) {
-                            finalDetailHtml = createMapDisplay(parsedData.location);
-                        } else {
-                            // C'est un JSON, mais pas pour une carte, donc on l'affiche joliment
-                           finalDetailHtml = `<pre class="whitespace-pre-wrap">${JSON.stringify(parsedData, null, 2)}</pre>`;
-                        }
-                    } catch(e) {
-                        // Ce n'est pas du JSON, on l'affiche comme du texte brut
-                         finalDetailHtml = `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`;
-                    }
-                    addAgentStepToTable('🔬 Observation', finalDetailHtml);
-                    break;
-                case 'agent_final_answer':
-                    addAgentStepToTable('✅ Réponse Finale', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`, 'bg-green-800/50');
-                    agentTaskTitle.textContent = `Tâche terminée !`;
-                    addMessageToChat(message.data.content, 'assistant');
-                    // Il n'est pas nécessaire de faire parler l'agent ici, car la réponse principale le fera déjà.
-                    break;
-                case 'agent_error':
-                    addAgentStepToTable('❌ Erreur', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`, 'bg-red-800/50');
-                    agentTaskTitle.textContent = `Erreur de l'agent`;
-                    break;
+                try {
+                    const parsedData = JSON.parse(message.data.content);
+
+                if (parsedData.type === 'map_location' && parsedData.location) 
+                
+                {finalDetailHtml = createMapDisplay(parsedData.location);}               
+                else if (parsedData.type === 'image' && parsedData.url) {
+                // NOUVELLE CONDITION POUR AFFICHER L'IMAGE STREET VIEW
+            finalDetailHtml = `
+                <div class="text-center">
+                    <p class="text-xs p-1 bg-gray-900">${parsedData.caption || "Image de l'agent"}</p>
+                    <img src="${parsedData.url}" alt="${parsedData.caption || "Image générée par l'agent"}" class="max-w-full h-auto rounded-md shadow-lg mx-auto">
+                </div>
+            `;
+        } else {
+            // C'est un JSON, mais pas pour une carte ou une image, donc on l'affiche joliment
+            finalDetailHtml = `<pre class="whitespace-pre-wrap">${JSON.stringify(parsedData, null, 2)}</pre>`;
+        }
+
+    } catch(e) {
+        // Ce n'est pas du JSON, on l'affiche comme du texte brut
+        finalDetailHtml = `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`;
+    }
+    addAgentStepToTable('🔬 Observation', finalDetailHtml);
+    break;
             }
         }
 
