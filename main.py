@@ -487,7 +487,7 @@ Exemples d'entités attendues pour chaque action :
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
-- "execute_multi_step_agent": {"task": "La description complète de la tâche complexe que l'agent doit accomplir."}
+- "execute_multi_step_agent": {"task": "La description complète de la tâche complexe que l'agent doit accomplir." (ex: "plusieurs étapes", "recherche approfondie", "analyse comparative", "identification d'informations dans une image", "localiser un lieu sur une photo")}
 - "open_youtube_video": {"query": "le sujet de la vidéo à rechercher sur YouTube"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
@@ -2480,7 +2480,8 @@ def chat_ws(ws):
                             # CAS 1: L'action était de démarrer l'agent multi-étapes
                             if isinstance(action_result, dict) and action_result.get("status") == "start_agent_process":
                                 task_for_agent = action_result.get("task")
-                                
+                                final_answer_from_agent = None 
+
                                 # Informer le client que l'agent démarre
                                 try:
                                     ws.send(json.dumps({
@@ -2512,12 +2513,12 @@ def chat_ws(ws):
 
                                         # VÉRIFICATION CRUCIALE : Si l'action était "finish", on génère nous-même la réponse finale
                                         if message_type == 'action' and agent_step_data.get('tool') == 'finish':
-                                            final_answer_content = agent_step_data.get('params', {}).get('answer', 'Tâche terminée.')
+                                            final_answer_from_agent = agent_step_data.get('params', {}).get('answer', 'Tâche terminée.')
                                             
                                             # Envoie le message de réponse finale juste après l'action "finish"
                                             ws.send(json.dumps({
                                                 "type": "agent_final_answer",
-                                                "data": {"content": final_answer_content}
+                                                "data": {"content": final_answer_from_agent}
                                             }))
                                             # La tâche est finie, on peut arrêter d'écouter ce processus
                                             break 
@@ -2535,10 +2536,17 @@ def chat_ws(ws):
                                             "type": "agent_error",
                                             "data": {"content": f"Erreur du processus agent: {stderr_output}"}
                                         }))
+                                        final_answer_from_agent = f"(L'agent a échoué avec l'erreur : {stderr_output})"
                                      except ConnectionClosed:
                                         pass
                                 agent_process.wait()
                                 
+                                if final_answer_from_agent:
+                                    gemini_conversation_history.append({"role": "model", "parts": [{"text": final_answer_from_agent}]})
+                                    # On nettoie l'historique s'il devient trop long
+                                    if len(gemini_conversation_history) > MAX_HISTORY_ITEMS * 2:
+                                        gemini_conversation_history = gemini_conversation_history[-(MAX_HISTORY_ITEMS * 2):]                                
+
                                 # Comme l'agent gère sa propre communication, on saute le reste du traitement
                                 chat_display_message = None
                                 panel_data_content = None
