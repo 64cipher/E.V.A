@@ -4,27 +4,37 @@ import sys
 import json
 import traceback
 import re
-import requests # Pour les appels à l'API de recherche Google
+import requests  # Pour les appels HTTP (recherche et contenu de page)
+from bs4 import BeautifulSoup # Pour parser le HTML
 import io
 import contextlib
-import subprocess # Ajouté pour lancer des processus externes
+import subprocess
+import googlemaps # Ajouté pour le géocodage
+
+# Nouveaux imports pour l'analyse d'images
+from PIL import Image
 
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# Force la sortie standard en UTF-8 pour éviter les erreurs de décodage Unicode sous Windows
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
 # --- Configuration ---
 load_dotenv()
 # Assurez-vous que la clé API pour ce modèle est bien définie
-gemini_api_key = os.getenv("GEMINI_API_KEY") 
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 if not gemini_api_key:
     print(json.dumps({"type": "error", "content": "Clé API Gemini manquante pour l'agent."}), flush=True)
     sys.exit(1)
 
-# --- Configuration pour Google Custom Search ---
+# --- Configuration pour Google APIs ---
 google_custom_search_api_key = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY")
 google_custom_search_cx = os.getenv("GOOGLE_CUSTOM_SEARCH_CX")
-google_search_enabled = bool(google_custom_search_api_key and google_custom_search_cx)
+Maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY") # NOUVEAU: Clé pour Maps
 
+google_search_enabled = bool(google_custom_search_api_key and google_custom_search_cx)
+Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
@@ -71,6 +81,69 @@ def web_search(query: str, num_results: int = 5) -> str:
     except Exception as e:
         return f"Erreur inattendue lors de la recherche web : {e}"
 
+def view_webpage(url: str) -> str:
+    """
+    Récupère et extrait le contenu textuel d'une page web à partir de son URL.
+    """
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+
+        # Utilise BeautifulSoup pour parser le HTML
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # Supprime les balises de script et de style qui ne contiennent pas de contenu visible
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+
+        # Extrait le texte
+        text = soup.get_text(separator='\n', strip=True)
+        
+        # Réduit les lignes vides multiples pour une meilleure lisibilité
+        cleaned_text = re.sub(r'\n\s*\n+', '\n', text)
+
+        # Limite la longueur pour éviter de surcharger le prompt
+        max_length = 8000
+        if len(cleaned_text) > max_length:
+            return cleaned_text[:max_length] + "\n\n[Contenu tronqué en raison de la longueur]"
+
+        return cleaned_text if cleaned_text else "Le contenu de la page est vide ou n'a pas pu être extrait."
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur de réseau ou HTTP lors de la récupération de la page : {e}"
+    except Exception as e:
+        return f"Erreur inattendue lors de l'analyse de la page web : {e}"
+
+def analyze_image(url: str, question: str = "Décris cette image en détail. Si c'est une personne, essaie de l'identifier si c'est une célébrité.") -> str:
+    """
+    Analyse une image à partir d'une URL. Télécharge l'image, puis utilise un modèle
+    multimodal pour répondre à une question à son sujet ou pour la décrire.
+    """
+    try:
+        response = requests.get(url, timeout=15)
+        response.raise_for_status()
+        
+        content_type = response.headers.get('content-type', '')
+        if not content_type.startswith('image/'):
+            return f"Erreur: L'URL ne semble pas pointer vers une image. Type de contenu: {content_type}"
+
+        image_bytes = io.BytesIO(response.content)
+        image = Image.open(image_bytes)
+
+        # Utiliser un modèle multimodal pour l'analyse.
+        vision_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        prompt_parts = [question, image]
+        
+        vision_response = vision_model.generate_content(prompt_parts)
+        return vision_response.text
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur de réseau lors de la récupération de l'image: {e}"
+    except Exception as e:
+        return f"Erreur inattendue lors de l'analyse de l'image: {e}"
 
 def execute_python(code: str) -> str:
     """
@@ -107,13 +180,11 @@ def play_fl_studio_sequence(sequence_json: str) -> str:
         if not os.path.exists(controller_path):
             return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
 
-        # Valider que l'entrée est bien un JSON
         try:
             json.loads(sequence_json)
         except json.JSONDecodeError:
             return "Erreur : le paramètre 'sequence_json' n'est pas une chaîne JSON valide."
 
-        # Lance le script contrôleur dans un autre processus
         command = [sys.executable, controller_path, sequence_json]
         subprocess.Popen(command)
 
@@ -121,12 +192,59 @@ def play_fl_studio_sequence(sequence_json: str) -> str:
     except Exception as e:
         return f"Erreur lors du lancement de la séquence musicale : {e}"
 
+# NOUVELLE FONCTION
+def locate_on_map(location_name: str) -> str:
+    """
+    Trouve les coordonnées géographiques d'un lieu donné et retourne un objet JSON
+    pour l'afficher sur une carte.
+    """
+    if not Maps_enabled:
+        return json.dumps({"type": "error", "content": "La clé API Google Maps n'est pas configurée."})
+
+    try:
+        gmaps = googlemaps.Client(key=Maps_api_key)
+        geocode_result = gmaps.geocode(location_name, language='fr')
+
+        if not geocode_result:
+            return json.dumps({"type": "error", "content": f"Impossible de trouver le lieu : {location_name}"})
+
+        first_result = geocode_result[0]
+        location_data = {
+            "name": first_result.get("formatted_address", location_name),
+            "lat": first_result["geometry"]["location"]["lat"],
+            "lng": first_result["geometry"]["location"]["lng"]
+        }
+        
+        # Retourne un objet JSON structuré que le frontend peut interpréter
+        return json.dumps({
+            "type": "map_location",
+            "location": location_data
+        })
+    except Exception as e:
+        return json.dumps({"type": "error", "content": f"Erreur API Google Maps: {e}"})
+
 
 AVAILABLE_TOOLS = {
     "web_search": {
         "function": web_search,
-        "description": "Recherche sur le web pour obtenir des informations actuelles ou générales. Utiliser pour des questions sur des lieux, des personnes, des événements, etc.",
+        "description": "Recherche sur le web pour obtenir des informations générales ou des URL. Utiliser pour des questions sur des lieux, des personnes, des événements, etc.",
         "params": {"query": "string", "num_results": "integer (optionnel, défaut 5)"}
+    },
+    "view_webpage": {
+        "function": view_webpage,
+        "description": "Extrait le contenu textuel d'une page web à partir de son URL. À utiliser après une recherche web pour analyser le contenu d'une page spécifique.",
+        "params": {"url": "string (URL complète de la page à lire)"}
+    },
+    # NOUVEL OUTIL AJOUTÉ
+    "locate_on_map": {
+        "function": locate_on_map,
+        "description": "Trouve et affiche un lieu sur une carte. Utilise cet outil lorsque l'utilisateur demande de montrer, localiser ou afficher un endroit.",
+        "params": {"location_name": "string (Le nom de la ville, du monument, ou de l'adresse à localiser)"}
+    },
+    "analyze_image": {
+        "function": analyze_image,
+        "description": "Analyse le contenu d'une image à partir d'une URL. Utilise cet outil pour décrire des images, identifier des objets, du texte, ou des personnes (célébrités) dans une image.",
+        "params": {"url": "string (URL complète de l'image)", "question": "string (optionnel, la question spécifique sur l'image)"}
     },
     "python_interpreter": {
         "function": execute_python,
@@ -150,7 +268,7 @@ Tu dois formater ta réponse exclusivement en JSON avec les clés "thought" et "
 L'objet "action" doit contenir "tool_name" et "parameters".
 
 Outils disponibles :
-{json.dumps({name: {"description": tool["description"], "params": tool["params"]} for name, tool in AVAILABLE_TOOLS.items()}, indent=2)}
+{json.dumps({name: {"description": tool["description"], "params": tool["params"]} for name, tool in AVAILABLE_TOOLS.items()}, indent=2, ensure_ascii=False)}
 
 Lorsque tu as terminé et que tu as la réponse finale, utilise l'outil spécial "finish" avec le paramètre "answer" contenant la solution complète.
 """
@@ -183,22 +301,22 @@ def run_agent_loop(initial_task: str):
             parameters = action.get("parameters", {})
         except Exception as e:
             error_message = f"Erreur lors de la décision de l'agent: {e}\nRéponse brute: {response.text if 'response' in locals() else 'N/A'}"
-            print(json.dumps({"type": "error", "content": error_message}), flush=True)
+            print(json.dumps({"type": "error", "content": error_message}, ensure_ascii=False), flush=True)
             break
 
-        print(json.dumps({"type": "thought", "content": thought}), flush=True)
+        print(json.dumps({"type": "thought", "content": thought}, ensure_ascii=False), flush=True)
         history.append(f"Thought: {thought}")
 
         if not tool_name:
             print(json.dumps({"type": "error", "content": "L'agent n'a pas choisi d'outil."}), flush=True)
             break
 
-        print(json.dumps({"type": "action", "tool": tool_name, "params": parameters}), flush=True)
+        print(json.dumps({"type": "action", "tool": tool_name, "params": parameters}, ensure_ascii=False), flush=True)
         history.append(f"Action: {tool_name} avec params {parameters}")
 
         if tool_name == "finish":
             final_answer = parameters.get("answer", "Tâche terminée sans réponse finale explicite.")
-            print(json.dumps({"type": "final_answer", "content": final_answer}), flush=True)
+            print(json.dumps({"type": "final_answer", "content": final_answer}, ensure_ascii=False), flush=True)
             break
 
         if tool_name in AVAILABLE_TOOLS:
@@ -210,7 +328,6 @@ def run_agent_loop(initial_task: str):
                 with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(error_capture):
                     tool_result = tool_function(**parameters)
 
-                # Combine le résultat de la fonction et les sorties capturées
                 stdout_val = output_capture.getvalue()
                 stderr_val = error_capture.getvalue()
                 
@@ -226,7 +343,7 @@ def run_agent_loop(initial_task: str):
         else:
             observation = f"Erreur: Outil '{tool_name}' inconnu."
 
-        print(json.dumps({"type": "observation", "content": str(observation)}), flush=True)
+        print(json.dumps({"type": "observation", "content": str(observation)}, ensure_ascii=False), flush=True)
         history.append(f"Observation: {observation}")
 
     else:
