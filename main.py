@@ -19,6 +19,15 @@ import tempfile # Pour gérer les fichiers temporaires
 import math # Pour la visualisation 3D
 import threading # Pour le nettoyage des fichiers temporaires
 import urllib.parse
+import warnings # <-- Assurez-vous que l'import est là
+
+# =====================================================================
+# NOUVEAU BLOC À VÉRIFIER - SON EMPLACEMENT EST CRUCIAL
+# =====================================================================
+# Ignorer les avertissements spécifiques de subprocess sur Windows
+if sys.platform == "win32":
+    warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*line buffering.*")
+
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
