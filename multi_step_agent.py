@@ -38,7 +38,7 @@ Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+agent_model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -300,6 +300,12 @@ AVAILABLE_TOOLS = {
         "function": play_fl_studio_sequence,
         "description": "Joue une séquence de notes ou d'accords sur FL Studio via le script 'fl_studio_controller.py'. L'agent doit générer lui-même la chaîne JSON de la séquence à jouer.",
         "params": {"sequence_json": "string (une chaîne JSON qui représente une liste d'événements musicaux)"}
+    },
+    "finish": {
+        "function": lambda answer: answer,
+        "description": "Utilise cet outil pour terminer la tâche et fournir la réponse finale.",
+        "params": {"answer": "string (La réponse finale et complète à la tâche)"}
+
     }
 }
 
@@ -313,9 +319,15 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 3.  **Format**: Ta réponse doit être exclusivement en JSON avec les clés "thought" et "action". L'objet "action" doit contenir "tool_name" et "parameters".
 
 # STRATÉGIE ET RAISONNEMENT
-- **Décomposition Logique**: Décompose les problèmes complexes en une séquence d'étapes logiques où la sortie d'une action devient l'entrée de la suivante. Ne saute pas d'étapes.
-- **Utilisation des Données Initiales**: Si la tâche initiale que l'on te donne contient des données spécifiques (comme une URL), tu DOIS les utiliser comme paramètres pour tes premières actions. N'invente pas de nouvelles données si elles sont déjà fournies.
-- **Vérification Critique**: Ne te contente pas de la première réponse plausible. Après avoir identifié un lieu potentiel, effectue une étape de VÉRIFICATION. Utilise `web_search` une seconde fois avec une requête comme "photo de [nom du lieu trouvé]" pour trouver des images de ce lieu. Compare mentalement les détails de ces nouvelles images avec la description de l'image originale. Si les détails ne correspondent pas, revois tes hypothèses et cherche d'autres pistes.
+- **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
+- **Utilisation des Données Initiales**:
+  - **URL de Page Web**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie. Ne cherche pas d'abord.
+  - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
+- **Gestion des Échecs (Très Important)**:
+  - Si `analyze_image` échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**.
+  - Ton étape suivante doit être d'utiliser `web_search` avec l'URL de l'image originale comme terme de recherche. Cela peut t'aider à trouver où l'image est utilisée ou à trouver une source alternative.
+  - Analyse ensuite les résultats de cette recherche pour de nouvelles pistes.
+- **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
 - **Exemple de tâche complexe : "Où cette photo a-t-elle été prise ?"**
     1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices uniques.
     2.  **Utilise ces indices** avec `web_search` pour trouver un nom de lieu probable.
@@ -369,10 +381,6 @@ def run_agent_loop(initial_task: str):
         print(json.dumps({"type": "action", "tool": tool_name, "params": parameters}, ensure_ascii=False), flush=True)
         history.append(f"Action: {tool_name} avec params {parameters}")
 
-        if tool_name == "finish":
-            final_answer = parameters.get("answer", "Tâche terminée sans réponse finale explicite.")
-            print(json.dumps({"type": "final_answer", "content": final_answer}, ensure_ascii=False), flush=True)
-            break
 
         if tool_name in AVAILABLE_TOOLS:
             output_capture = io.StringIO()
