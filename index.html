@@ -390,6 +390,7 @@
         let attachedFile = null; 
         const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
         let audioCtx;
+        let googleMapsApiKey = null;
 
         // --- WebSocket (Modification de onmessage) ---
         function connectWebSocket() {
@@ -440,6 +441,27 @@
             ws.onclose = () => { wsReady = false; statusText.textContent = "Déconnecté. Reconnexion..."; skipNextAudioDueToCode = false; evaIsCurrentlySpeaking = false; setTimeout(connectWebSocket, wsRetryInterval); };
         }
         
+        function createMapDisplay(location) {
+            if (!googleMapsApiKey) {
+                return '<div class="p-2 text-red-400">Erreur: Clé API Google Maps non trouvée côté client pour l\'intégration.</div>';
+            }
+            const embedUrl = `https://www.google.com/maps/embed/v1/view?key=${googleMapsApiKey}&center=${location.lat},${location.lng}&zoom=15&maptype=roadmap`;
+            
+            // Le style garantit un format carré et réactif, jusqu'à une largeur maximale de 300px.
+            return `<div style="aspect-ratio: 1 / 1; width: 100%; max-width: 300px; margin: auto; border-radius: 0.5rem; overflow: hidden;">
+                        <p class="text-center text-xs p-1 bg-gray-900">${location.name}</p>
+                        <iframe
+                            width="100%"
+                            height="100%"
+                            style="border:0;"
+                            loading="lazy"
+                            allowfullscreen
+                            referrerpolicy="no-referrer-when-downgrade"
+                            src="${embedUrl}">
+                        </iframe>
+                    </div>`;
+        }
+
         // --- Agent Logic (NOUVELLES FONCTIONS) ---
         function handleAgentMessage(message) {
             setActiveInfoPanel('agentContent', true);
@@ -450,7 +472,7 @@
                     agentTaskTitle.textContent = `Tâche : ${message.data.task}`;
                     break;
                 case 'agent_thought':
-                    addAgentStepToTable('🤔 Pensée', message.data.content);
+                    addAgentStepToTable('🤔 Pensée', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`);
                     break;
                 case 'agent_action':
                     const paramsString = JSON.stringify(message.data.params, null, 2).replace(/\\n/g, '\n');
@@ -458,22 +480,37 @@
                     addAgentStepToTable('⚡ Action', actionDetail);
                     break;
                 case 'agent_observation':
-                    addAgentStepToTable('🔬 Observation', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`);
+                    let finalDetailHtml;
+                    try {
+                        // Tente de parser le contenu de l'observation comme du JSON
+                        const parsedData = JSON.parse(message.data.content);
+                        // Vérifie si c'est notre objet de localisation de carte
+                        if (parsedData.type === 'map_location' && parsedData.location) {
+                            finalDetailHtml = createMapDisplay(parsedData.location);
+                        } else {
+                            // C'est un JSON, mais pas pour une carte, donc on l'affiche joliment
+                           finalDetailHtml = `<pre class="whitespace-pre-wrap">${JSON.stringify(parsedData, null, 2)}</pre>`;
+                        }
+                    } catch(e) {
+                        // Ce n'est pas du JSON, on l'affiche comme du texte brut
+                         finalDetailHtml = `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`;
+                    }
+                    addAgentStepToTable('🔬 Observation', finalDetailHtml);
                     break;
                 case 'agent_final_answer':
-                    addAgentStepToTable('✅ Réponse Finale', message.data.content, 'bg-green-800/50');
+                    addAgentStepToTable('✅ Réponse Finale', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`, 'bg-green-800/50');
                     agentTaskTitle.textContent = `Tâche terminée !`;
                     addMessageToChat(message.data.content, 'assistant');
-                    speakClientSideMessage(message.data.content);
+                    // Il n'est pas nécessaire de faire parler l'agent ici, car la réponse principale le fera déjà.
                     break;
                 case 'agent_error':
-                    addAgentStepToTable('❌ Erreur', message.data.content, 'bg-red-800/50');
+                    addAgentStepToTable('❌ Erreur', `<pre class="whitespace-pre-wrap">${message.data.content}</pre>`, 'bg-red-800/50');
                     agentTaskTitle.textContent = `Erreur de l'agent`;
                     break;
             }
         }
 
-        function addAgentStepToTable(type, detail, rowClass = '') {
+        function addAgentStepToTable(type, detailHtml, rowClass = '') {
             agentStepCounter++;
             const row = agentTableBody.insertRow();
             row.className = `border-b border-gray-700 hover:bg-gray-600/50 fade-in-row ${rowClass}`;
@@ -488,7 +525,7 @@
 
             const cellDetail = row.insertCell(2);
             cellDetail.className = 'px-4 py-2 align-top';
-            cellDetail.innerHTML = detail.toString().replace(/\n/g, '<br>'); // Affiche les sauts de ligne
+            cellDetail.innerHTML = detailHtml; // Utilise innerHTML pour interpréter le HTML de la carte
             
             agentContentPanel.scrollTop = agentContentPanel.scrollHeight;
         }
@@ -608,6 +645,8 @@
         function handleCalculatorInput(value) { if (calculatorResetDisplay && !['(', ')'].includes(value)) { calculatorCurrentInput = ""; calculatorResetDisplay = false; } if (calculatorCurrentInput.length >= MAX_INPUT_LENGTH && !['C', '=', 'sin', 'cos', 'tan', 'sqrt', 'log', 'ln', '!'].includes(value)) { return; } if (value >= '0' && value <= '9') { calculatorCurrentInput += value; } else if (value === '.') { if (!calculatorCurrentInput.includes('.')) { calculatorCurrentInput += '.'; } } else if (value === 'C') { calculatorCurrentInput = ""; calculatorPreviousInput = ""; calculatorOperator = null; } else if (value === '=') { if (calculatorOperator && calculatorPreviousInput !== "" && calculatorCurrentInput !== "") { try { let expressionToEvaluate = calculatorPreviousInput + calculatorOperator + calculatorCurrentInput; if (calculatorOperator === '^') { expressionToEvaluate = `Math.pow(${calculatorPreviousInput}, ${calculatorCurrentInput})`; } const sanitizedExpression = expressionToEvaluate.replace(/[^-()\d/*+.]/g, ''); let result = new Function('return ' + sanitizedExpression)(); if (!isFinite(result)) { calculatorCurrentInput = "Dépassement"; } else { calculatorCurrentInput = result.toString(); } calculatorOperator = null; calculatorPreviousInput = ""; calculatorResetDisplay = true; } catch (e) { console.error("Erreur calculatrice:", e); calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true; } } } else if (['+', '-', '*', '/', '^'].includes(value)) { if (calculatorCurrentInput !== "") { if (calculatorPreviousInput === "") { calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; calculatorOperator = value; } else if (calculatorOperator) { handleCalculatorInput('='); if (calculatorCurrentInput !== "Erreur" && calculatorCurrentInput !== "Dépassement") { calculatorPreviousInput = calculatorCurrentInput; calculatorCurrentInput = ""; calculatorOperator = value; calculatorResetDisplay = false; } else { calculatorPreviousInput = ""; calculatorOperator = null; } } } else if (calculatorPreviousInput !== "" && value === "-" && calculatorOperator && calculatorCurrentInput === "") { calculatorCurrentInput = "-"; } else if (calculatorPreviousInput !== "" && !calculatorOperator) { calculatorOperator = value; calculatorCurrentInput = ""; calculatorResetDisplay = false; } } else { if (value === '(') { calculatorCurrentInput += '('; calculatorResetDisplay = false; } else if (value === ')') { calculatorCurrentInput += ')'; calculatorResetDisplay = false; } else if (calculatorCurrentInput !== "" || ['pi', 'e'].includes(value)) { const num = parseFloat(calculatorCurrentInput); if (isNaN(num) && !['pi', 'e'].includes(value) && !calculatorCurrentInput.endsWith(')')) {} else { try { let result; switch(value) { case 'sin': result = Math.sin(num * Math.PI / 180); break; case 'cos': result = Math.cos(num * Math.PI / 180); break; case 'tan': result = Math.tan(num * Math.PI / 180); break; case 'sqrt': result = Math.sqrt(num); break; case 'log': result = Math.log10(num); break; case 'ln': result = Math.log(num); break; case '!': if (num < 0 || !Number.isInteger(num) || num > 170) { result = Infinity; break; } let fact = 1; for (let i = 2; i <= num; i++) fact *= i; result = fact; break; case 'pi': result = Math.PI; break; case 'e': result = Math.E; break; default: result = num; } if (!isFinite(result)) { calculatorCurrentInput = "Dépassement"; } else { calculatorCurrentInput = result.toString(); } calculatorResetDisplay = true; } catch (e) { console.error("Erreur fonction calculatrice:", e); calculatorCurrentInput = "Erreur"; calculatorResetDisplay = true; } } } else if (['pi', 'e'].includes(value)) { calculatorCurrentInput = (value === 'pi' ? Math.PI : Math.E).toString(); calculatorResetDisplay = true; } } updateCalculatorDisplay(); }
 
         document.addEventListener('DOMContentLoaded', () => {
+            const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]');
+            googleMapsApiKey = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null;
             setupEventListeners();
             document.body.addEventListener('click', initAudioContext, { once: true });
             updateDateTimeDashboard(); setInterval(updateDateTimeDashboard, 1000); 
