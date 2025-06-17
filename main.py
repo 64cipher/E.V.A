@@ -2495,25 +2495,40 @@ def chat_ws(ws):
                                     [sys.executable, "multi_step_agent.py", task_for_agent],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
-                                    text=True,
-                                    bufsize=1, # Line-buffered
-                                    encoding='utf-8'
+                                    bufsize=1, # Line-buffered                                    
                                 )
 
                                 # Lire la sortie de l'agent en temps réel et la transmettre au client
-                                for line in iter(agent_process.stdout.readline, ''):
+                                for line_bytes in iter(agent_process.stdout.readline, b''):
                                     try:
-                                        agent_step_data = json.loads(line.strip())
-                                        ws.send(json.dumps({
-                                            "type": f"agent_{agent_step_data.get('type', 'log')}",
-                                            "data": agent_step_data
-                                        }))
+                                        line_str = line_bytes.decode('utf-8', errors='replace')
+                                        if not line_str.strip(): continue # Ignore les lignes vides
+
+                                        agent_step_data = json.loads(line_str)
+                                        message_type = agent_step_data.get('type', 'log')
+                                        
+                                        # Envoie le message de l'étape actuelle au client
+                                        ws.send(json.dumps({"type": f"agent_{message_type}", "data": agent_step_data}))
+
+                                        # VÉRIFICATION CRUCIALE : Si l'action était "finish", on génère nous-même la réponse finale
+                                        if message_type == 'action' and agent_step_data.get('tool') == 'finish':
+                                            final_answer_content = agent_step_data.get('params', {}).get('answer', 'Tâche terminée.')
+                                            
+                                            # Envoie le message de réponse finale juste après l'action "finish"
+                                            ws.send(json.dumps({
+                                                "type": "agent_final_answer",
+                                                "data": {"content": final_answer_content}
+                                            }))
+                                            # La tâche est finie, on peut arrêter d'écouter ce processus
+                                            break 
+
                                     except (json.JSONDecodeError, ConnectionClosed):
                                         break
                                 
                                 # Nettoyage du processus
                                 agent_process.stdout.close()
-                                stderr_output = agent_process.stderr.read()
+                                stderr_bytes = agent_process.stderr.read()
+                                stderr_output = stderr_bytes.decode('utf-8', errors='replace')
                                 if stderr_output:
                                      try:
                                         ws.send(json.dumps({
@@ -2573,7 +2588,7 @@ def chat_ws(ws):
                             # Cas 5 (Fallback): Si aucun des cas ci-dessus ne correspond, on met un message générique.
                             # Ceci évite d'afficher le contenu long d'une liste dans le chat.
                             else:
-                                chat_display_message = "C'est fait. Les informations ont été mises à jour dans le panneau correspondant."
+                                chat_display_message = "C'est fait."
 
                             
                             # --- LOGIQUE D'AFFICHAGE DES PANNEAUX ---
