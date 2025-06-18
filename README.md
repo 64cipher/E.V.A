@@ -1,4 +1,4 @@
-# E.V.A – Evolved Virtual Assistant avec Mode Agent (Instable et experimental)
+# E.V.A – Evolved Virtual Assistant avec Mode Agent (Expérimental)
 
 Serveur Flask + Web UI - NodeJS, NGINX, Python, etc... Au choix.
 
@@ -38,7 +38,9 @@ Le mode Agent est très couteux en ressource sur API, donc faites attention.
 | **Interface**     | Panneau latéral (carte, recherche, e‑mails, tâches, calendrier, code généré). |
 | **Transcript Audio Whisper**  | Convertisserz un audio MP3 ou WAV en texte.                       |
 | **Visualiseur 3D**     | Demandez à E.V.A de créer un objet comme un cube, une sphere, un cône ou un tore en 3D.    |
-| **Execution de code** | E.V.A peux executer du code python et intéragir avec le shell            |
+| **Execution de code** | E.V.A peut executer du code python et intéragir avec le shell            |
+| **Mode Agent** | E.V.A peut executer des tâches en plusieurs étapes                               |
+| **Comptibilité MIDI** | E.V.A peut jouer des notes de musique sur votre DAW comme FL Studio (nécessite LoopMIDI) |
 ---
 
 ## Architecture rapide
