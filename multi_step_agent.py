@@ -5,6 +5,7 @@ import json
 import traceback
 import re
 import requests  # Pour les appels HTTP (recherche et contenu de page)
+import urllib3   # Pour la gestion des avertissements SSL
 from bs4 import BeautifulSoup # Pour parser le HTML
 import io
 import contextlib
@@ -19,6 +20,9 @@ from io import BytesIO
 
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Supprime les avertissements de requêtes HTTPS non vérifiées (InsecureRequestWarning)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Force la sortie standard en UTF-8 pour éviter les erreurs de décodage Unicode sous Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -453,10 +457,17 @@ def run_agent_loop(initial_task: str):
                 stdout_val = output_capture.getvalue()
                 stderr_val = error_capture.getvalue()
                 
+                # Filtre l'avertissement InsecureRequestWarning de la sortie d'erreur
+                if "InsecureRequestWarning" in stderr_val:
+                    lines = stderr_val.splitlines()
+                    filtered_lines = [line for line in lines if "InsecureRequestWarning" not in line]
+                    stderr_val = "\n".join(filtered_lines)
+
                 observation = str(tool_result)
                 if stdout_val:
                     observation += f"\n\n[Sortie standard capturée]:\n{stdout_val}"
-                if stderr_val:
+                # N'ajoute la section d'erreur que si stderr_val contient encore quelque chose après le filtrage
+                if stderr_val.strip():
                     observation += f"\n\n[Erreur standard capturée]:\n{stderr_val}"
 
             except Exception as e:
