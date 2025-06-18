@@ -41,7 +41,7 @@ Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+agent_model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -92,7 +92,8 @@ def view_webpage(url: str) -> str:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=15)
+        # Ajout de verify=False pour ignorer les erreurs de certificat SSL
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
         response.raise_for_status()
         
         content_type = response.headers.get('content-type', '').lower()
@@ -136,7 +137,8 @@ def read_document_from_url(url: str) -> str:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=20)
+        # Ajout de verify=False pour ignorer les erreurs de certificat SSL, comme pour les pages web.
+        response = requests.get(url, headers=headers, timeout=20, verify=False)
         response.raise_for_status()
 
         content_type = response.headers.get('content-type', '').lower()
@@ -179,7 +181,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
         response.raise_for_status()
         
         content_type = response.headers.get('content-type', '')
@@ -190,7 +192,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         image = Image.open(image_bytes)
 
         # Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.0-flash')
+        vision_model = genai.GenerativeModel('gemini-1.5-flash')
         prompt_parts = [question, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
