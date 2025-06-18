@@ -41,7 +41,7 @@ Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-1.5-flash')
+agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -192,7 +192,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         image = Image.open(image_bytes)
 
         # Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-1.5-flash')
+        vision_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt_parts = [question, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
