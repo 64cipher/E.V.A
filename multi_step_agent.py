@@ -11,8 +11,11 @@ import contextlib
 import subprocess
 import googlemaps # Ajouté pour le géocodage
 import urllib.parse
-# Nouveaux imports pour l'analyse d'images
+# Nouveaux imports pour l'analyse d'images et de documents
 from PIL import Image
+import PyPDF2
+from io import BytesIO
+
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -38,7 +41,7 @@ Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-2.0-flash')
+agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -83,7 +86,7 @@ def web_search(query: str, num_results: int = 5) -> str:
 
 def view_webpage(url: str) -> str:
     """
-    Récupère et extrait le contenu textuel d'une page web à partir de son URL.
+    Récupère et extrait le contenu textuel d'une page web HTML à partir de son URL.
     """
     try:
         headers = {
@@ -91,6 +94,13 @@ def view_webpage(url: str) -> str:
         }
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
+        
+        content_type = response.headers.get('content-type', '').lower()
+        # Redirige vers le bon outil si l'URL est un PDF ou un TXT
+        if 'application/pdf' in content_type or url.lower().endswith('.pdf'):
+            return "Erreur: L'URL pointe vers un fichier PDF. Veuillez utiliser l'outil 'read_document' pour en lire le contenu."
+        if 'text/plain' in content_type or url.lower().endswith('.txt'):
+            return "Erreur: L'URL pointe vers un fichier TXT. Veuillez utiliser l'outil 'read_document' pour en lire le contenu."
 
         # Utilise BeautifulSoup pour parser le HTML
         soup = BeautifulSoup(response.content, 'html.parser')
@@ -117,6 +127,49 @@ def view_webpage(url: str) -> str:
     except Exception as e:
         return f"Erreur inattendue lors de l'analyse de la page web : {e}"
 
+def read_document_from_url(url: str) -> str:
+    """
+    Lit le contenu d'un fichier PDF ou TXT à partir d'une URL.
+    Nécessite l'installation de 'PyPDF2' (pip install PyPDF2).
+    """
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=20)
+        response.raise_for_status()
+
+        content_type = response.headers.get('content-type', '').lower()
+        is_pdf = 'application/pdf' in content_type or url.lower().endswith('.pdf')
+        is_txt = 'text/plain' in content_type or url.lower().endswith('.txt')
+
+        if is_pdf:
+            # Utilise un flux en mémoire pour lire le contenu du PDF
+            pdf_file = BytesIO(response.content)
+            reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                # Ajoute le texte de chaque page, en gérant les cas où l'extraction ne retourne rien
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+            return text.strip() if text.strip() else "Le contenu du PDF est vide ou n'a pas pu être extrait."
+        
+        elif is_txt:
+            # Décode le contenu texte en utilisant l'encodage détecté par requests
+            return response.text
+
+        else:
+            return "Erreur: L'URL ne semble pointer ni vers un PDF, ni vers un fichier TXT. Pour une page web HTML, utilisez l'outil 'view_webpage'."
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur de réseau lors de la récupération du document : {e}"
+    except PyPDF2.errors.PdfReadError:
+        return "Erreur: Le fichier à l'URL indiquée n'est pas un PDF valide ou est corrompu."
+    except Exception as e:
+        # Capture toute autre erreur inattendue
+        return f"Erreur inattendue lors de la lecture du document : {e}"
+
 def analyze_image(url: str, question: str = "Décris cette image en détail. Si c'est une personne, essaie de l'identifier si c'est une célébrité.") -> str:
     """
     Analyse une image à partir d'une URL. Télécharge l'image, puis utilise un modèle
@@ -126,7 +179,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         
         content_type = response.headers.get('content-type', '')
@@ -195,7 +248,6 @@ def play_fl_studio_sequence(sequence_json: str) -> str:
     except Exception as e:
         return f"Erreur lors du lancement de la séquence musicale : {e}"
 
-# NOUVELLE FONCTION
 def locate_on_map(location_name: str) -> str:
     """
     Trouve les coordonnées géographiques d'un lieu donné et retourne un objet JSON
@@ -245,10 +297,8 @@ def get_street_view_image(latitude: float, longitude: float, heading: int = 0, p
             'key': Maps_api_key
         }
         
-        # L'URL construite avec les paramètres est l'URL de l'image elle-même.
         image_url = f"{base_url}?{urllib.parse.urlencode(params)}"
         
-        # Retourne un objet JSON structuré que le frontend peut interpréter
         return json.dumps({
             "type": "image",
             "url": image_url,
@@ -267,16 +317,19 @@ AVAILABLE_TOOLS = {
     },
     "view_webpage": {
         "function": view_webpage,
-        "description": "Extrait le contenu textuel d'une page web à partir de son URL. À utiliser après une recherche web pour analyser le contenu d'une page spécifique.",
+        "description": "Extrait le contenu textuel d'une page web HTML. Ne pas utiliser pour les PDF ou TXT. À utiliser après une recherche web pour analyser le contenu d'une page spécifique.",
         "params": {"url": "string (URL complète de la page à lire)"}
     },
-    # NOUVEL OUTIL AJOUTÉ
+    "read_document": {
+        "function": read_document_from_url,
+        "description": "Lit le contenu textuel d'un document distant (PDF ou TXT) à partir de son URL. Utiliser pour analyser des rapports, des articles ou des documents textes.",
+        "params": {"url": "string (URL complète du document PDF ou TXT)"}
+    },
     "locate_on_map": {
         "function": locate_on_map,
         "description": "Trouve et affiche un lieu sur une carte. Utilise cet outil lorsque l'utilisateur demande de montrer, localiser ou afficher un endroit.",
         "params": {"location_name": "string (Le nom de la ville, du monument, ou de l'adresse à localiser)"}
     },
-    # NOUVEL OUTIL POUR STREET VIEW
     "get_street_view_image": {
         "function": get_street_view_image,
         "description": "Obtient une image statique de Google Street View pour des coordonnées géographiques (latitude, longitude). Utile pour visualiser à quoi ressemble un endroit. Doit être utilisé APRÈS avoir obtenu des coordonnées avec 'locate_on_map'.",
@@ -321,12 +374,11 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 # STRATÉGIE ET RAISONNEMENT
 - **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
 - **Utilisation des Données Initiales**:
-  - **URL de Page Web**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie. Ne cherche pas d'abord.
+  - **URL de Page Web HTML**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie.
+  - **URL de Document (PDF/TXT)**: Si la tâche concerne une URL finissant par `.pdf` ou `.txt`, ta première action DOIT être `read_document`.
   - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
 - **Gestion des Échecs (Très Important)**:
-  - Si `analyze_image` échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**.
-  - Ton étape suivante doit être d'utiliser `web_search` avec l'URL de l'image originale comme terme de recherche. Cela peut t'aider à trouver où l'image est utilisée ou à trouver une source alternative.
-  - Analyse ensuite les résultats de cette recherche pour de nouvelles pistes.
+  - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
 - **Exemple de tâche complexe : "Où cette photo a-t-elle été prise ?"**
     1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices uniques.
@@ -386,6 +438,11 @@ def run_agent_loop(initial_task: str):
             output_capture = io.StringIO()
             error_capture = io.StringIO()
             try:
+                if tool_name == 'finish':
+                    observation = parameters.get('answer', 'Tâche terminée.')
+                    print(json.dumps({"type": "observation", "content": str(observation)}, ensure_ascii=False), flush=True)
+                    return # Fin de la boucle
+
                 tool_function = AVAILABLE_TOOLS[tool_name]["function"]
                 # Redirige stdout/stderr pour capturer toute sortie parasite des bibliothèques
                 with contextlib.redirect_stdout(output_capture), contextlib.redirect_stderr(error_capture):
