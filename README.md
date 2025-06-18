@@ -224,6 +224,8 @@ openai-whisper
 ffmpeg-python
 pyvista
 spotipy
+mido
+PyPDF2
 ```
 
 Générez le fichier exact via :
