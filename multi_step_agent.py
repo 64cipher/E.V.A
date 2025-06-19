@@ -459,7 +459,7 @@ def summarize_webpage(url: str, topic: str = "les points clés") -> str:
         truncated_text = cleaned_text[:max_length]
 
         # Étape 2 : Appeler un modèle pour effectuer le résumé
-        summarizer_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        summarizer_model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = f"Résume le texte suivant en te concentrant sur {topic}. Le résumé doit être concis, informatif et prêt à être envoyé par e-mail :\n\n---\n{truncated_text}\n---"
         
         summary_response = summarizer_model.generate_content(prompt)
@@ -575,7 +575,7 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
     3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
     4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
     5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à [adresse e-mail du destinataire]"**
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à ex: cipher:"analogcipher@proton.me", exemple:"exemple@mail.com**
     1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
     2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
     3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
@@ -605,6 +605,7 @@ def run_agent_loop(initial_task: str):
         prompt += f"\n\n--- Étape actuelle ---\nObservation: {observation}\n\nTa réponse JSON:"
 
         try:
+            # ... (génération de la réponse et parsing JSON)
             response = agent_model.generate_content(prompt)
             raw_text = response.text
 
@@ -618,10 +619,20 @@ def run_agent_loop(initial_task: str):
             action = decision_json.get("action", {})
             tool_name = action.get("tool_name")
             parameters = action.get("parameters", {})
+
         except Exception as e:
-            error_message = f"Erreur lors de la décision de l'agent: {e}\nRéponse brute: {response.text if 'response' in locals() else 'N/A'}"
-            print(json.dumps({"type": "error", "content": error_message}, ensure_ascii=False), flush=True)
-            break
+            # GESTION D'ERREUR SANS ARRÊT
+            # L'agent a produit une sortie invalide. On transforme cette erreur en une "observation"
+            # pour qu'il puisse se corriger au prochain tour.
+            thought = "Erreur de formatage."
+            tool_name = "error_handler" # Un pseudo-outil pour la logique
+            parameters = {}
+            observation = f"Erreur: La réponse générée n'était pas un JSON valide. Erreur: {e}. Réponse brute: {raw_text}. Tu dois répondre IMPÉRATIVEMENT avec un JSON valide contenant 'thought' et 'action'."
+            
+            # Afficher l'erreur pour le débogage
+            print(json.dumps({"type": "error", "content": observation}, ensure_ascii=False), flush=True)
+            history.append(f"Observation: {observation}")
+            continue # Passe à l'itération suivante
 
         print(json.dumps({"type": "thought", "content": thought}, ensure_ascii=False), flush=True)
         history.append(f"Thought: {thought}")
