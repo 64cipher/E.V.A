@@ -16,7 +16,15 @@ import urllib.parse
 from PIL import Image
 import PyPDF2
 from io import BytesIO
+from email.message import EmailMessage
 
+
+import base64
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -34,7 +42,15 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 if not gemini_api_key:
     print(json.dumps({"type": "error", "content": "Clé API Gemini manquante pour l'agent."}), flush=True)
     sys.exit(1)
+# --- NOUVEAU: Configuration pour Gmail ---
+gmail_token_path = os.getenv("GMAIL_TOKEN_PICKLE_PATH")
+gmail_scopes = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.modify'
+]
 
+gmail_enabled = bool(gmail_token_path) and os.path.exists('credentials.json')
 # --- Configuration pour Google APIs ---
 google_custom_search_api_key = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY")
 google_custom_search_cx = os.getenv("GOOGLE_CUSTOM_SEARCH_CX")
@@ -314,6 +330,146 @@ def get_street_view_image(latitude: float, longitude: float, heading: int = 0, p
     except Exception as e:
         return json.dumps({"type": "error", "content": f"Erreur API Street View: {e}"})    
 
+def get_gmail_service():
+    """
+    Crée et retourne un service Gmail API authentifié. Gère le flux OAuth2.
+    """
+    creds = None
+    if os.path.exists(gmail_token_path):
+        creds = Credentials.from_authorized_user_file(gmail_token_path, gmail_scopes)
+    
+    # Si les identifiants n'existent pas ou sont invalides, lancez le flux d'authentification.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', gmail_scopes)
+            creds = flow.run_local_server(port=0)
+        
+        # Sauvegarde les identifiants pour la prochaine exécution
+        with open(gmail_token_path, 'w') as token:
+            token.write(creds.to_json())
+            
+    return build('gmail', 'v1', credentials=creds)
+
+def send_email(to: str, subject: str, body: str) -> str:
+    """
+    Version finale qui répare les chaînes de caractères d'entrée en les
+    transcodant de cp1252 (probable source de l'erreur) vers UTF-8.
+    """
+    if not gmail_enabled:
+        return "Erreur: La fonctionnalité Gmail n'est pas configurée..."
+
+    try:
+        # --- BLOC DE RÉPARATION DE CHAÎNE ---
+        # Cette astuce "encode/decode" force la réinterprétation des caractères.
+        # On suppose que la source était du texte Windows (cp1252) mal interprété.
+        try:
+            # On encode en bytes selon une carte 1-pour-1 (latin-1) puis on décode
+            # en utilisant le codec que l'on suppose être le bon (cp1252).
+            subject_repaired = subject.encode('latin-1').decode('cp1252')
+            body_repaired = body.encode('latin-1').decode('cp1252')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # Si la réparation échoue, on se rabat sur le remplacement sécurisé.
+            subject_repaired = subject.encode('utf-8', errors='replace').decode('utf-8')
+            body_repaired = body.encode('utf-8', errors='replace').decode('utf-8')
+        # --- FIN DU BLOC DE RÉPARATION ---
+
+        service = get_gmail_service()
+        
+        message = EmailMessage()
+        message.set_content(body_repaired) # On utilise la version réparée
+        
+        message['To'] = to
+        message['From'] = 'me'
+        message['Subject'] = subject_repaired # On utilise la version réparée
+        
+        encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        create_message = {'raw': encoded_message}
+        
+        send_message = (service.users().messages().send(userId="me", body=create_message).execute())
+        return f"E-mail envoyé avec succès à {to}. ID du message: {send_message['id']}"
+
+    except HttpError as error:
+        return f"Erreur API lors de l'envoi de l'e-mail: {error}"
+    except Exception as e:
+        return f"Erreur inattendue lors de l'envoi de l'e-mail: {e}"
+
+def read_inbox(query: str = "is:unread in:inbox", max_results: int = 5) -> str:
+    """
+    Lit les e-mails de la boîte de réception correspondant à une requête.
+    Exemples de requêtes : 'from:paypal', 'subject:facture', 'is:unread'.
+    """
+    if not gmail_enabled:
+        return "Erreur: La fonctionnalité Gmail n'est pas configurée."
+        
+    try:
+        service = get_gmail_service()
+        results = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+        messages = results.get('messages', [])
+
+        if not messages:
+            return f"Aucun message trouvé pour la requête : '{query}'."
+
+        email_summaries = []
+        for msg in messages:
+            msg_data = service.users().messages().get(userId='me', id=msg['id']).execute()
+            payload = msg_data['payload']
+            headers = payload.get('headers', [])
+            
+            subject = next((h['value'] for h in headers if h['name'] == 'Subject'), 'Sans objet')
+            sender = next((h['value'] for h in headers if h['name'] == 'From'), 'Inconnu')
+            
+            snippet = msg_data.get('snippet', 'Pas d\'extrait.')
+            email_summaries.append(f"De: {sender}\nObjet: {subject}\nExtrait: {snippet}\n---")
+            
+        return "\n".join(email_summaries)
+
+    except HttpError as error:
+        return f"Erreur lors de la lecture de la boîte de réception: {error}"
+    except Exception as e:
+        return f"Erreur inattendue lors de la lecture des e-mails: {e}"
+    
+def summarize_webpage(url: str, topic: str = "les points clés") -> str:
+    """
+    Récupère, nettoie et résume le contenu d'une page web.
+    Utilise cet outil pour obtenir un résumé concis d'un article avant de l'envoyer par e-mail ou de l'analyser.
+    Retourne uniquement le résumé textuel.
+    """
+    try:
+        # Étape 1 : Récupérer le contenu de la page (similaire à view_webpage)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=15, verify=False)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+        for script_or_style in soup(["script", "style", "nav", "footer", "header"]):
+            script_or_style.decompose()
+        
+        text = soup.get_text(separator='\n', strip=True)
+        cleaned_text = re.sub(r'\n\s*\n+', '\n', text)
+
+        if not cleaned_text:
+            return "Erreur : Le contenu de la page est vide ou n'a pas pu être extrait."
+
+        # Limite la longueur pour le prompt de résumé
+        max_length = 12000
+        truncated_text = cleaned_text[:max_length]
+
+        # Étape 2 : Appeler un modèle pour effectuer le résumé
+        summarizer_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        prompt = f"Résume le texte suivant en te concentrant sur {topic}. Le résumé doit être concis, informatif et prêt à être envoyé par e-mail :\n\n---\n{truncated_text}\n---"
+        
+        summary_response = summarizer_model.generate_content(prompt)
+        
+        return summary_response.text.strip()
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur réseau lors de la récupération de la page pour le résumé : {e}"
+    except Exception as e:
+        return f"Erreur inattendue lors du résumé de la page : {e}"    
 
 AVAILABLE_TOOLS = {
     "web_search": {
@@ -364,8 +520,32 @@ AVAILABLE_TOOLS = {
         "function": lambda answer: answer,
         "description": "Utilise cet outil pour terminer la tâche et fournir la réponse finale.",
         "params": {"answer": "string (La réponse finale et complète à la tâche)"}
-
-    }
+    },
+        "send_email": {
+        "function": send_email,
+        "description": "Envoie un e-mail à un destinataire spécifié. Utiliser pour communiquer des résultats ou envoyer des informations.",
+        "params": {
+            "to": "string (l'adresse e-mail du destinataire)",
+            "subject": "string (l'objet de l'e-mail)",
+            "body": "string (le contenu du corps de l'e-mail)"
+        }
+    },
+        "read_inbox": {
+        "function": read_inbox,
+        "description": "Consulte la boîte de réception Gmail pour trouver des e-mails récents ou spécifiques en utilisant une requête de recherche. Très utile pour vérifier des notifications ou des réponses.",
+        "params": {
+            "query": "string (optionnel, requête de recherche type Gmail, ex: 'is:unread', défaut: 'is:unread in:inbox')",
+            "max_results": "integer (optionnel, nombre maximum de messages à retourner, défaut: 5)"
+        }
+    },
+        "summarize_webpage": {
+        "function": summarize_webpage,
+        "description": "Récupère et résume le contenu d'une page web en une seule action. Utilise cet outil pour extraire les points clés d'un article avant de l'envoyer ou de l'analyser. C'est plus efficace que d'utiliser 'view_webpage' puis de résumer mentalement.",
+        "params": {
+            "url": "string (URL complète de la page à résumer)",
+            "topic": "string (optionnel, le sujet sur lequel se concentrer pour le résumé, ex: 'les aspects financiers')"
+        }
+    },
 }
 
 
@@ -386,13 +566,27 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 - **Gestion des Échecs (Très Important)**:
   - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
-- **Exemple de tâche complexe : "Où cette photo a-t-elle été prise ?"**
+- **NOUVEAU - Gestion des Communications**:
+  - Utilise l'outil `send_email` lorsque la tâche te demande explicitement de communiquer, de notifier, d'envoyer un rapport ou de transmettre un résultat à quelqu'un.
+  - Utilise l'outil `read_inbox` pour vérifier si des informations nouvelles ou attendues (comme une confirmation, une réponse) sont arrivées par e-mail.
+- **Exemple de tâche complexe (Géographie) : "Où cette photo a-t-elle été prise ?"**
     1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices uniques.
     2.  **Utilise ces indices** avec `web_search` pour trouver un nom de lieu probable.
     3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
     4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
     5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **Réponse Finale**: Lorsque tu as la réponse complète et VÉRIFIÉE, utilise l'outil spécial "finish".
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à [adresse e-mail du destinataire]"**
+    1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
+    2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
+    3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
+    4.  **Utilise `send_email`** pour envoyer le résumé généré à l'adresse spécifiée.
+- **Réponse Finale**: Lorsque tu as la réponse complète, vérifiée et que toutes les actions requises (comme l'envoi d'un e-mail) sont terminées, utilise l'outil spécial "finish".
+- **NOUVELLE RÈGLE CRITIQUE - Gestion des Adresses E-mail**: La valeur spéciale `"me"` dans l'API Gmail fait référence à ton propre compte (celui qui est authentifié). Ne l'utilise **JAMAIS** comme destinataire dans le paramètre `to` de l'outil `send_email`, sauf si la tâche est explicitement de t'envoyer un e-mail à toi-même. Le destinataire doit toujours être extrait de la demande de l'utilisateur.
+  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à jeanmichel@exemple.com"
+    1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
+    2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
+    3.  **Valide** le destinataire 'jeanmichel@exemple.com' dans ta pensée.
+    4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
 
 # OUTILS DISPONIBLES
 {json.dumps({name: {"description": tool["description"], "params": tool["params"]} for name, tool in AVAILABLE_TOOLS.items()}, indent=2, ensure_ascii=False)}
