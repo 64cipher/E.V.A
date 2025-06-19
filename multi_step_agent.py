@@ -645,17 +645,17 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
     3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
     4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
     5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: exemple:"exemple@mail.com", cipher:"analogcipher64@proton.me"**)"
     1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
     2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
     3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
     4.  **Utilise `send_email`** pour envoyer le résumé généré à l'adresse spécifiée.
 - **Réponse Finale**: Lorsque tu as la réponse complète, vérifiée et que toutes les actions requises (comme l'envoi d'un e-mail) sont terminées, utilise l'outil spécial "finish".
 - **NOUVELLE RÈGLE CRITIQUE - Gestion des Adresses E-mail**: La valeur spéciale `"me"` dans l'API Gmail fait référence à ton propre compte (celui qui est authentifié). Ne l'utilise **JAMAIS** comme destinataire dans le paramètre `to` de l'outil `send_email`, sauf si la tâche est explicitement de t'envoyer un e-mail à toi-même. Le destinataire doit toujours être extrait de la demande de l'utilisateur.
-  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
+  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: exemple:"exemple@mail.com", cipher:"analogcipher64@proton.me"**)"
     1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
     2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
-    3.  **Valide** le destinataire parmis les exemples qui seront cités: silver:"silverdirito@hotmail.fr" - cipher:"analogcipher64@proton.me" dans ta pensée.
+    3.  **Valide** le destinataire parmis les exemples qui seront cités: exemple:"exemple@mail.com" - cipher:"analogcipher64@proton.me" dans ta pensée.
     4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
 
 # OUTILS DISPONIBLES
