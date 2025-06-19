@@ -1,4 +1,6 @@
 # multi_step_agent.py
+import whisper
+import yt_dlp
 import os
 import sys
 import json
@@ -17,6 +19,7 @@ from PIL import Image
 import PyPDF2
 from io import BytesIO
 from email.message import EmailMessage
+import tempfile
 
 
 import base64
@@ -108,6 +111,9 @@ def view_webpage(url: str) -> str:
     """
     Récupère et extrait le contenu textuel d'une page web HTML à partir de son URL.
     """
+    if "youtube.com/watch" in url or "youtu.be/" in url:
+        return "Erreur: L'URL pointe vers une vidéo YouTube. Veuillez utiliser l'outil 'transcribe_and_summarize_youtube' pour en analyser le contenu."
+    
     try:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -471,6 +477,61 @@ def summarize_webpage(url: str, topic: str = "les points clés") -> str:
     except Exception as e:
         return f"Erreur inattendue lors du résumé de la page : {e}"    
 
+def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les points clés") -> str:
+    """
+    Extrait la transcription d'une vidéo YouTube en utilisant systématiquement Whisper.
+    NOTE : Cette approche est lente et gourmande en ressources.
+    """
+    
+    temp_dir = tempfile.gettempdir()
+    temp_audio_path = os.path.join(temp_dir, 'agent_temp_audio.mp3')
+    
+    try:
+        # 1. Validation de l'URL et extraction de l'ID
+        regex = r"(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"
+        match = re.search(regex, url)
+        if not match:
+            return f"Erreur: L'URL '{url}' ne semble pas être une URL YouTube valide."
+
+        # 2. Téléchargement de l'audio
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+            'outtmpl': temp_audio_path.replace('.mp3', ''),
+            'quiet': True,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+
+        if not os.path.exists(temp_audio_path):
+            return "Erreur: Le fichier audio n'a pas pu être téléchargé. La vidéo est probablement restreinte (géo-blocage, etc.)."
+
+        # 3. Transcription avec Whisper
+        model = whisper.load_model("base")
+        result = model.transcribe(temp_audio_path, fp16=False)
+        transcript_text = result['text']
+
+        if not transcript_text:
+            return "Erreur: Whisper n'a produit aucune transcription."
+
+        # 4. Résumé par le LLM
+        max_length = 15000
+        truncated_text = transcript_text[:max_length]
+
+        summarizer_model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = f"Voici la transcription d'une vidéo YouTube. Résume le contenu en te concentrant sur {topic}. Le résumé doit être concis et informatif:\n\n---\n{truncated_text}\n---"
+        summary_response = summarizer_model.generate_content(prompt)
+        
+        return summary_response.text.strip()
+
+    except Exception as e:
+        return f"Erreur durant le processus Whisper : {e}"
+    finally:
+        # Nettoyage
+        if os.path.exists(temp_audio_path):
+            os.remove(temp_audio_path) 
+
+
 AVAILABLE_TOOLS = {
     "web_search": {
         "function": web_search,
@@ -546,6 +607,14 @@ AVAILABLE_TOOLS = {
             "topic": "string (optionnel, le sujet sur lequel se concentrer pour le résumé, ex: 'les aspects financiers')"
         }
     },
+        "transcribe_and_summarize_youtube": {
+        "function": transcribe_and_summarize_youtube_whisper_only,
+        "description": "Extrait le contenu parlé d'une vidéo YouTube et le résume. À utiliser exclusivement lorsque la tâche implique l'analyse d'une vidéo YouTube.",
+        "params": {
+            "url": "string (URL complète de la vidéo YouTube)",
+            "topic": "string (optionnel, le sujet sur lequel se concentrer pour le résumé)"
+        }
+    },
 }
 
 
@@ -563,6 +632,7 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
   - **URL de Page Web HTML**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie.
   - **URL de Document (PDF/TXT)**: Si la tâche concerne une URL finissant par `.pdf` ou `.txt`, ta première action DOIT être `read_document`.
   - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
+   - **URL de Vidéo YouTube**: Si la tâche est d'analyser le contenu d'une vidéo YouTube, ta première action pour cette URL DOIT être `transcribe_and_summarize_youtube_whisper_only`.
 - **Gestion des Échecs (Très Important)**:
   - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
@@ -575,17 +645,17 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
     3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
     4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
     5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à ex: cipher:"analogcipher@proton.me", exemple:"exemple@mail.com**
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
     1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
     2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
     3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
     4.  **Utilise `send_email`** pour envoyer le résumé généré à l'adresse spécifiée.
 - **Réponse Finale**: Lorsque tu as la réponse complète, vérifiée et que toutes les actions requises (comme l'envoi d'un e-mail) sont terminées, utilise l'outil spécial "finish".
 - **NOUVELLE RÈGLE CRITIQUE - Gestion des Adresses E-mail**: La valeur spéciale `"me"` dans l'API Gmail fait référence à ton propre compte (celui qui est authentifié). Ne l'utilise **JAMAIS** comme destinataire dans le paramètre `to` de l'outil `send_email`, sauf si la tâche est explicitement de t'envoyer un e-mail à toi-même. Le destinataire doit toujours être extrait de la demande de l'utilisateur.
-  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à jeanmichel@exemple.com"
+  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
     1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
     2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
-    3.  **Valide** le destinataire 'jeanmichel@exemple.com' dans ta pensée.
+    3.  **Valide** le destinataire parmis les exemples qui seront cités: silver:"silverdirito@hotmail.fr" - cipher:"analogcipher64@proton.me" dans ta pensée.
     4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
 
 # OUTILS DISPONIBLES
@@ -596,7 +666,7 @@ def run_agent_loop(initial_task: str):
     """Exécute la boucle de raisonnement et d'action de l'agent."""
     observation = f"Tâche initiale: {initial_task}"
     history = []
-    max_steps = 10
+    max_steps = 20
 
     for step in range(max_steps):
         prompt = f"{AGENT_SYSTEM_PROMPT}\n\n"
