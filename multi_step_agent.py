@@ -37,6 +37,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Force la sortie standard en UTF-8 pour éviter les erreurs de décodage Unicode sous Windows
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # --- Configuration ---
 load_dotenv()
@@ -106,6 +107,47 @@ def web_search(query: str, num_results: int = 5) -> str:
         return f"Erreur de réseau ou d'API lors de la recherche web : {e}"
     except Exception as e:
         return f"Erreur inattendue lors de la recherche web : {e}"
+
+def image_search(query: str, num_results: int = 5) -> str:
+    """
+    Effectue une recherche d'images en utilisant l'API Google Custom Search.
+    Retourne une liste de résultats contenant le titre et l'URL directe de l'image.
+    """
+    if not google_search_enabled:
+        return "Erreur: Le service de recherche web n'est pas configuré. Veuillez vérifier les variables GOOGLE_CUSTOM_SEARCH_API_KEY et GOOGLE_CUSTOM_SEARCH_CX dans le fichier .env."
+
+    try:
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            'key': google_custom_search_api_key,
+            'cx': google_custom_search_cx,
+            'q': query,
+            'num': num_results,
+            'hl': 'fr',
+            'gl': 'fr',
+            'searchType': 'image'  # Paramètre clé pour la recherche d'images
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        search_results = response.json()
+
+        items = search_results.get("items", [])
+        if not items:
+            return f"Aucun résultat d'image trouvé pour '{query}'."
+
+        output = ""
+        for i, item in enumerate(items):
+            title = item.get("title", "Sans titre")
+            image_url = item.get("link", "#") # URL directe de l'image
+            context_link = item.get("image", {}).get("contextLink", "#") # Page où l'image se trouve
+            output += f"{i+1}. {title}\n   URL Image: {image_url}\n   Page Source: {context_link}\n\n"
+
+        return output.strip()
+
+    except requests.exceptions.RequestException as e:
+        return f"Erreur de réseau ou d'API lors de la recherche d'images : {e}"
+    except Exception as e:
+        return f"Erreur inattendue lors de la recherche d'images : {e}"    
 
 def view_webpage(url: str) -> str:
     """
@@ -253,28 +295,6 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"Erreur lors de l'exécution du code:\n{traceback.format_exc()}"
 
-def play_fl_studio_sequence(sequence_json: str) -> str:
-    """
-    Joue une séquence de notes ou d'accords sur FL Studio.
-    Le paramètre 'sequence_json' doit être une chaîne de caractères contenant un JSON valide
-    qui représente une liste d'événements musicaux.
-    """
-    try:
-        controller_path = "fl_studio_controller.py"
-        if not os.path.exists(controller_path):
-            return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
-
-        try:
-            json.loads(sequence_json)
-        except json.JSONDecodeError:
-            return "Erreur : le paramètre 'sequence_json' n'est pas une chaîne JSON valide."
-
-        command = [sys.executable, controller_path, sequence_json]
-        subprocess.Popen(command)
-
-        return f"La séquence musicale a été envoyée à FL Studio."
-    except Exception as e:
-        return f"Erreur lors du lancement de la séquence musicale : {e}"
 
 def locate_on_map(location_name: str) -> str:
     """
@@ -518,7 +538,7 @@ def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les po
         max_length = 15000
         truncated_text = transcript_text[:max_length]
 
-        summarizer_model = genai.GenerativeModel('gemini-1.5-flash')
+        summarizer_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt = f"Voici la transcription d'une vidéo YouTube. Résume le contenu en te concentrant sur {topic}. Le résumé doit être concis et informatif:\n\n---\n{truncated_text}\n---"
         summary_response = summarizer_model.generate_content(prompt)
         
@@ -530,6 +550,7 @@ def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les po
         # Nettoyage
         if os.path.exists(temp_audio_path):
             os.remove(temp_audio_path) 
+
 
 
 AVAILABLE_TOOLS = {
@@ -571,11 +592,7 @@ AVAILABLE_TOOLS = {
         "function": execute_python,
         "description": "Exécute du code Python. Utilise-le pour des calculs complexes, la manipulation de chaînes de caractères, ou pour créer du contenu structuré (ex: HTML, SVG). Le code est exécuté dans un environnement isolé.",
         "params": {"code": "string (doit être un bloc de code Python valide)"}
-    },
-    "play_music_sequence": {
-        "function": play_fl_studio_sequence,
-        "description": "Joue une séquence de notes ou d'accords sur FL Studio via le script 'fl_studio_controller.py'. L'agent doit générer lui-même la chaîne JSON de la séquence à jouer.",
-        "params": {"sequence_json": "string (une chaîne JSON qui représente une liste d'événements musicaux)"}
+
     },
     "finish": {
         "function": lambda answer: answer,
@@ -615,6 +632,13 @@ AVAILABLE_TOOLS = {
             "topic": "string (optionnel, le sujet sur lequel se concentrer pour le résumé)"
         }
     },
+        "image_search": {
+        "function": image_search,
+        "description": "Recherche des images sur le web à partir d'une requête textuelle et retourne une liste d'URL d'images. À utiliser quand l'utilisateur demande de trouver, chercher ou montrer des photos ou des images.",
+        "params": {
+            "query": "string", "num_results": "integer (optionnel, défaut 5)"
+        }
+    },
 }
 
 
@@ -632,7 +656,8 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
   - **URL de Page Web HTML**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie.
   - **URL de Document (PDF/TXT)**: Si la tâche concerne une URL finissant par `.pdf` ou `.txt`, ta première action DOIT être `read_document`.
   - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
-   - **URL de Vidéo YouTube**: Si la tâche est d'analyser le contenu d'une vidéo YouTube, ta première action pour cette URL DOIT être `transcribe_and_summarize_youtube_whisper_only`.
+  - **URL de Vidéo YouTube**: Si la tâche est d'analyser le contenu d'une vidéo YouTube, ta première action pour cette URL DOIT être `transcribe_and_summarize_youtube_whisper_only`.
+  - **Recherche d'Images**: Si la tâche est de "trouver des photos de la tour Eiffel", tu dois utiliser l'outil `image_search` avec la requête "tour Eiffel". Ne confonds pas cela avec `analyze_image` qui analyse une image existante à partir d'une URL.
 - **Gestion des Échecs (Très Important)**:
   - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
@@ -645,17 +670,17 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
     3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
     4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
     5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: exemple:"exemple@mail.com", cipher:"analogcipher64@proton.me"**)"
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
     1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
     2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
     3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
     4.  **Utilise `send_email`** pour envoyer le résumé généré à l'adresse spécifiée.
 - **Réponse Finale**: Lorsque tu as la réponse complète, vérifiée et que toutes les actions requises (comme l'envoi d'un e-mail) sont terminées, utilise l'outil spécial "finish".
 - **NOUVELLE RÈGLE CRITIQUE - Gestion des Adresses E-mail**: La valeur spéciale `"me"` dans l'API Gmail fait référence à ton propre compte (celui qui est authentifié). Ne l'utilise **JAMAIS** comme destinataire dans le paramètre `to` de l'outil `send_email`, sauf si la tâche est explicitement de t'envoyer un e-mail à toi-même. Le destinataire doit toujours être extrait de la demande de l'utilisateur.
-  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: exemple:"exemple@mail.com", cipher:"analogcipher64@proton.me"**)"
+  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
     1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
     2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
-    3.  **Valide** le destinataire parmis les exemples qui seront cités: exemple:"exemple@mail.com" - cipher:"analogcipher64@proton.me" dans ta pensée.
+    3.  **Valide** le destinataire parmis les exemples qui seront cités: silver:"silverdirito@hotmail.fr" - cipher:"analogcipher64@proton.me" dans ta pensée.
     4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
 
 # OUTILS DISPONIBLES
