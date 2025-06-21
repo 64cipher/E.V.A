@@ -242,8 +242,8 @@ def read_document_from_url(url: str) -> str:
 
 def analyze_image(url: str, question: str = "Décris cette image en détail. Si c'est une personne, essaie de l'identifier si c'est une célébrité.") -> str:
     """
-    Analyse une image à partir d'une URL. Télécharge l'image, puis utilise un modèle
-    multimodal pour répondre à une question à son sujet ou pour la décrire.
+    Analyse une image à partir d'une URL en utilisant Pillow pour extraire les métadonnées
+    techniques et un modèle multimodal pour l'analyse de contenu.
     """
     try:
         headers = {
@@ -257,11 +257,27 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
             return f"Erreur: L'URL ne semble pas pointer vers une image. Type de contenu: {content_type}"
 
         image_bytes = io.BytesIO(response.content)
+        
+        # --- AMÉLIORATION AVEC PILLOW ---
+        # 1. Ouvrir l'image avec Pillow
         image = Image.open(image_bytes)
+        
+        # 2. Extraire les métadonnées techniques
+        image_format = image.format
+        image_mode = image.mode
+        image_size = image.size
+        
+        # 3. Préparer un prompt enrichi pour le modèle visuel
+        metadata_prompt = (
+            f"Analyse l'image fournie en tenant compte de ses caractéristiques techniques. "
+            f"Format: {image_format}, Mode de couleur: {image_mode}, Dimensions: {image_size[0]}x{image_size[1]} pixels.\n\n"
+            f"Question de l'utilisateur : \"{question}\""
+        )
+        # --- FIN DE L'AMÉLIORATION ---
 
-        # Utiliser un modèle multimodal pour l'analyse.
+        # 4. Utiliser un modèle multimodal pour l'analyse.
         vision_model = genai.GenerativeModel('gemini-2.0-flash')
-        prompt_parts = [question, image]
+        prompt_parts = [metadata_prompt, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
         return vision_response.text
