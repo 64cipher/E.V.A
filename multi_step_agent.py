@@ -295,6 +295,45 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"Erreur lors de l'exécution du code:\n{traceback.format_exc()}"
 
+def execute_shell_command(command: str) -> str:
+    """
+    Exécute une commande shell dans le terminal de l'hôte.
+    ATTENTION : L'utilisation de cette fonction est extrêmement risquée et peut compromettre la sécurité.
+    Elle est dotée d'un délai d'attente de 60 secondes.
+    """
+    try:
+        # shlex.split sépare la commande en une liste d'arguments.
+        # C'est une mesure de sécurité cruciale pour éviter les injections de commandes.
+        args = shlex.split(command)
+
+        # Exécution de la commande de manière sécurisée sans 'shell=True'
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,        # Pour obtenir stdout/stderr en tant que chaines de caractères
+            timeout=60,       # Un délai de sécurité pour éviter que les commandes ne bloquent
+            check=False       # N'échoue pas si le code de retour est non-nul
+        )
+
+        # Formatage de la sortie pour l'agent
+        output = f"Commande: '{command}'\nCode de retour: {result.returncode}\n"
+        if result.stdout:
+            output += f"--- STDOUT ---\n{result.stdout.strip()}\n"
+        if result.stderr:
+            output += f"--- STDERR ---\n{result.stderr.strip()}\n"
+
+        if not result.stdout and not result.stderr:
+            output += "La commande a été exécutée sans produire de sortie."
+
+        return output.strip()
+
+    except subprocess.TimeoutExpired:
+        return f"Erreur : La commande a dépassé le délai de 60 secondes."
+    except FileNotFoundError:
+        return f"Erreur : Commande ou programme '{args[0] if args else ''}' introuvable. Vérifiez qu'il est installé et dans le PATH du système."
+    except Exception as e:
+        return f"Erreur inattendue lors de l'exécution de la commande '{command}': {e}"
+
 
 def locate_on_map(location_name: str) -> str:
     """
@@ -638,6 +677,11 @@ AVAILABLE_TOOLS = {
         "params": {
             "query": "string", "num_results": "integer (optionnel, défaut 5)"
         }
+    },
+        "execute_shell_command": {  # <--- Votre nouvelle fonction
+        "function": execute_shell_command,
+        "description": "...",
+        "params": {"command": "string (La commande shell complète à exécuter)"}
     },
 }
 
