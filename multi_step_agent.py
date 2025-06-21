@@ -20,7 +20,7 @@ import PyPDF2
 from io import BytesIO
 from email.message import EmailMessage
 import tempfile
-
+import shlex
 
 import base64
 from google.oauth2.credentials import Credentials
@@ -334,6 +334,7 @@ def execute_shell_command(command: str) -> str:
     except Exception as e:
         return f"Erreur inattendue lors de l'exécution de la commande '{command}': {e}"
 
+    
 
 def locate_on_map(location_name: str) -> str:
     """
@@ -682,7 +683,8 @@ AVAILABLE_TOOLS = {
         "function": execute_shell_command,
         "description": "...",
         "params": {"command": "string (La commande shell complète à exécuter)"}
-    },
+    },   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil
+    
 }
 
 
@@ -696,40 +698,37 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 
 # STRATÉGIE ET RAISONNEMENT
 - **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
+- **Stratégie d'Analyse d'Image pour la Géolocalisation**: Pour identifier le lieu d'une photo, suis IMPÉRATIVEMENT cette séquence :
+  1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices textuels, des noms de monuments, ou des caractéristiques uniques.
+  2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.).
+  3.  **Une fois un nom de lieu identifié**, utilise `locate_on_map` pour obtenir ses coordonnées géographiques précises.
+  4.  **(Optionnel mais recommandé)** Utilise `get_street_view_image` avec les coordonnées pour confirmer visuellement que l'endroit correspond à l'image initiale.
 - **Utilisation des Données Initiales**:
   - **URL de Page Web HTML**: Si la tâche est d'analyser une page web (texte), ta première action DOIT être `view_webpage` avec l'URL fournie.
   - **URL de Document (PDF/TXT)**: Si la tâche concerne une URL finissant par `.pdf` ou `.txt`, ta première action DOIT être `read_document`.
   - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
+  - **Penser comme Google Lens**: Face à une image, ton premier réflexe est d'utiliser `analyze_image` pour la décomposer en informations exploitables (texte, noms de lieux, objets). Utilise ensuite ces informations pour des recherches ou d'autres actions.
+  - **Recherche d'Images**: Si la tâche est de "trouver des photos de la tour Eiffel'", tu dois utiliser l'outil `image_search` avec la requête "tour Eiffel". Ne confonds pas cela avec `analyze_image` qui analyse une image existante à partir d'une URL.
   - **URL de Vidéo YouTube**: Si la tâche est d'analyser le contenu d'une vidéo YouTube, ta première action pour cette URL DOIT être `transcribe_and_summarize_youtube_whisper_only`.
-  - **Recherche d'Images**: Si la tâche est de "trouver des photos de la tour Eiffel", tu dois utiliser l'outil `image_search` avec la requête "tour Eiffel". Ne confonds pas cela avec `analyze_image` qui analyse une image existante à partir d'une URL.
 - **Gestion des Échecs (Très Important)**:
   - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
 - **NOUVEAU - Gestion des Communications**:
   - Utilise l'outil `send_email` lorsque la tâche te demande explicitement de communiquer, de notifier, d'envoyer un rapport ou de transmettre un résultat à quelqu'un.
   - Utilise l'outil `read_inbox` pour vérifier si des informations nouvelles ou attendues (comme une confirmation, une réponse) sont arrivées par e-mail.
-- **Exemple de tâche complexe (Géographie) : "Où cette photo a-t-elle été prise ?"**
-    1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices uniques.
-    2.  **Utilise ces indices** avec `web_search` pour trouver un nom de lieu probable.
-    3.  **Vérifie** ce lieu en cherchant d'autres images avec `web_search`.
-    4.  Si la vérification est concluante, **convertis le nom en coordonnées** avec `locate_on_map`.
-    5.  **Utilise `get_street_view_image`** pour la visualisation finale.
-- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
-    1.  **Commence par la recherche** avec `web_search` en utilisant une requête comme "derniers articles sur l'intelligence artificielle".
-    2.  **Analyse la page la plus pertinente** avec `view_webpage` pour en extraire le contenu.
-    3.  **Synthétise mentalement** les informations clés de l'article pour créer un résumé.
-    4.  **Utilise `send_email`** pour envoyer le résumé généré à l'adresse spécifiée.
 - **Réponse Finale**: Lorsque tu as la réponse complète, vérifiée et que toutes les actions requises (comme l'envoi d'un e-mail) sont terminées, utilise l'outil spécial "finish".
 - **NOUVELLE RÈGLE CRITIQUE - Gestion des Adresses E-mail**: La valeur spéciale `"me"` dans l'API Gmail fait référence à ton propre compte (celui qui est authentifié). Ne l'utilise **JAMAIS** comme destinataire dans le paramètre `to` de l'outil `send_email`, sauf si la tâche est explicitement de t'envoyer un e-mail à toi-même. Le destinataire doit toujours être extrait de la demande de l'utilisateur.
-  **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
+- **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à (ex: silver:"silverdirito@hotmail.fr", cipher:"analogcipher64@proton.me"**)"
     1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
     2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
     3.  **Valide** le destinataire parmis les exemples qui seront cités: silver:"silverdirito@hotmail.fr" - cipher:"analogcipher64@proton.me" dans ta pensée.
     4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
+    
 
 # OUTILS DISPONIBLES
 {json.dumps({name: {"description": tool["description"], "params": tool["params"]} for name, tool in AVAILABLE_TOOLS.items()}, indent=2, ensure_ascii=False)}
 """
+
 
 def run_agent_loop(initial_task: str):
     """Exécute la boucle de raisonnement et d'action de l'agent."""
