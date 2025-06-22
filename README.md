@@ -226,6 +226,7 @@ pyvista
 spotipy
 mido
 PyPDF2
+rtmidi-python
 ```
 
 Générez le fichier exact via :
