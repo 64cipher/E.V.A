@@ -227,6 +227,7 @@ spotipy
 mido
 PyPDF2
 rtmidi-python
+yt-dlp
 ```
 
 Générez le fichier exact via :
