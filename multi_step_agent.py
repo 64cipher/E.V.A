@@ -63,11 +63,43 @@ Maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY") # NOUVEAU: Clé pour Maps
 google_search_enabled = bool(google_custom_search_api_key and google_custom_search_cx)
 Maps_enabled = bool(Maps_api_key) # NOUVEAU: Flag pour Maps
 
+email_to_name_map = {}
+try:
+    # Utilise l'encodage utf-8 pour gérer correctement les caractères spéciaux comme dans "Sébastien"
+    with open('contacts.json', 'r', encoding='utf-8') as f:
+        contacts_data = json.load(f)
+        # Crée un dictionnaire inversé pour une recherche rapide : { "email@adresse.com": "NomAffichage" }
+        for contact_info in contacts_data.values():
+            if "email" in contact_info and "display_name" in contact_info:
+                email = contact_info["email"].lower() # Met en minuscule pour une recherche insensible à la casse
+                display_name = contact_info["display_name"]
+                email_to_name_map[email] = display_name
+except FileNotFoundError:
+    # Le script continuera de fonctionner même si le fichier de contacts n'existe pas.
+    pass
+except json.JSONDecodeError:
+    print(json.dumps({"type": "error", "content": "Erreur de syntaxe dans contacts.json."}), flush=True)
+
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
 agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # --- Boîte à Outils de l'Agent ---
+
+def get_contact_display_name(email_address: str) -> str:
+    """
+    Recherche un nom d'affichage pour une adresse e-mail donnée.
+    Retourne le nom si trouvé, sinon retourne l'adresse e-mail originale.
+    """
+    if not email_address:
+        return "Inconnu"
+
+    # Extrait l'e-mail s'il est au format "Nom <email@exemple.com>"
+    match = re.search(r'<([^>]+)>', email_address)
+    clean_email = match.group(1).lower() if match else email_address.lower()
+
+    # Retourne le nom trouvé dans le carnet d'adresses, ou l'e-mail par défaut
+    return email_to_name_map.get(clean_email, email_address)
 
 def web_search(query: str, num_results: int = 5) -> str:
     """
@@ -276,7 +308,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         # --- FIN DE L'AMÉLIORATION ---
 
         # 4. Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.0-flash')
+        vision_model = genai.GenerativeModel('gemini-2.5-flash')
         prompt_parts = [metadata_prompt, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
@@ -470,7 +502,8 @@ def send_email(to: str, subject: str, body: str) -> str:
         create_message = {'raw': encoded_message}
         
         send_message = (service.users().messages().send(userId="me", body=create_message).execute())
-        return f"E-mail envoyé avec succès à {to}. ID du message: {send_message['id']}"
+        display_recipient = get_contact_display_name(to)
+        return f"E-mail envoyé avec succès à {display_recipient}. ID du message: {send_message['id']}"
 
     except HttpError as error:
         return f"Erreur API lors de l'envoi de l'e-mail: {error}"
@@ -503,7 +536,8 @@ def read_inbox(query: str = "is:unread in:inbox", max_results: int = 5) -> str:
             sender = next((h['value'] for h in headers if h['name'] == 'From'), 'Inconnu')
             
             snippet = msg_data.get('snippet', 'Pas d\'extrait.')
-            email_summaries.append(f"De: {sender}\nObjet: {subject}\nExtrait: {snippet}\n---")
+            display_sender = get_contact_display_name(sender)
+            email_summaries.append(f"De: {display_sender}\nObjet: {subject}\nExtrait: {snippet}\n---")
             
         return "\n".join(email_summaries)
 
@@ -551,7 +585,28 @@ def summarize_webpage(url: str, topic: str = "les points clés") -> str:
     except requests.exceptions.RequestException as e:
         return f"Erreur réseau lors de la récupération de la page pour le résumé : {e}"
     except Exception as e:
-        return f"Erreur inattendue lors du résumé de la page : {e}"    
+        return f"Erreur inattendue lors du résumé de la page : {e}"
+
+def find_contact_email(name: str) -> str:
+    """
+    Recherche l'adresse e-mail d'un contact à partir de son nom.
+    La recherche se base sur les clés du fichier contacts.json.
+    """
+    # La variable 'contacts_data' est chargée au début du script et accessible ici.
+    search_name = name.lower().strip()
+    
+    # Cherche une correspondance exacte dans les clés du JSON (ex: "jean dupont")
+    contact = contacts_data.get(search_name)
+    
+    if contact and 'email' in contact:
+        return contact['email']
+    else:
+        # Essaye une recherche partielle si aucune correspondance exacte n'est trouvée
+        for key, data in contacts_data.items():
+            if search_name in key:
+                return data['email']
+        
+        return f"Contact '{name}' non trouvé dans le carnet d'adresses."        
 
 def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les points clés") -> str:
     """
@@ -700,7 +755,11 @@ AVAILABLE_TOOLS = {
         "description": "...",
         "params": {"command": "string (La commande shell complète à exécuter)"}
     },   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil
-    
+        "find_contact_email": {
+            "function": find_contact_email,
+            "description": "Recherche l'adresse e-mail d'un contact à partir de son nom. À utiliser IMPÉRATIVEMENT avant d'envoyer un e-mail si vous ne disposez que d'un nom et non d'une adresse e-mail complète.",
+            "params": {"name": "string (Le nom du contact à rechercher, ex: 'Jean Dupont')"}
+    },
 }
 
 
@@ -716,7 +775,7 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 - **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
 - **Stratégie d'Analyse d'Image pour la Géolocalisation**: Pour identifier le lieu d'une photo, suis IMPÉRATIVEMENT cette séquence :
   1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices textuels, des noms de monuments, ou des caractéristiques uniques.
-  2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.).
+  2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.) et `image_search` pour comparer les images si besoin (ville, rue, batiments, monuments, panneaux, magasin, etc.).
   3.  **Une fois un nom de lieu identifié**, utilise `locate_on_map` pour obtenir ses coordonnées géographiques précises.
   4.  **(Optionnel mais recommandé)** Utilise `get_street_view_image` avec les coordonnées pour confirmer visuellement que l'endroit correspond à l'image initiale.
 - **Utilisation des Données Initiales**:
@@ -737,8 +796,15 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 - **NOUVEAU - Exemple de tâche complexe (Recherche et Communication) : "Cherche un article récent sur l'IA puis envoie un résumé à [email]"
     1.  **Recherche** avec `web_search` pour trouver un article pertinent et obtenir son URL.
     2.  **Utilise le NOUVEL outil `summarize_webpage`** avec l'URL pour obtenir un résumé propre et concis.
-    3.  **Valide** le destinataire [email] dans ta pensée.
+    3.  **Valide** utilise l'outil `find_contact_email` avec le nom de la personne pour récupérer l'adresse e-mail du destinataire dans ta pensée.
     4.  **Utilise `send_email`** avec le résumé obtenu à l'étape 2.
+# --- AJOUT : STRATÉGIE D'ENVOI D'E-MAIL ---
+- **RÈGLE CRUCIALE**: Si la tâche est d'envoyer un e-mail à une personne identifiée par son **NOM** (ex: "Silver", "Analogue"), tu dois suivre cette séquence OBLIGATOIRE :
+    1.  **D'ABORD**, utilise l'outil `find_contact_email` avec le nom de la personne pour récupérer son adresse e-mail.
+    2.  **ENSUITE**, et seulement après avoir obtenu une adresse e-mail valide, utilise l'outil `send_email` avec cette adresse.
+- **NE JAMAIS INVENTER UNE ADRESSE E-MAIL**. Si `find_contact_email` retourne "Contact non trouvé", informe l'utilisateur que tu ne peux pas envoyer l'e-mail car le contact est inconnu.
+- Si la tâche te donne déjà une adresse e-mail complète (ex: "envoie un mail à contact@site.com"), tu peux utiliser `send_email` directement.
+# --- FIN DE L'AJOUT ---    
     
 
 # OUTILS DISPONIBLES
