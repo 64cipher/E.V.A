@@ -608,7 +608,7 @@ def find_contact_email(name: str) -> str:
         
         return f"Contact '{name}' non trouvé dans le carnet d'adresses."        
 
-def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les points clés") -> str:
+def summarize_youtube_speech(url: str, topic: str = "les points clés") -> str:
     """
     Extrait la transcription d'une vidéo YouTube en utilisant systématiquement Whisper.
     NOTE : Cette approche est lente et gourmande en ressources.
@@ -661,6 +661,26 @@ def transcribe_and_summarize_youtube_whisper_only(url: str, topic: str = "les po
         # Nettoyage
         if os.path.exists(temp_audio_path):
             os.remove(temp_audio_path) 
+
+def get_youtube_metadata(url: str) -> str:
+    """
+    Extrait les métadonnées (titre et description) d'une vidéo YouTube à partir de son URL.
+    Cet outil est la première étape pour toute analyse de vidéo YouTube, qu'il s'agisse de musique ou de parole.
+    """
+    try:
+        # Options pour yt-dlp pour être rapide et ne pas télécharger la vidéo
+        ydl_opts = {'quiet': True, 'extract_flat': True, 'no_warnings': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extraction des informations
+            info_dict = ydl.extract_info(url, download=False)
+            video_title = info_dict.get('title', 'Titre inconnu')
+            video_description = info_dict.get('description', 'Description indisponible')
+
+        # Retourne un texte formaté que l'agent peut facilement utiliser
+        return f"Titre de la vidéo: {video_title}\n\nDescription: {video_description[:500]}..."
+
+    except Exception as e:
+        return f"Une erreur est survenue lors de la récupération des métadonnées de la vidéo : {e}"
 
 
 
@@ -736,11 +756,18 @@ AVAILABLE_TOOLS = {
         }
     },
         "transcribe_and_summarize_youtube": {
-        "function": transcribe_and_summarize_youtube_whisper_only,
+        "function": summarize_youtube_speech,
         "description": "Extrait le contenu parlé d'une vidéo YouTube et le résume. À utiliser exclusivement lorsque la tâche implique l'analyse d'une vidéo YouTube.",
         "params": {
             "url": "string (URL complète de la vidéo YouTube)",
             "topic": "string (optionnel, le sujet sur lequel se concentrer pour le résumé)"
+            }
+    },
+        "get_youtube_metadata": {
+        "function": get_youtube_metadata,
+        "description": "INDISPENSABLE première étape pour toute analyse de vidéo YouTube. Récupère le titre et la description d'une vidéo pour permettre des actions ultérieures (recherche sur la musique, analyse du sujet, etc.).",
+        "params": {
+            "url": "string (URL complète de la vidéo YouTube)"
         }
     },
         "image_search": {
@@ -784,8 +811,7 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
   - **URL d'Image**: Si la tâche est d'analyser une IMAGE via une URL, ta première action DOIT être `analyze_image`.
   - **Penser comme Google Lens**: Face à une image, ton premier réflexe est d'utiliser `analyze_image` pour la décomposer en informations exploitables (texte, noms de lieux, objets). Utilise ensuite ces informations pour des recherches ou d'autres actions.
   - **Recherche d'Images**: Si la tâche est de "trouver des photos de la tour Eiffel'", tu dois utiliser l'outil `image_search` avec la requête "tour Eiffel". Ne confonds pas cela avec `analyze_image` qui analyse une image existante à partir d'une URL.
-  - **URL de Vidéo YouTube**: Si la tâche est d'analyser le contenu d'une vidéo YouTube, ta première action pour cette URL DOIT être `transcribe_and_summarize_youtube_whisper_only`.
-- **Gestion des Échecs (Très Important)**:
+- **URL de Vidéo YouTube**: Ta PREMIÈRE action pour toute URL YouTube est TOUJOURS d'utiliser `get_youtube_metadata`. Une fois que tu as le titre et la description, utilise `web_search` pour trouver des informations, que ce soit sur la musique (genre, artiste) ou sur le sujet du discours. N'utilise `summarize_youtube_speech` (transcription) qu'en dernier recours si l'information n'est trouvable nulle part ailleurs.
   - Si un outil échoue (par exemple, avec une erreur réseau 403 ou 429), **NE T'ARRÊTE PAS**. Analyse l'erreur et essaie une autre approche. Par exemple, si `view_webpage` échoue, utilise `web_search` pour trouver une source alternative ou des informations sur le problème.
 - **Vérification Critique**: Pour les tâches d'identification (comme trouver un lieu), après avoir une hypothèse, VÉRIFIE-LA. Utilise `web_search` avec le nom du lieu pour trouver d'autres photos et compare-les avec la description initiale. Si ça ne correspond pas, cherche d'autres hypothèses.
 - **NOUVEAU - Gestion des Communications**:
