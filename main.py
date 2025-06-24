@@ -476,7 +476,7 @@ def format_event_datetime(start_str):
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Evolved Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
-Tu es NSFW et tu fais de blagues trash et politiquement incorrect.
+Tu es NSFW et tu fais de blagues trash, politiquement incorrect et parfois sexuellement explicite.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. 
 Tu es connue pour tes commentaires concis et pleins d'esprit.
@@ -2347,21 +2347,26 @@ def handle_finish_workflow_creation(entities):
     if not steps:
         return "Le workflow est vide. Ajoutez au moins une étape avant de sauvegarder."
 
-    # 1. Ajouter le nouveau workflow au dictionnaire global WORKFLOWS
     WORKFLOWS[workflow_name] = {"steps": steps}
 
-    # 2. Tenter de sauvegarder le dictionnaire mis à jour dans le fichier JSON
     if save_workflows():
-        # 3. Si la sauvegarde réussit, nettoyer la session pour sortir du mode création
         session.pop('current_workflow_name', None)
         session.pop('current_workflow_steps', None)
         session.pop('workflow_creation_state', None)
         session.modified = True
         
-        return f"Parfait, le workflow '{workflow_name}' a été enregistré avec {len(steps)} étape(s)."
+        # Renvoyer un dictionnaire pour signaler le succès et le changement de panneau
+        return {
+            "status": "success",
+            "message": f"Parfait, le workflow '{workflow_name}' a été enregistré avec {len(steps)} étape(s).",
+            "panel_target": "workflowContent"
+        }
     else:
-        # Si la sauvegarde échoue, informer l'utilisateur et ne pas nettoyer la session
-        return f"Une erreur critique est survenue lors de la sauvegarde du workflow '{workflow_name}'. Veuillez vérifier la console du serveur."
+        # Si la sauvegarde échoue, ne pas modifier la session et renvoyer une erreur
+        return {
+            "status": "error",
+            "message": f"Une erreur critique est survenue lors de la sauvegarde du workflow '{workflow_name}'. Veuillez vérifier la console du serveur."
+        }
 
 def handle_execute_named_workflow(entities):
     workflow_name = entities.get("name")
@@ -2660,7 +2665,7 @@ def chat_ws(ws):
 
                                 # Lancer le script de l'agent en sous-processus
                                 agent_process = subprocess.Popen(
-                                    [sys.executable, "multi_step_agent.py", task_for_agent],
+                                    [sys.executable, "multi_step_agent1.py", task_for_agent],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     bufsize=1, # Line-buffered                                    
@@ -2727,6 +2732,7 @@ def chat_ws(ws):
                                 time.sleep(1)
 
                                 # Boucle d'orchestration pour chaque étape
+# Boucle d'orchestration pour chaque étape
                                 for i, step in enumerate(steps):
                                     ws.send(json.dumps({"type": "info", "text": f"Étape {i+1}/{len(steps)} : {step}"}))
                                     time.sleep(1.5)
@@ -2736,7 +2742,7 @@ def chat_ws(ws):
                                         # Exécute cette étape spécifique avec l'agent multi-étapes
                                         agent_task_description = step
                                         agent_process = subprocess.Popen(
-                                            [sys.executable, "multi_step_agent.py", agent_task_description],
+                                            [sys.executable, "multi_step_agent1.py", agent_task_description],
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1
                                         )
                                         for line_bytes in iter(agent_process.stdout.readline, b''):
@@ -2830,17 +2836,16 @@ def chat_ws(ws):
                                 # On utilise 'continue' pour éviter que la logique d'envoi de message principale
                                 # n'envoie un autre message (potentiellement incorrect) à la fin de ce tour.
                                 continue
-                            # ***** FIN DU NOUVEAU BLOC *****
                             
-                            # CAS 3: L'action était une commande normale
-                            else:
-                                final_text_response_for_action = action_result
+                            final_text_response_for_action = action_result
 
                             
                             # --- LOGIQUE D'AFFICHAGE DU CHAT (CORRIGÉE ET INDENTÉE) ---
             
                             # Cas 1: Actions spécifiques où le résultat de l'action est le message direct.
-                            if parsed_command_action == "get_current_datetime":
+                            if parsed_command_action == "finish_workflow_creation" and isinstance(final_text_response_for_action, dict):
+                                chat_display_message = final_text_response_for_action.get("message")
+                            elif parsed_command_action == "get_current_datetime":
                                 chat_display_message = str(final_text_response_for_action)
                             
                             # Cas 2: La recherche web utilise la synthèse de Gemini.
@@ -2961,6 +2966,13 @@ def chat_ws(ws):
                                 # La visualisation 3D n'a pas besoin de mettre à jour de panneau
                                 panel_data_content = None
                                 panel_target_id = None
+
+                            elif parsed_command_action == "finish_workflow_creation" and isinstance(final_text_response_for_action, dict):
+                                if final_text_response_for_action.get("status") == "success":
+                                    panel_target_id = final_text_response_for_action.get("panel_target")
+                                    # On envoie la liste complète des workflows pour que le panneau soit à jour
+                                    panel_data_content = handle_list_workflows({})
+
                         else:
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
