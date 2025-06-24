@@ -6,7 +6,7 @@
     <title>Evolved Virtual Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" xintegrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=VOTRE_CLE_API_GOOGLEMAPS&callback=initMap&libraries=places&solution_channel=GMP_QB_baseURL_v4_A"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         html, body {
@@ -236,6 +236,8 @@
                 <button class="info-tab-button" data-target="schedulerContent">Planificateur</button> 
                 <button class="info-tab-button" data-target="calculatorContent">Calculatrice</button>
                 <button class="info-tab-button" data-target="agentContent">Réflexion</button> <!-- AJOUTÉ -->
+                <button class="info-tab-button" data-target="workflowContent">Workflows</button>
+
             </div>
             <div id="infoPanelContentArea">
                 <div id="mapContent" class="info-content-panel active-content"><div id="mapDiv"></div></div>
@@ -278,6 +280,42 @@
                         </table>
                     </div>
                 </div>
+
+                <div id="workflowContent" class="info-content-panel">
+                    <div class="w-full">
+                        <h3 class="mb-4">Gestion des Workflows</h3>
+                        <div class="flex space-x-2 mb-4">
+                            <button id="saveWorkflowsButton" title="Exporter les workflows vers un fichier JSON" class="flex-1 p-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold">Exporter Workflows</button>
+                            <button id="loadWorkflowsButton" title="Importer des workflows depuis un fichier JSON" class="flex-1 p-2 bg-blue-600 hover:bg-blue-700 rounded-md text-sm font-semibold">Importer Workflows</button>
+                        </div>
+                        <input type="file" id="loadWorkflowsInput" class="hidden" accept="application/json">
+
+                        <button id="createWorkflowButton" class="w-full p-2 bg-indigo-600 hover:bg-indigo-700 rounded-md font-semibold mb-4">Créer un nouveau Workflow</button>
+                        
+                        <div id="workflowFormContainer" class="hidden p-4 bg-gray-700 rounded-lg mb-4">
+                            <h4 id="workflowFormTitle" class="text-lg font-semibold mb-3"></h4>
+                            <input type="hidden" id="currentWorkflowName">
+                            <div class="input-group mb-3">
+                                <label for="workflowNameInput" class="block text-sm font-medium text-gray-300 mb-1">Nom du Workflow:</label>
+                                <input type="text" id="workflowNameInput" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md" placeholder="Ex: Routine Matinale">
+                            </div>
+                            <div class="input-group mb-3">
+                                <label for="workflowStepsInput" class="block text-sm font-medium text-gray-300 mb-1">Étapes (une par ligne):</label>
+                                <textarea id="workflowStepsInput" rows="6" class="w-full p-2 bg-gray-600 border border-gray-500 rounded-md" placeholder="Ex: affiche la météo&#10;lance la chanson &quot;nothing else matters&quot;"></textarea>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button id="saveWorkflowButton" class="flex-1 p-2 bg-green-600 hover:bg-green-700 rounded-md font-semibold">Enregistrer</button>
+                                <button id="cancelWorkflowButton" class="flex-1 p-2 bg-gray-500 hover:bg-gray-600 rounded-md font-semibold">Annuler</button>
+                            </div>
+                        </div>
+
+                        <h4 class="mt-4 text-base font-medium">Workflows Existants:</h4>
+                        <ul id="workflowsList" class="mt-2 space-y-2">
+                            <!-- Workflows will be rendered here -->
+                        </ul>
+                    </div>
+                </div>
+
             </div>
         </div>
 
@@ -363,6 +401,21 @@
         const calculatorDisplay = document.getElementById('calculatorDisplay');
         const calculatorButtonsContainer = document.getElementById('calculatorButtons'); 
 
+        // --- DOM Elements (Nouveaux éléments pour les workflows) ---
+        const workflowContentPanel = document.getElementById('workflowContent');
+        const createWorkflowButton = document.getElementById('createWorkflowButton');
+        const workflowFormContainer = document.getElementById('workflowFormContainer');
+        const workflowFormTitle = document.getElementById('workflowFormTitle');
+        const currentWorkflowNameInput = document.getElementById('currentWorkflowName'); // Hidden input for original name during edit
+        const workflowNameInput = document.getElementById('workflowNameInput');
+        const workflowStepsInput = document.getElementById('workflowStepsInput');
+        const saveWorkflowButton = document.getElementById('saveWorkflowButton');
+        const cancelWorkflowButton = document.getElementById('cancelWorkflowButton');
+        const workflowsList = document.getElementById('workflowsList');
+        const saveWorkflowsButton = document.getElementById('saveWorkflowsButton');
+        const loadWorkflowsButton = document.getElementById('loadWorkflowsButton');
+        const loadWorkflowsInput = document.getElementById('loadWorkflowsInput');
+
         // --- Application State (Ajout de l'état de l'agent) ---
         let agentModeActive = false;
         let agentStepCounter = 0;
@@ -405,9 +458,11 @@
         let isSpeakingClientSide = false; 
         let interruptEvaEnabled = false; 
         let evaIsCurrentlySpeaking = false; 
-        let scheduledPrompts = []; 
+        let scheduledPrompts = [];
+        let workflowsData = {}; // Pour stocker les workflows chargés
+        let workflowsDirty = false; // Pour suivre les modifications non sauvegardées
         let attachedFile = null; 
-        const openWeatherMapApiKey = 'YOUR_OPENWEATHERMAP_API_KEY'; 
+        const openWeatherMapApiKey = 'VOTRE_CLE_API_OPENWEATHERMAP'; 
         let audioCtx;
         let googleMapsApiKey = null;
 
@@ -585,6 +640,161 @@
             agentContentPanel.scrollTop = agentContentPanel.scrollHeight;
         }
 
+        // --- Workflow Management Functions ---
+
+        async function fetchWorkflows() {
+            try {
+                // On charge le fichier JSON local au lieu de l'API, en s'assurant de ne pas utiliser le cache
+                const response = await fetch('./workflows.json', { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP ! statut: ${response.status}`);
+                }
+                workflowsData = await response.json();
+                renderWorkflowsList();
+                workflowsDirty = false;
+                updateWorkflowSaveButtonState();
+            } catch (error) {
+                console.error("Erreur lors du chargement de workflows.json:", error);
+                addMessageToChat("Impossible de charger le fichier workflows.json. Assurez-vous qu'il existe et est au bon format.", "assistant");
+                workflowsData = {}; // Initialiser avec un objet vide en cas d'erreur
+                renderWorkflowsList();
+                workflowsDirty = false;
+                updateWorkflowSaveButtonState();
+            }
+        }
+
+        function saveWorkflowsToFile() {
+            if (Object.keys(workflowsData).length === 0) {
+                addMessageToChat("Aucun workflow à exporter.", "assistant");
+                setActiveInfoPanel('workflowContent', true);
+                return;
+            }
+            // Utilise 4 espaces pour l'indentation pour correspondre au fichier d'origine
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(workflowsData, null, 4));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "workflows.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            addMessageToChat("Workflows exportés. Sauvegardez le fichier pour conserver vos modifications.", "assistant");
+            workflowsDirty = false;
+            updateWorkflowSaveButtonState();
+        }
+
+        function loadWorkflowsFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (!confirm("Charger les workflows depuis ce fichier remplacera tous les workflows actuels non sauvegardés. Continuer ?")) {
+                event.target.value = ''; 
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (typeof loadedData !== 'object' || loadedData === null || Array.isArray(loadedData)) {
+                        throw new Error("Le fichier JSON doit contenir un objet de workflows.");
+                    }
+                    workflowsData = loadedData;
+                    renderWorkflowsList();
+                    addMessageToChat("Workflows chargés depuis le fichier.", "assistant");
+                    setActiveInfoPanel('workflowContent', true);
+                    workflowsDirty = false;
+                    updateWorkflowSaveButtonState();
+                } catch (error) {
+                    console.error("Erreur lors du chargement du fichier de workflows:", error);
+                    addMessageToChat(`Erreur lors du chargement du fichier : ${error.message}`, "assistant");
+                } finally { event.target.value = ''; }
+            };
+            reader.readAsText(file);
+        }
+
+        function updateWorkflowSaveButtonState() {
+            const button = document.getElementById('saveWorkflowsButton');
+            if (!button) return;
+            if (workflowsDirty) {
+                button.classList.add('bg-yellow-500', 'hover:bg-yellow-600', 'animate-pulse');
+                button.classList.remove('bg-green-600', 'hover:bg-green-700');
+                button.title = "Exporter les modifications non sauvegardées";
+                button.innerHTML = 'Exporter Workflows <span class="text-xs ml-1 font-bold">(modifié)</span>';
+            } else {
+                button.classList.remove('bg-yellow-500', 'hover:bg-yellow-600', 'animate-pulse');
+                button.classList.add('bg-green-600', 'hover:bg-green-700');
+                button.title = "Exporter les workflows vers un fichier JSON";
+                button.innerHTML = 'Exporter Workflows';
+            }
+        }
+
+        function renderWorkflowsList() {
+            workflowsList.innerHTML = '';
+            if (Object.keys(workflowsData).length === 0) {
+                workflowsList.innerHTML = '<li class="text-gray-400">Aucun workflow défini.</li>';
+                return;
+            }
+            for (const name in workflowsData) {
+                const workflow = workflowsData[name];
+                const listItem = document.createElement('li');
+                listItem.className = 'workflow-item p-3 bg-gray-600 rounded-md shadow flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0';
+                listItem.innerHTML = `
+                    <div class="flex-grow">
+                        <strong class="text-blue-300 text-lg">${name}</strong>
+                        <p class="text-sm text-gray-300 mt-1">${workflow.steps.length} étape(s)</p>
+                    </div>
+                    <div class="flex space-x-2 mt-2 sm:mt-0">
+                        <button data-workflow-name="${name}" class="run-workflow-button p-2 bg-green-600 hover:bg-green-700 rounded-md text-sm font-semibold">Lancer</button>
+                        <button data-workflow-name="${name}" class="edit-workflow-button p-2 bg-yellow-600 hover:bg-yellow-700 rounded-md text-sm font-semibold">Éditer</button>
+                        <button data-workflow-name="${name}" class="delete-workflow-button p-2 bg-red-600 hover:bg-red-700 rounded-md text-sm font-semibold">Supprimer</button>
+                    </div>
+                `;
+                workflowsList.appendChild(listItem);
+            }
+
+            // Add event listeners to dynamically created buttons
+            workflowsList.querySelectorAll('.run-workflow-button').forEach(button => {
+                button.addEventListener('click', (e) => runWorkflow(e.target.dataset.workflowName));
+            });
+            workflowsList.querySelectorAll('.edit-workflow-button').forEach(button => {
+                button.addEventListener('click', (e) => showWorkflowForm(e.target.dataset.workflowName));
+            });
+            workflowsList.querySelectorAll('.delete-workflow-button').forEach(button => {
+                button.addEventListener('click', (e) => deleteWorkflow(e.target.dataset.workflowName));
+            });
+        }
+
+        function showWorkflowForm(name = null) {
+            workflowFormContainer.classList.remove('hidden');
+            if (name) {
+                workflowFormTitle.textContent = `Éditer le Workflow: ${name}`;
+                currentWorkflowNameInput.value = name;
+                workflowNameInput.value = name;
+                workflowNameInput.disabled = true; // Prevent changing name during edit
+                workflowStepsInput.value = workflowsData[name].steps.join('\n');
+            } else {
+                workflowFormTitle.textContent = 'Créer un nouveau Workflow';
+                currentWorkflowNameInput.value = '';
+                workflowNameInput.value = '';
+                workflowNameInput.disabled = false;
+                workflowStepsInput.value = '';
+            }
+            createWorkflowButton.classList.add('hidden'); // Hide create button when form is open
+        }
+
+        function hideWorkflowForm() {
+            workflowFormContainer.classList.add('hidden');
+            createWorkflowButton.classList.remove('hidden');
+        }
+
+        function deleteWorkflow(name) {
+            if (confirm(`Êtes-vous sûr de vouloir supprimer le workflow "${name}" ?\nN'oubliez pas d'exporter pour sauvegarder la suppression.`)) {
+                delete workflowsData[name];
+                renderWorkflowsList(); // On rafraîchit la liste
+                addMessageToChat(`Workflow "${name}" supprimé.`, "assistant");
+                workflowsDirty = true;
+                updateWorkflowSaveButtonState();
+            }
+        }       
+
         // --- sendMessageViaWebSocket (MODIFIÉE) ---
         function sendMessageViaWebSocket(speechTranscript = null) {
             let messageTextToSend = speechTranscript ? speechTranscript.trim() : messageInput.value.trim();
@@ -603,6 +813,44 @@
             catch (error) { addMessageToChat(`Erreur envoi: ${error.message}`, 'assistant'); restartRecognitionAfterEva(); }
         }
 
+        // --- Workflow Specific Send Message ---
+        function runWorkflow(name) {
+            const command = `lance le workflow : ${name}`;
+            addMessageToChat(`Lancement du workflow : "${name}"`, "user");
+            sendMessageViaWebSocket(command);
+        }
+
+        function handleWorkflowFormSubmit() {
+            const oldName = currentWorkflowNameInput.value.trim();
+            const newName = workflowNameInput.value.trim();
+            const steps = workflowStepsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+
+            if (!newName) {
+                addMessageToChat("Le nom du workflow ne peut pas être vide.", "assistant");
+                return;
+            }
+            if (steps.length === 0) {
+                addMessageToChat("Un workflow doit avoir au moins une étape.", "assistant");
+                return;
+            }
+
+            if (oldName && oldName !== newName) { // Should not happen if workflowNameInput is disabled during edit
+                addMessageToChat("Le renommage de workflow n'est pas supporté via l'édition directe du nom. Veuillez supprimer et recréer si vous souhaitez changer le nom.", "assistant");
+                return;
+            } else if (!oldName && workflowsData[newName]) { // Creating new workflow, name already exists
+                addMessageToChat(`Un workflow nommé "${newName}" existe déjà.`, "assistant");
+                return;
+            }
+            workflowsData[newName] = { steps: steps }; // Create or update
+            addMessageToChat(`Workflow "${newName}" ${oldName ? 'mis à jour' : 'créé'}.\nN'oubliez pas d'exporter pour sauvegarder.`, "assistant");
+            renderWorkflowsList();
+            hideWorkflowForm();
+            workflowsDirty = true;
+            updateWorkflowSaveButtonState();
+            setActiveInfoPanel('workflowContent', true);
+        }
+
+
         function updatePanelContent(targetId, panelData) {
             setActiveInfoPanel(targetId, true);
             switch (targetId) {
@@ -612,6 +860,12 @@
                 case 'taskContent': if(taskListContentDiv) taskListContentDiv.innerHTML = formatTaskList(panelData); break;
                 case 'calendarContent': if(calendarEventListContentDiv) calendarEventListContentDiv.innerHTML = formatCalendarEvents(panelData); break;
                 case 'weatherForecastContent': displayWeatherForecast(); break; 
+                case 'workflowContent':
+                    // La fonction setActiveInfoPanel, appelée juste avant, déclenche déjà un rechargement
+                    // des workflows si le panneau n'était pas déjà ouvert.
+                    // On s'assure ici que la liste est bien rafraîchie même si le panneau était déjà visible.
+                    fetchWorkflows();
+                    break;
                 case 'codeDisplayContent': const codeInfos = extractCodeInfo(panelData); if(evaCodeCanvasContentCode) evaCodeCanvasContentCode.textContent = codeInfos.length > 0 ? codeInfos.map(info => info.code).join('\n\n/* --- Bloc suivant --- */\n\n') : panelData; if (evaCodeCanvasContentWrapper && !evaCodeCanvasContentWrapper.classList.contains('expanded')) { evaCodeCanvasContentWrapper.classList.add('expanded'); if(codeCanvasIcon) codeCanvasIcon.classList.replace('fa-plus', 'fa-minus'); } break;
                 default: console.warn("panel_target_id inconnu:", targetId);
             }
@@ -625,6 +879,12 @@
                 agentModeButton.title = `Mode Agent (${agentModeActive ? 'Activé' : 'Désactivé'})`;
                 addMessageToChat(`Mode Agent ${agentModeActive ? 'activé' : 'désactivé'}.`, 'assistant');
             });
+            createWorkflowButton.addEventListener('click', () => showWorkflowForm());
+            saveWorkflowButton.addEventListener('click', handleWorkflowFormSubmit);
+            cancelWorkflowButton.addEventListener('click', hideWorkflowForm);
+            saveWorkflowsButton.addEventListener('click', saveWorkflowsToFile);
+            loadWorkflowsButton.addEventListener('click', () => loadWorkflowsInput.click());
+            loadWorkflowsInput.addEventListener('change', loadWorkflowsFromFile);
             // Le reste de vos listeners
             sendButton.addEventListener('click', () => sendMessageViaWebSocket());
             messageInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessageViaWebSocket(); });
@@ -643,7 +903,7 @@
             promptFrequencyInput.addEventListener('change', () => { recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once'); });
             promptIndefiniteCheckbox.addEventListener('change', () => { promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked; if (promptIndefiniteCheckbox.checked) promptRepetitionsInput.value = ""; else promptRepetitionsInput.value = "1"; });
             if (authorizeGoogleButton) authorizeGoogleButton.addEventListener('click', () => { window.open(`${backendHttpUrl}/authorize_google`, '_blank'); if (authStatus) authStatus.textContent = "Autorisation Google lancée..."; });
-            document.addEventListener('keydown', (e) => { const activeEl = document.activeElement; if ([messageInput, scheduledPromptTextInput, scheduledPromptTimeInput, promptRepetitionsInput].includes(activeEl)) return; initAudioContext(); if (e.code === 'Space') { e.preventDefault(); userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; isEvaActivatedListening = false; if (userExplicitlyWantsContinuousListen) { stopWakeWordRecognition(); if (!recognitionActive) startCommandRecognition(true); } else { stopCommandRecognition(); startWakeWordRecognition(); } } else if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleWebcam(); } else if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleMute(); } else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); interruptModeButton.click(); } });
+            document.addEventListener('keydown', (e) => { const activeEl = document.activeElement; if ([messageInput, scheduledPromptTextInput, scheduledPromptTimeInput, promptRepetitionsInput, workflowNameInput, workflowStepsInput].includes(activeEl)) return; initAudioContext(); if (e.code === 'Space') { e.preventDefault(); userExplicitlyWantsContinuousListen = !userExplicitlyWantsContinuousListen; isEvaActivatedListening = false; if (userExplicitlyWantsContinuousListen) { stopWakeWordRecognition(); if (!recognitionActive) startCommandRecognition(true); } else { stopCommandRecognition(); startWakeWordRecognition(); } } else if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleWebcam(); } else if (e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); toggleMute(); } else if (e.key.toLowerCase() === 'i' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); interruptModeButton.click(); } });
             toggleInfoPanelButton.addEventListener('click', () => { infoPanelColumn.classList.toggle('collapsed'); const isCollapsed = infoPanelColumn.classList.contains('collapsed'); const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right'); if(leftIcon) leftIcon.style.display = isCollapsed ? 'none' : 'inline-block'; if(rightIcon) rightIcon.style.display = isCollapsed ? 'inline-block' : 'none'; if (!isCollapsed && activeInfoPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350); } });
             infoPanelTabsContainer.addEventListener('click', (event) => { if (event.target.classList.contains('info-tab-button')) { setActiveInfoPanel(event.target.dataset.target, false); } });
             if (toggleCodeCanvasButton) { toggleCodeCanvasButton.addEventListener('click', () => { if (evaCodeCanvasContentWrapper) evaCodeCanvasContentWrapper.classList.toggle('expanded'); if (codeCanvasIcon) { codeCanvasIcon.classList.toggle('fa-plus'); codeCanvasIcon.classList.toggle('fa-minus'); } }); }
@@ -708,8 +968,33 @@
         function stopWakeWordRecognition() { if (wakeWordRecognizer && wakeWordRecognitionActive) { wakeWordRecognizer.abort(); } wakeWordRecognitionActive = false; }
         function startCommandRecognition(isContinuous) { if (!SpeechRecognitionAPI) { statusText.textContent = "Reconnaissance vocale non supportée."; if(micButton) micButton.disabled = true; return; } if (recognitionActive) { console.warn("Reco. commande déjà active."); return; } stopWakeWordRecognition(); commandRecognizer = new SpeechRecognitionAPI(); commandRecognizer.lang = 'fr-FR'; commandRecognizer.interimResults = false; commandRecognizer.maxAlternatives = 1; commandRecognizer.continuous = isContinuous || interruptEvaEnabled; commandRecognizer.onstart = () => { recognitionActive = true; updateMicButtonState(true); if (isEvaActivatedListening) { statusText.textContent = "Eva activée. Écoute de la commande..."; } else if (commandRecognizer.continuous) { statusText.textContent = interruptEvaEnabled ? "Interruption d'EVA..." : 'Écoute continue...'; } else { statusText.textContent = 'Écoute...'; } console.log("Reco. commande démarrée. Continu:", commandRecognizer.continuous, "EvaActivée:", isEvaActivatedListening); if (interruptEvaEnabled && evaIsCurrentlySpeaking) { if (audioPlayer && !audioPlayer.paused) audioPlayer.pause(); if (speechSynthesis.speaking) speechSynthesis.cancel(); } }; commandRecognizer.onresult = (event) => { const transcript = event.results[event.results.length - 1][0].transcript.trim().toLowerCase(); console.log("Commande reconnue:", transcript); let commandProcessedLocally = false; if (transcript === "allume la caméra") { if (!isCamOn) { toggleWebcam(); } else { addMessageToChat("La caméra est déjà allumée.", "assistant"); } commandProcessedLocally = true; } else if (transcript === "éteins la caméra") { if (isCamOn) { toggleWebcam(); } else { addMessageToChat("La caméra est déjà éteinte.", "assistant"); } commandProcessedLocally = true; } else if (transcript === "change la caméra") { if (isCamOn) { switchCamera(); } else { addMessageToChat("La caméra a changée.", "assistant"); } commandProcessedLocally = true; } if (!commandProcessedLocally) { sendMessageViaWebSocket(event.results[event.results.length - 1][0].transcript.trim()); } }; commandRecognizer.onerror = (event) => { const wasRecognizingBeforeError = recognitionActive; recognitionActive = false; updateMicButtonState(false); let errorMsg = `Erreur reco. cmd: ${event.error}`; if (event.error === 'no-speech') errorMsg = 'Aucune parole (commande).'; else if (event.error === 'audio-capture') errorMsg = 'Erreur capture audio (commande).'; else if (event.error === 'not-allowed') { errorMsg = 'Accès micro refusé (commande).'; userExplicitlyWantsContinuousListen = false; isEvaActivatedListening = false; } statusText.textContent = errorMsg; console.error("Erreur reco. commande:", event.error, " EvaActivée:", isEvaActivatedListening, " Continu:", userExplicitlyWantsContinuousListen); if (isEvaActivatedListening) { isEvaActivatedListening = false; if (event.error !== 'not-allowed') setTimeout(startWakeWordRecognition, 100); } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasRecognizingBeforeError && event.error !== 'not-allowed' && event.error !== 'aborted') { setTimeout(() => startCommandRecognition(true), 250); } else { if (event.error !== 'not-allowed' && !userExplicitlyWantsContinuousListen && !interruptEvaEnabled) { setTimeout(startWakeWordRecognition, 100); } else if (event.error === 'not-allowed') { statusText.textContent = errorMsg + " Vérifiez les permissions."; } } }; commandRecognizer.onend = () => { const wasActive = recognitionActive; recognitionActive = false; console.log("Reco. commande terminée. EvaActivée:", isEvaActivatedListening, "Continu:", userExplicitlyWantsContinuousListen, "Interrupt:", interruptEvaEnabled); if (pausedForEvaOutput && !interruptEvaEnabled) { statusText.textContent = "En attente d'EVA..."; } else if (isEvaActivatedListening) { isEvaActivatedListening = false; updateMicButtonState(false); startWakeWordRecognition(); } else if ((userExplicitlyWantsContinuousListen || interruptEvaEnabled) && wasActive) { if (userExplicitlyWantsContinuousListen || interruptEvaEnabled) { console.log("Redémarrage reco. continue."); startCommandRecognition(true); } else { updateMicButtonState(false); startWakeWordRecognition(); } } else { updateMicButtonState(false); if (!userExplicitlyWantsContinuousListen && !interruptEvaEnabled) { startWakeWordRecognition(); } } }; try { commandRecognizer.start(); } catch (e) { recognitionActive = false; updateMicButtonState(false); statusText.textContent = "Erreur démarrage reco. commande."; console.error("Erreur démarrage reco. commande:", e); if (isEvaActivatedListening) isEvaActivatedListening = false; startWakeWordRecognition(); } }
         function stopCommandRecognition() { if (commandRecognizer && recognitionActive) { commandRecognizer.abort(); } recognitionActive = false; isEvaActivatedListening = false; updateMicButtonState(false); }
-        function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) { if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) { infoPanelColumn.classList.remove('collapsed'); const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left'); const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right'); if(leftIcon) leftIcon.style.display = 'inline-block'; if(rightIcon) rightIcon.style.display = 'none'; } document.querySelectorAll('.info-tab-button').forEach(button => { button.classList.remove('active-tab'); if (button.dataset.target === targetPanelId) button.classList.add('active-tab'); }); document.querySelectorAll('.info-content-panel').forEach(panel => { panel.classList.remove('active-content'); if (panel.id === targetPanelId) panel.classList.add('active-content'); }); activeInfoPanelId = targetPanelId; if (targetPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) { setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350); } }
-        window.initMap = function() { const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]'); const apiKeyFromScript = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null; if (!apiKeyFromScript || apiKeyFromScript === "YOUR_Maps_API_KEY" || !apiKeyFromScript.startsWith("AIza")) { if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps incorrecte ou manquante.</p>"; console.error("Clé API Google Maps manquante ou invalide."); return; } if (typeof google === 'undefined' || typeof google.maps === 'undefined') { addMessageToChat("Erreur: API Google Maps non chargée.", "assistant"); return; } try { directionsService = new google.maps.DirectionsService(); directionsRenderer = new google.maps.DirectionsRenderer(); gMap = new google.maps.Map(mapElementDiv, { center: currentMapCenter, zoom: currentMapZoom, mapTypeId: google.maps.MapTypeId.ROADMAP, styles: [ {elementType:"geometry",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.stroke",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.fill",stylers:[{color:"#746855"}]},{featureType:"administrative.locality",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#263c3f"}]},{featureType:"poi.park",elementType:"labels.text.fill",stylers:[{color:"#6b9a76"}]},{featureType:"road",elementType:"geometry",stylers:[{color:"#38414e"}]},{featureType:"road",elementType:"geometry.stroke",stylers:[{color:"#212a37"}]},{featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#9ca5b3"}]},{featureType:"road.highway",elementType:"geometry",stylers:[{color:"#746855"}]},{featureType:"road.highway",elementType:"geometry.stroke",stylers:[{color:"#1f2835"}]},{featureType:"road.highway",elementType:"labels.text.fill",stylers:[{color:"#f3d19c"}]},{featureType:"transit",elementType:"geometry",stylers:[{color:"#2f3948"}]},{featureType:"transit.station",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"water",elementType:"geometry",stylers:[{color:"#17263c"}]},{featureType:"water",elementType:"labels.text.fill",stylers:[{color:"#515c6d"}]},{featureType:"water",elementType:"labels.text.stroke",stylers:[{color:"#17263c"}]}] }); directionsRenderer.setMap(gMap); gMap.addListener('center_changed', () => { if(gMap) currentMapCenter = gMap.getCenter(); }); gMap.addListener('zoom_changed', () => { if(gMap) currentMapZoom = gMap.getZoom(); }); if (navigator.geolocation) { navigator.geolocation.getCurrentPosition( (position) => { if(gMap) { const userPos = { lat: position.coords.latitude, lng: position.coords.longitude }; gMap.setCenter(userPos); currentMapCenter = userPos;} }, () => { console.warn("Impossible d'obtenir la position."); } ); } } catch (e) { addMessageToChat("Erreur init carte.", "assistant"); console.error("Erreur init carte:", e); } }
+        async function setActiveInfoPanel(targetPanelId, autoOpenPanel = true) {
+            if (autoOpenPanel && infoPanelColumn.classList.contains('collapsed')) {
+                infoPanelColumn.classList.remove('collapsed');
+                const leftIcon = toggleInfoPanelButton.querySelector('.fa-chevron-left');
+                const rightIcon = toggleInfoPanelButton.querySelector('.fa-chevron-right');
+                if(leftIcon) leftIcon.style.display = 'inline-block';
+                if(rightIcon) rightIcon.style.display = 'none';
+            }
+            document.querySelectorAll('.info-tab-button').forEach(button => {
+                button.classList.remove('active-tab');
+                if (button.dataset.target === targetPanelId) button.classList.add('active-tab');
+            });
+            document.querySelectorAll('.info-content-panel').forEach(panel => {
+                panel.classList.remove('active-content');
+                if (panel.id === targetPanelId) panel.classList.add('active-content');
+            });
+            activeInfoPanelId = targetPanelId;
+
+            // Recharge les workflows si l'onglet est activé pour refléter les changements externes (et s'il n'y a pas de modifs non sauvegardées).
+            if (targetPanelId === 'workflowContent' && !workflowsDirty) {
+                await fetchWorkflows();
+            }
+            
+            if (targetPanelId === 'mapContent' && typeof google !== 'undefined' && google.maps && gMap) {
+                setTimeout(() => { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); }, 350);
+            }
+        }        window.initMap = function() { const apiKeyScriptTag = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]'); const apiKeyFromScript = apiKeyScriptTag ? new URL(apiKeyScriptTag.src).searchParams.get('key') : null; if (!apiKeyFromScript || apiKeyFromScript === "YOUR_Maps_API_KEY" || !apiKeyFromScript.startsWith("AIza")) { if (mapElementDiv) mapElementDiv.innerHTML = "<p class='p-4 text-red-400'>Configuration de la clé API Google Maps incorrecte ou manquante.</p>"; console.error("Clé API Google Maps manquante ou invalide."); return; } if (typeof google === 'undefined' || typeof google.maps === 'undefined') { addMessageToChat("Erreur: API Google Maps non chargée.", "assistant"); return; } try { directionsService = new google.maps.DirectionsService(); directionsRenderer = new google.maps.DirectionsRenderer(); gMap = new google.maps.Map(mapElementDiv, { center: currentMapCenter, zoom: currentMapZoom, mapTypeId: google.maps.MapTypeId.ROADMAP, styles: [ {elementType:"geometry",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.stroke",stylers:[{color:"#242f3e"}]},{elementType:"labels.text.fill",stylers:[{color:"#746855"}]},{featureType:"administrative.locality",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"poi.park",elementType:"geometry",stylers:[{color:"#263c3f"}]},{featureType:"poi.park",elementType:"labels.text.fill",stylers:[{color:"#6b9a76"}]},{featureType:"road",elementType:"geometry",stylers:[{color:"#38414e"}]},{featureType:"road",elementType:"geometry.stroke",stylers:[{color:"#212a37"}]},{featureType:"road",elementType:"labels.text.fill",stylers:[{color:"#9ca5b3"}]},{featureType:"road.highway",elementType:"geometry",stylers:[{color:"#746855"}]},{featureType:"road.highway",elementType:"geometry.stroke",stylers:[{color:"#1f2835"}]},{featureType:"road.highway",elementType:"labels.text.fill",stylers:[{color:"#f3d19c"}]},{featureType:"transit",elementType:"geometry",stylers:[{color:"#2f3948"}]},{featureType:"transit.station",elementType:"labels.text.fill",stylers:[{color:"#d59563"}]},{featureType:"water",elementType:"geometry",stylers:[{color:"#17263c"}]},{featureType:"water",elementType:"labels.text.fill",stylers:[{color:"#515c6d"}]},{featureType:"water",elementType:"labels.text.stroke",stylers:[{color:"#17263c"}]}] }); directionsRenderer.setMap(gMap); gMap.addListener('center_changed', () => { if(gMap) currentMapCenter = gMap.getCenter(); }); gMap.addListener('zoom_changed', () => { if(gMap) currentMapZoom = gMap.getZoom(); }); if (navigator.geolocation) { navigator.geolocation.getCurrentPosition( (position) => { if(gMap) { const userPos = { lat: position.coords.latitude, lng: position.coords.longitude }; gMap.setCenter(userPos); currentMapCenter = userPos;} }, () => { console.warn("Impossible d'obtenir la position."); } ); } } catch (e) { addMessageToChat("Erreur init carte.", "assistant"); console.error("Erreur init carte:", e); } }
         function calculateAndDisplayRoute(origin, destination) { if (!directionsService || !directionsRenderer || !gMap) { addMessageToChat("Services carte non prêts.", "assistant"); setActiveInfoPanel('mapContent', true); return; } if (!origin || !destination) { addMessageToChat("Origine/destination manquante.", "assistant"); setActiveInfoPanel('mapContent', true); return; } let originForMap = origin; if (typeof origin === 'string' && (origin.toLowerCase().includes("votre position") || origin.toLowerCase().includes("ma position") || origin.toLowerCase().includes("actuelle"))) { if (userLatitude && userLongitude) { const userCurrentPos = { lat: userLatitude, lng: userLongitude }; directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => { if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response); else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); } ); return; } else if (navigator.geolocation) { navigator.geolocation.getCurrentPosition(position => { const userCurrentPos = { lat: position.coords.latitude, lng: position.coords.longitude }; directionsService.route( { origin: userCurrentPos, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => { if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response); else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); } ); }, () => { addMessageToChat("Impossible d'obtenir position. Utilisation de " + userLocatedCity + ".", "assistant"); directionsService.route( { origin: userLocatedCity, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => { if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response); else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); }); }); return; } else { addMessageToChat("Géolocalisation non supportée. Utilisation de " + userLocatedCity + ".", "assistant"); originForMap = userLocatedCity; } } directionsService.route( { origin: originForMap, destination: destination, travelMode: google.maps.TravelMode.DRIVING }, (response, status) => { if (status === google.maps.DirectionsStatus.OK) directionsRenderer.setDirections(response); else addMessageToChat("Impossible d'afficher itinéraire: " + status, "assistant"); } ); }
         function parseDirectionsFromText(textResponse) { const match = textResponse.match(/^Itinéraire de\s+(.+?)\s+à\s+(.+?):/i); if (match && match[1] && match[2]) return { origin: match[1].trim(), destination: match[2].trim() }; return null; }
         function addMessageToChat(text, sender) { const messageElement = document.createElement('div'); messageElement.textContent = text; messageElement.classList.add('chat-message', `${sender}-message`); chatbox.appendChild(messageElement); chatbox.scrollTop = chatbox.scrollHeight; }
@@ -762,7 +1047,14 @@
             if (interruptModeButton) interruptModeButton.title = "Activer l'interruption d'EVA (Désactivé) (ou touche 'i')";
             if(promptFrequencyInput && recurrenceOptionsDiv) recurrenceOptionsDiv.classList.toggle('hidden', promptFrequencyInput.value === 'once');
             if(promptIndefiniteCheckbox && promptRepetitionsInput) promptRepetitionsInput.disabled = promptIndefiniteCheckbox.checked;
+            fetchWorkflows(); // Load workflows on startu
             window.addEventListener('resize', () => { if (typeof google !== 'undefined' && google.maps && gMap && activeInfoPanelId === 'mapContent' && infoPanelColumn && !infoPanelColumn.classList.contains('collapsed')) { google.maps.event.trigger(gMap, 'resize'); gMap.setCenter(currentMapCenter); gMap.setZoom(currentMapZoom); } });
+            window.addEventListener('beforeunload', (event) => {
+                if (workflowsDirty) {
+                    event.preventDefault();
+                    event.returnValue = ''; // Requis par certains navigateurs
+                }
+            });
             if (SpeechRecognitionAPI) { startWakeWordRecognition(); } 
             else { statusText.textContent = "Reconnaissance vocale non supportée par ce navigateur."; if (micButton) micButton.disabled = true; }
         });
