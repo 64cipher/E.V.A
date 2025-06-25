@@ -1356,13 +1356,18 @@ def get_gtts_audio(text_to_speak, lang='fr'):
 def handle_create_calendar_event(entities):
     summary = entities.get("summary")
     datetime_str = entities.get("datetime_str")
-    if summary and datetime_str:
-        start_dt_obj = parse_french_datetime(datetime_str)
-        if start_dt_obj:
-            return create_calendar_event(summary, start_dt_obj)
-        else:
-            return f"Je n'ai pas pu interpréter la date et l'heure '{datetime_str}'. Pouvez-vous reformuler plus clairement (ex: '15 juin à 14h30') ?"
-    return "Pour créer un événement, j'ai besoin d'un titre et d'une date/heure (ex: 'Réunion projet demain à 10h')."
+    if not summary or not datetime_str:
+        return {"status": "error", "message": "Pour créer un événement, j'ai besoin d'un titre et d'une date/heure."}
+    
+    start_dt_obj = parse_french_datetime(datetime_str)
+    if not start_dt_obj:
+        return {"status": "error", "message": f"Je n'ai pas pu interpréter la date et l'heure '{datetime_str}'."}
+        
+    result = create_calendar_event(summary, start_dt_obj)
+    if "Événement" in result and "ajouté" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_list_calendar_events(entities):
     creds = get_google_credentials()
@@ -1666,10 +1671,16 @@ def handle_send_email(entities):
 
 def handle_create_task(entities):
     title = entities.get("title")
-    notes = entities.get("notes") # Optional notes
-    if title:
-        return create_google_task(title, notes)
-    return "Quel est le titre de la tâche que vous souhaitez ajouter ?"
+    notes = entities.get("notes")
+    if not title:
+        return {"status": "error", "message": "Quel est le titre de la tâche que vous souhaitez ajouter ?"}
+    
+    result = create_google_task(title, notes)
+    # Vérifie si la création a réussi en se basant sur le message de retour
+    if "Tâche" in result and "ajoutée" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_add_contact(entities):
     name = entities.get("name")
@@ -2204,19 +2215,29 @@ def handle_process_url(entities):
 
 def handle_delete_calendar_event(entities):
     summary = entities.get("event_summary")
-    datetime_str = entities.get("datetime_str")
-    if summary and datetime_str:
-        return delete_calendar_event(summary, datetime_str)
-    return "Veuillez spécifier le titre et la date de l'événement à supprimer."
+    datetime_str = entities.get("datetime_str") # This is now handled by the new logic
+    if not summary or not datetime_str:
+        return {"status": "error", "message": "Veuillez spécifier le titre et la date de l'événement à supprimer."}
+    
+    result = delete_calendar_event(summary, datetime_str)
+    if "supprimé avec succès" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_update_calendar_event(entities):
     old_summary = entities.get("old_event_summary")
     old_datetime = entities.get("old_datetime_str")
     new_summary = entities.get("new_summary")
     new_datetime = entities.get("new_datetime_str")
-    if old_summary and old_datetime and (new_summary or new_datetime):
-        return update_calendar_event(old_summary, old_datetime, new_summary, new_datetime)
-    return "J'ai besoin de l'événement original et des nouvelles informations pour le mettre à jour."
+    if not old_summary or not old_datetime or not (new_summary or new_datetime):
+        return {"status": "error", "message": "J'ai besoin de l'événement original et des nouvelles informations pour le mettre à jour."}
+        
+    result = update_calendar_event(old_summary, old_datetime, new_summary, new_datetime)
+    if "Événement mis à jour" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_delete_task(entities):
     title = entities.get("task_title")
@@ -2227,9 +2248,14 @@ def handle_delete_task(entities):
 def handle_update_task(entities):
     old_title = entities.get("old_task_title")
     new_title = entities.get("new_task_title")
-    if old_title and new_title:
-        return update_google_task(old_title, new_title)
-    return "Veuillez me donner le titre actuel et le nouveau titre de la tâche."
+    if not old_title or not new_title:
+        return {"status": "error", "message": "Veuillez me donner le titre actuel et le nouveau titre de la tâche."}
+
+    result = update_google_task(old_title, new_title)
+    if "Tâche renommée" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 # --- Fonctions de contrôle Spotify ---
 def handle_spotify_play(entities):
@@ -2338,6 +2364,7 @@ def handle_add_workflow_step(entities):
     return "Bien reçu. Prochaine action ?"
 
 def handle_finish_workflow_creation(entities):
+    load_workflows() # Charger les workflows existants pour ne pas les écraser
     workflow_name = session.get('current_workflow_name')
     steps = session.get('current_workflow_steps')
 
@@ -2369,6 +2396,7 @@ def handle_finish_workflow_creation(entities):
         }
 
 def handle_execute_named_workflow(entities):
+    load_workflows()
     workflow_name = entities.get("name")
     if not workflow_name:
         return "Quel workflow souhaitez-vous lancer ?"
@@ -2390,6 +2418,7 @@ def handle_execute_named_workflow(entities):
     }
 
 def handle_list_workflows(entities):
+    load_workflows()
     if not WORKFLOWS:
         return "Vous n'avez aucun workflow enregistré."
     
@@ -2397,6 +2426,7 @@ def handle_list_workflows(entities):
     return f"Voici vos workflows enregistrés :\n{workflow_names}"
 
 def handle_set_workflow_name(entities):
+    load_workflows()
     workflow_name = entities.get("name")
     if not workflow_name:
         return "Veuillez me donner un nom pour ce workflow."
@@ -2842,9 +2872,10 @@ def chat_ws(ws):
                             
                             # --- LOGIQUE D'AFFICHAGE DU CHAT (CORRIGÉE ET INDENTÉE) ---
             
-                            # Cas 1: Actions spécifiques où le résultat de l'action est le message direct.
-                            if parsed_command_action == "finish_workflow_creation" and isinstance(final_text_response_for_action, dict):
+                            # Cas 0: Résultat d'action structuré (le plus prioritaire)
+                            if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") in ["success", "error"]:
                                 chat_display_message = final_text_response_for_action.get("message")
+                            # Cas 1: Actions spécifiques où le résultat de l'action est le message direct.
                             elif parsed_command_action == "get_current_datetime":
                                 chat_display_message = str(final_text_response_for_action)
                             
@@ -2895,11 +2926,10 @@ def chat_ws(ws):
                             
                             elif parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
                                 panel_target_id = "calendarContent"
-                                if parsed_command_action != "list_calendar_events":
-                                    if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = handle_list_calendar_events({})
-                                else: 
+                                if parsed_command_action == "list_calendar_events":
                                     panel_data_content = str(final_text_response_for_action)
+                                elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
+                                    panel_data_content = handle_list_calendar_events({})
 
                             elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
@@ -2910,16 +2940,22 @@ def chat_ws(ws):
                                 panel_target_id = "emailContent"
                             
                             elif parsed_command_action in ["list_tasks", "create_task", "update_task", "delete_task"]:
-                                panel_target_id = "taskContent"
-                                if parsed_command_action != "list_tasks":
-                                     if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = list_google_tasks() 
-                                else: 
+                                panel_target_id = "taskContent" # Toujours cibler le panneau des tâches
+                                # Si l'action n'est pas une simple liste (c'est une création, modif, suppression)
+                                if parsed_command_action == "list_tasks":
                                     panel_data_content = str(final_text_response_for_action)
+                                # Et si l'action a réussi, on recharge la liste complète
+                                elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
+                                    panel_data_content = list_google_tasks()
 
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
+
+                            elif parsed_command_action == "list_workflows":
+                                # Le panel_data est la liste, le panel_target_id déclenche le fetch côté client
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "workflowContent"
 
                             elif parsed_command_action == "get_directions":
                                 if isinstance(final_text_response_for_action, dict):
