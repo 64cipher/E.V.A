@@ -309,7 +309,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         # --- FIN DE L'AMÉLIORATION ---
 
         # 4. Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.5-flash')
+        vision_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt_parts = [metadata_prompt, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
