@@ -22,6 +22,7 @@ from email.message import EmailMessage
 import tempfile
 import shlex
 from pydub import AudioSegment
+from pydub.silence import split_on_silence
 
 import base64
 from google.oauth2.credentials import Credentials
@@ -83,7 +84,7 @@ except json.JSONDecodeError:
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
+agent_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -309,7 +310,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         # --- FIN DE L'AMÉLIORATION ---
 
         # 4. Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.0-flash')
+        vision_model = genai.GenerativeModel('gemini-2.5-flash')
         prompt_parts = [metadata_prompt, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
@@ -576,7 +577,7 @@ def summarize_webpage(url: str, topic: str = "les points clés") -> str:
         truncated_text = cleaned_text[:max_length]
 
         # Étape 2 : Appeler un modèle pour effectuer le résumé
-        summarizer_model = genai.GenerativeModel('gemini-2.5-flash')
+        summarizer_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt = f"Résume le texte suivant en te concentrant sur {topic}. Le résumé doit être concis, informatif et prêt à être envoyé par e-mail :\n\n---\n{truncated_text}\n---"
         
         summary_response = summarizer_model.generate_content(prompt)
@@ -611,15 +612,15 @@ def find_contact_email(name: str) -> str:
 
 def summarize_youtube_speech(url: str, topic: str = "les points clés") -> str:
     """
-    Extrait et résume la transcription d'une vidéo YouTube en utilisant SpeechRecognition.
-    Cette fonction convertit explicitement l'audio en WAV pour une meilleure compatibilité.
+    Extrait, segmente, transcrit et résume la parole d'une vidéo YouTube.
+    Cette version gère les fichiers longs en les découpant au niveau des silences.
     """
     temp_dir = tempfile.gettempdir()
     mp3_path = os.path.join(temp_dir, 'agent_temp_audio.mp3')
     wav_path = os.path.join(temp_dir, 'agent_temp_audio.wav')
 
     try:
-        # 1. Validation de l'URL et téléchargement de l'audio en MP3
+        # 1. Téléchargement et conversion (inchangé)
         regex = r"(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})"
         match = re.search(regex, url)
         if not match:
@@ -637,29 +638,58 @@ def summarize_youtube_speech(url: str, topic: str = "les points clés") -> str:
         if not os.path.exists(mp3_path):
             return "Erreur: Le fichier audio n'a pas pu être téléchargé."
 
-        # --- ÉTAPE DE CONVERSION EXPLICITE (Correction) ---
-        # Convertit le fichier MP3 en WAV car SpeechRecognition le préfère.
         sound = AudioSegment.from_mp3(mp3_path)
         sound.export(wav_path, format="wav")
 
-        # 2. Transcription à partir du fichier WAV
+        # --- NOUVELLE ÉTAPE : Segmentation de l'audio ---
         r = sr.Recognizer()
-        with sr.AudioFile(wav_path) as source:  # On utilise le fichier .wav
-            audio_data = r.record(source)
-            try:
-                transcript_text = r.recognize_google(audio_data, language='fr-FR')
-            except sr.UnknownValueError:
-                return "Erreur: L'API vocale n'a pas pu comprendre l'audio."
-            except sr.RequestError as e:
-                return f"Erreur: Impossible de contacter l'API vocale; {e}"
+        full_transcript = ""
+        
+        # Charger le fichier audio complet pour la segmentation
+        sound_file = AudioSegment.from_wav(wav_path)
+        
+        # Découpe l'audio sur les silences de plus de 700ms avec un seuil de -40 dBFS
+        audio_chunks = split_on_silence(
+            sound_file,
+            min_silence_len=700,
+            silence_thresh=-40,
+            keep_silence=300 # Garde un peu de silence pour ne pas couper les mots
+        )
 
-        if not transcript_text:
+        if not audio_chunks:
+            return "Erreur: Impossible de segmenter l'audio. Le fichier est peut-être silencieux."
+
+        # 2. Transcription en boucle sur chaque segment
+        for i, chunk in enumerate(audio_chunks):
+            chunk_silent = AudioSegment.silent(duration=10) # Ajout de silence si nécessaire
+            audio_chunk = chunk_silent + chunk + chunk_silent
+            
+            # Exporte chaque segment dans un fichier temporaire
+            chunk_filename = os.path.join(temp_dir, f"chunk{i}.wav")
+            audio_chunk.export(chunk_filename, format="wav")
+
+            try:
+                with sr.AudioFile(chunk_filename) as source:
+                    audio_data = r.record(source)
+                    # Transcrire le segment
+                    text = r.recognize_google(audio_data, language='fr-FR')
+                    full_transcript += text + " "
+            except sr.UnknownValueError:
+                # Ignore les segments que l'API ne peut pas comprendre
+                continue
+            except sr.RequestError as e:
+                # Si une erreur persiste même sur un petit segment, on le signale.
+                return f"Erreur API sur un segment: {e}. La vidéo est peut-être trop longue ou le service indisponible."
+            finally:
+                os.remove(chunk_filename)
+
+        if not full_transcript:
             return "Erreur: La transcription n'a produit aucun texte."
 
-        # 3. Résumé par le LLM (inchangé)
+        # 3. Résumé du texte complet (inchangé)
         max_length = 15000
-        truncated_text = transcript_text[:max_length]
-        summarizer_model = genai.GenerativeModel('gemini-2.0-flash')
+        truncated_text = full_transcript[:max_length]
+        summarizer_model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = f"Voici la transcription d'une vidéo YouTube. Résume le contenu en te concentrant sur {topic}. Le résumé doit être concis et informatif:\n\n---\n{truncated_text}\n---"
         summary_response = summarizer_model.generate_content(prompt)
         
@@ -668,7 +698,7 @@ def summarize_youtube_speech(url: str, topic: str = "les points clés") -> str:
     except Exception as e:
         return f"Erreur durant le processus de transcription : {e}"
     finally:
-        # --- NETTOYAGE DES DEUX FICHIERS (Correction) ---
+        # Nettoyage
         if os.path.exists(mp3_path):
             os.remove(mp3_path)
         if os.path.exists(wav_path):
