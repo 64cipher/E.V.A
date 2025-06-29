@@ -1030,6 +1030,37 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
         }}
 
                 ```
+- **NOUVEAU - STRATÉGIE DE CAPTURE DE SORTIE INTERACTIVE**:
+  - **PROBLÈME**: La tâche nécessite de lancer une commande dans une fenêtre visible ET de récupérer sa sortie pour une analyse ultérieure.
+  - **SOLUTION OBLIGATOIRE (2 étapes)**:
+    1.  **Étape 1**: Utilise `execute_interactive_command`. La commande doit être modifiée pour rediriger sa sortie vers un fichier. Pour une exécution propre, utilise `cmd /c` pour que la fenêtre se ferme après la commande.
+    2.  **Étape 2**: Dans l'action suivante, utilise `read_local_file` pour lire le contenu du fichier créé à l'étape 1.
+  - **Exemple de workflow : "Exécute ipconfig et analyse le résultat"**
+    - **Action 1 (Lancement et Redirection)**:
+      ```json
+      {{
+        "thought": "Je dois exécuter 'ipconfig' et capturer sa sortie. J'utilise 'execute_interactive_command' avec redirection vers 'C:\\temp\\ip_output.txt' et 'cmd /c' pour une fermeture automatique.",
+        "action": {{
+          "tool_name": "execute_interactive_command",
+          "parameters": {{
+            "command": "cmd /c \\"ipconfig /all > C:\\\\temp\\\\ip_output.txt && exit\\""
+          }}
+        }}
+      }}
+      ```
+    - **Action 2 (Lecture du Résultat)**:
+      ```json
+      {{
+        "thought": "La commande a été exécutée. Je lis maintenant le fichier 'C:\\temp\\ip_output.txt' pour obtenir les résultats.",
+        "action": {{
+          "tool_name": "read_local_file",
+          "parameters": {{
+            "path": "C:\\\\temp\\\\ip_output.txt"
+          }}
+        }}
+      }}
+      ```
+                
 - **Stratégie d'Analyse d'Image pour la Géolocalisation**: Pour identifier le lieu d'une photo, suis IMPÉRATIVEMENT cette séquence :
   1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices textuels, des noms de monuments, ou des caractéristiques uniques.
   2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.) et `image_search` pour comparer les images si besoin (ville, rue, batiments, monuments, panneaux, magasin, etc.).
