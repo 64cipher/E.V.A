@@ -2804,7 +2804,7 @@ def chat_ws(ws):
                                 time.sleep(1)
 
                                 # Boucle d'orchestration pour chaque étape
-# Boucle d'orchestration pour chaque étape
+                                # Boucle d'orchestration pour chaque étape
                                 for i, step in enumerate(steps):
                                     ws.send(json.dumps({"type": "info", "text": f"Étape {i+1}/{len(steps)} : {step}"}))
                                     time.sleep(1.5)
