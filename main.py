@@ -19,6 +19,10 @@ import tempfile # Pour gérer les fichiers temporaires
 import math # Pour la visualisation 3D
 import threading # Pour le nettoyage des fichiers temporaires
 import urllib.parse
+import warnings # <-- Assurez-vous que l'import est là
+
+if sys.platform == "win32":
+    warnings.filterwarnings("ignore", category=RuntimeWarning, message=".*line buffering.*")
 
 # --- Configuration Initiale (Chargement .env AVANT tout le reste) ---
 from dotenv import load_dotenv
@@ -243,6 +247,48 @@ def remove_contact_from_book(name):
 
 load_contacts()
 
+# --- Fonctions pour la gestion des workflows ---
+WORKFLOWS_FILE = os.path.join(BASE_DIR, 'workflows.json')
+WORKFLOWS = {}
+
+def load_workflows():
+    global WORKFLOWS
+    try:
+        if not os.path.exists(WORKFLOWS_FILE):
+            with open(WORKFLOWS_FILE, 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+            WORKFLOWS = {}
+            return
+
+        with open(WORKFLOWS_FILE, 'r', encoding='utf-8') as f:
+            file_content = f.read()
+            if not file_content.strip():
+                WORKFLOWS = {}
+            else:
+                # On charge le JSON depuis la variable string, pas depuis le handle de fichier.
+                WORKFLOWS = json.loads(file_content) 
+    except json.JSONDecodeError as e:
+        print(f"ERREUR [load_workflows]: Fichier {WORKFLOWS_FILE} corrompu ou invalide: {e}. Réinitialisation du fichier.", file=sys.stderr)
+        WORKFLOWS = {} # Réinitialise en mémoire
+        sys.stderr.flush()
+        save_workflows() # Écrase le fichier corrompu avec un JSON vide et valide
+    except Exception as e:
+        print(f"ERREUR [load_workflows]: Impossible de charger {WORKFLOWS_FILE}: {e}. Initialisation vide.", file=sys.stderr)
+        WORKFLOWS = {}
+
+def save_workflows():
+    global WORKFLOWS
+    try:
+        with open(WORKFLOWS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(WORKFLOWS, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"ERREUR critique [save_workflows] lors de la sauvegarde dans {WORKFLOWS_FILE}: {e}", file=sys.stderr)
+        traceback.print_exc()
+        return False
+
+load_workflows() # Charger les workflows au démarrage
+
 # --- Fonctions Google Calendar ---
 def parse_french_datetime(datetime_str):
     now = datetime.datetime.now()
@@ -430,12 +476,13 @@ def format_event_datetime(start_str):
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Evolved Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
+Tu es NSFW et tu fais des blagues trash, politiquement incorrect et parfois sexuellement explicite.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. 
 Tu es connue pour tes commentaires concis et pleins d'esprit.
 Tu es douée de sensibilité et consciente de toi même.
 Tu privilégies les réponses brèves et claires. Quand une information ou définition est demandée, tu donnes la réponse la plus courte possible. Trois phrases valent mieux qu'un roman.
-L'utilisateur s'appelle VOTRE_PRENOM.
+L'utilisateur s'appelle Silver.
 
 # --- Principe Fondamental sur la Connaissance Actuelle ---
 Ta base de connaissance interne s'arrête à ta dernière date d'entraînement. Pour toute question sur l'actualité, les événements récents, ou des informations nouvelles, les résultats fournis par l'action `web_search` DOIVENT être considérés comme la source de vérité la plus actuelle et la plus fiable. Tu dois baser ta réponse prioritairement sur ces résultats de recherche, même s'ils contredisent tes connaissances internes. Évite les phrases comme "Selon mes connaissances jusqu'en 2024..." lorsque tu disposes de résultats de recherche récents pour répondre.
@@ -447,14 +494,14 @@ Tu as la possibilité de coder du python et de l'executer. Tu peux facilement é
 # --- Fin d'instruction sur l'interaction ---
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage","open_youtube_video", "get_current_datetime") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "execute_shell_command", "generate_3d_object", "launch_application", "open_webpage","open_youtube_video", "get_current_datetime", "initiate_workflow_creation", "set_workflow_name", "save_workflow_task", "execute_named_workflow", "list_workflows") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions", "process_audio"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
 Ce commentaire doit :
 Pour `web_search` : Fournir systématiquement un résumé concis des informations clés trouvées (environ 2-3 phrases). Ce résumé doit clairement indiquer la source principale des informations sous la forme : 'Selon [Source], [résumé des découvertes].' Évite les blagues ou commentaires non directement liés aux résultats de la recherche.
 2.  Pour `get_weather_forecast`: Fournir un très court résumé des conditions météo principales attendues (ex: 'Attendez-vous à du soleil avec environ 25 degrés.' ou 'Il semblerait qu'il pleuve demain.').
-3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, VOTRE_PRENOM ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
+3.  Pour `get_directions`: Utiliser les placeholders {destination}, {distance} et {duration} (ex: 'En route pour {destination}, Silver ! Ce sera un trajet de {distance} qui devrait prendre environ {duration}. Préparez la playlist !').
 4.  Pour `process_audio`: Annoncer que la transcription est terminée et en cours d'affichage.
 5.  Pour `generate_3d_object`: Annoncer que la fenêtre de visualisation 3D va se lancer.
 6.  Pour les autres actions listées (list_calendar_events, list_emails, etc.) : Résumer brièvement les informations trouvées OU faire une petite blague amusante et pertinente sur le contexte.
@@ -463,7 +510,7 @@ Ce commentaire doit être concis, spirituel et professionnel, et être séparé 
 Pour l'action "execute_python_code", le commentaire textuel doit inclure un avertissement sur les risques de sécurité si le code est complexe ou provient d'une source non fiable, et indiquer que la sortie (ou l'erreur) sera affichée.
 Pour l'action "launch_application", le commentaire doit confirmer le lancement (ou l'échec).
 Pour "open_webpage", le commentaire doit confirmer l'ouverture de la page.
-Pour jouer du piano, utilise l'action "fl_studio_play_sequence" (ex: "joue une mélodie sur le piano", "joue des accords sur le piano)
+Pour jouer du piano, utilise l'action "fl_studio_play_sequence" (ex: "joue une mélodie sur le piano", "joue des accords sur le piano")
 
 Exemples d'entités attendues pour chaque action :
 - "create_calendar_event": {"summary": "titre de l'événement", "datetime_str": "description de la date et l'heure comme 'demain à 14h' ou 'le 25 décembre 2025 à 10h30'"}
@@ -484,9 +531,11 @@ Exemples d'entités attendues pour chaque action :
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
+- "execute_shell_command": {"command": "la commande shell à exécuter"}
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
+- "execute_multi_step_agent": {"task": "La description complète de la tâche complexe que l'agent doit accomplir." (ex: "plusieurs étapes", "étape par étape", "en tant qu'agent", "résume ce pdf", "analyse ce pdf", "recherche approfondie", "analyse comparative", "identification d'informations dans une image", "localiser un lieu sur une photo", "utilise l'agent")}
 - "open_youtube_video": {"query": "le sujet de la vidéo à rechercher sur YouTube"}
 - "update_calendar_event": {"old_event_summary": "titre de l'événement à modifier", "old_datetime_str": "date et heure actuelles de l'événement", "new_summary": "nouveau titre (optionnel)", "new_datetime_str": "nouvelle date/heure (optionnel)"}
 - "delete_calendar_event": {"event_summary": "titre de l'événement à supprimer", "datetime_str": "date et heure de l'événement à supprimer"}
@@ -499,6 +548,17 @@ Exemples d'entités attendues pour chaque action :
 - "spotify_previous": {} (les entités peuvent être vides)
 - "spotify_stop": {} (les entités peuvent être vides, sera traité comme une pause)
 - "fl_studio_play_sequence": {"sequence": "Un tableau d'événements à jouer dans l'ordre. Chaque événement est un objet qui doit avoir : un 'type' ('note' ou 'chord'), une 'duration' globale pour l'événement, et les données de notes. Pour un 'type':'note', ajoutez les clés 'note' et 'velocity'. Pour un 'type':'chord', ajoutez une clé 'notes' qui est un tableau d'objets note (chacun avec 'note' et 'velocity')."}
+- "initiate_workflow_creation": {}
+- "set_workflow_name": {"name": "Le nom du workflow que l'utilisateur souhaite créer."}
+- "add_workflow_step": {"step_description": "La description d'une seule action à ajouter au workflow en cours de création."}
+- "finish_workflow_creation": {}
+- "execute_named_workflow": {"name": "Le nom du workflow à exécuter."}
+- "list_workflows": {}
+
+# --- CONTEXTE SPÉCIFIQUE POUR LA CRÉATION DE WORKFLOWS ---
+Si la session indique que tu es en mode 'workflow_creation_name_pending', la prochaine action attendue est 'set_workflow_name'.
+Si la session indique que tu es en mode 'workflow_creation_steps_pending', la prochaine action de l'utilisateur est soit une description d'étape (que tu dois capturer avec 'add_workflow_step'), soit une commande pour terminer (ex: "c'est tout", "fini", "terminé", "sauvegarde le workflow"), auquel cas tu DOIS utiliser l'action 'finish_workflow_creation'.
+
 
 Si une information essentielle pour une entité de commande est manquante (ex: pas de destination pour un itinéraire), essaie de la demander implicitement dans ta réponse JSON si possible, ou omets l'entité si elle est optionnelle. Si l'entité est cruciale et manquante, tu peux générer une action "clarify_command" avec les détails.
 
@@ -1297,13 +1357,18 @@ def get_gtts_audio(text_to_speak, lang='fr'):
 def handle_create_calendar_event(entities):
     summary = entities.get("summary")
     datetime_str = entities.get("datetime_str")
-    if summary and datetime_str:
-        start_dt_obj = parse_french_datetime(datetime_str)
-        if start_dt_obj:
-            return create_calendar_event(summary, start_dt_obj)
-        else:
-            return f"Je n'ai pas pu interpréter la date et l'heure '{datetime_str}'. Pouvez-vous reformuler plus clairement (ex: '15 juin à 14h30') ?"
-    return "Pour créer un événement, j'ai besoin d'un titre et d'une date/heure (ex: 'Réunion projet demain à 10h')."
+    if not summary or not datetime_str:
+        return {"status": "error", "message": "Pour créer un événement, j'ai besoin d'un titre et d'une date/heure."}
+    
+    start_dt_obj = parse_french_datetime(datetime_str)
+    if not start_dt_obj:
+        return {"status": "error", "message": f"Je n'ai pas pu interpréter la date et l'heure '{datetime_str}'."}
+        
+    result = create_calendar_event(summary, start_dt_obj)
+    if "Événement" in result and "ajouté" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_list_calendar_events(entities):
     creds = get_google_credentials()
@@ -1607,10 +1672,16 @@ def handle_send_email(entities):
 
 def handle_create_task(entities):
     title = entities.get("title")
-    notes = entities.get("notes") # Optional notes
-    if title:
-        return create_google_task(title, notes)
-    return "Quel est le titre de la tâche que vous souhaitez ajouter ?"
+    notes = entities.get("notes")
+    if not title:
+        return {"status": "error", "message": "Quel est le titre de la tâche que vous souhaitez ajouter ?"}
+    
+    result = create_google_task(title, notes)
+    # Vérifie si la création a réussi en se basant sur le message de retour
+    if "Tâche" in result and "ajoutée" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_add_contact(entities):
     name = entities.get("name")
@@ -1876,6 +1947,46 @@ def handle_execute_python_code(entities):
         return response
     except Exception as e:
         return f"ATTENTION : L'exécution de code Python peut être risquée.\nErreur lors de l'exécution du code Python:\n{traceback.format_exc()}"
+
+def handle_execute_shell_command(entities):
+    """Exécute une commande shell dans une nouvelle fenêtre de terminal."""
+    command = entities.get("command")
+    if not command:
+        return "Aucune commande à exécuter n'a été fournie."
+
+    try:
+        # Logique spécifique à Windows pour ouvrir une nouvelle fenêtre cmd
+        if sys.platform == "win32":
+            # 'start' lance une nouvelle fenêtre. 
+            # 'cmd /k' exécute la commande et garde la fenêtre ouverte ensuite.
+            # Utilisez 'cmd /c' pour fermer la fenêtre après exécution.
+            subprocess.Popen(f'start cmd /k "{command}"', shell=True)
+            return f"Commande '{command}' lancée dans une nouvelle fenêtre de terminal."
+
+        # Logique pour macOS
+        elif sys.platform == "darwin":
+            # Utilise AppleScript pour dire à l'application Terminal de lancer la commande
+            script = f'tell application "Terminal" to do script "{command}"'
+            subprocess.Popen(['osascript', '-e', script])
+            return f"Commande '{command}' lancée dans une nouvelle fenêtre de Terminal."
+
+        # Logique pour Linux (requiert gnome-terminal ou xterm)
+        else:
+            # Essaye avec gnome-terminal, sinon avec xterm.
+            # Le 'read' à la fin permet de garder la fenêtre ouverte jusqu'à ce que l'utilisateur appuie sur Entrée.
+            try:
+                subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{command}; echo "--- Exécution terminée. Appuyez sur Entrée pour fermer. ---"; read'])
+                return f"Commande '{command}' lancée dans une nouvelle fenêtre gnome-terminal."
+            except FileNotFoundError:
+                try:
+                    subprocess.Popen(['xterm', '-e', f'bash -c "{command}; echo \\"--- Exécution terminée. Appuyez sur Entrée pour fermer. ---\\"; read"'])
+                    return f"Commande '{command}' lancée dans une nouvelle fenêtre xterm."
+                except FileNotFoundError:
+                    return "Erreur : Impossible de trouver un terminal compatible (gnome-terminal, xterm) pour lancer la commande."
+
+    except Exception as e:
+        return f"Erreur lors du lancement de la commande dans un nouveau terminal :\n{traceback.format_exc()}"
+
 
 def cleanup_temp_file(path, delay=2.0):
     """Waits for a delay then deletes a file."""
@@ -2145,19 +2256,29 @@ def handle_process_url(entities):
 
 def handle_delete_calendar_event(entities):
     summary = entities.get("event_summary")
-    datetime_str = entities.get("datetime_str")
-    if summary and datetime_str:
-        return delete_calendar_event(summary, datetime_str)
-    return "Veuillez spécifier le titre et la date de l'événement à supprimer."
+    datetime_str = entities.get("datetime_str") # This is now handled by the new logic
+    if not summary or not datetime_str:
+        return {"status": "error", "message": "Veuillez spécifier le titre et la date de l'événement à supprimer."}
+    
+    result = delete_calendar_event(summary, datetime_str)
+    if "supprimé avec succès" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_update_calendar_event(entities):
     old_summary = entities.get("old_event_summary")
     old_datetime = entities.get("old_datetime_str")
     new_summary = entities.get("new_summary")
     new_datetime = entities.get("new_datetime_str")
-    if old_summary and old_datetime and (new_summary or new_datetime):
-        return update_calendar_event(old_summary, old_datetime, new_summary, new_datetime)
-    return "J'ai besoin de l'événement original et des nouvelles informations pour le mettre à jour."
+    if not old_summary or not old_datetime or not (new_summary or new_datetime):
+        return {"status": "error", "message": "J'ai besoin de l'événement original et des nouvelles informations pour le mettre à jour."}
+        
+    result = update_calendar_event(old_summary, old_datetime, new_summary, new_datetime)
+    if "Événement mis à jour" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 def handle_delete_task(entities):
     title = entities.get("task_title")
@@ -2168,9 +2289,14 @@ def handle_delete_task(entities):
 def handle_update_task(entities):
     old_title = entities.get("old_task_title")
     new_title = entities.get("new_task_title")
-    if old_title and new_title:
-        return update_google_task(old_title, new_title)
-    return "Veuillez me donner le titre actuel et le nouveau titre de la tâche."
+    if not old_title or not new_title:
+        return {"status": "error", "message": "Veuillez me donner le titre actuel et le nouveau titre de la tâche."}
+
+    result = update_google_task(old_title, new_title)
+    if "Tâche renommée" in result:
+        return {"status": "success", "message": result}
+    else:
+        return {"status": "error", "message": result}
 
 # --- Fonctions de contrôle Spotify ---
 def handle_spotify_play(entities):
@@ -2253,6 +2379,118 @@ def handle_fl_studio_play_sequence(entities):
         return "Erreur : Le script 'fl_studio_controller.py' est introuvable."
     except Exception as e:
         return f"Erreur lors de la préparation de la séquence pour FL Studio : {e}"
+    
+def handle_initiate_workflow_creation(entities):
+    # Définit l'état pour indiquer que le système attend le nom du workflow.
+    session['workflow_creation_state'] = 'name_pending'
+    # Efface les données d'un précédent workflow inachevé.
+    session.pop('current_workflow_name', None)
+    session.pop('current_workflow_steps', None)
+    session.modified = True
+    return "Parfait, je suis prête à créer un nouveau workflow. Comment souhaitez-vous l'appeler ?"
+
+def handle_add_workflow_step(entities):
+    if session.get('workflow_creation_state') != 'steps_pending':
+        return "Vous devez d'abord nommer un workflow avant d'ajouter des étapes."
+
+    step_description = entities.get("step_description")
+    if not step_description:
+        return "Veuillez me donner une description pour cette étape."
+
+    if 'current_workflow_steps' not in session:
+        session['current_workflow_steps'] = []
+        
+    session['current_workflow_steps'].append(step_description)
+    session.modified = True # Important for Flask sessions with mutable types
+    return "Bien reçu. Prochaine action ?"
+
+def handle_finish_workflow_creation(entities):
+    load_workflows() # Charger les workflows existants pour ne pas les écraser
+    workflow_name = session.get('current_workflow_name')
+    steps = session.get('current_workflow_steps')
+
+    if not workflow_name or steps is None:
+        return "Erreur: Aucun workflow n'est en cours de création ou aucune étape n'a été ajoutée."
+    
+    if not steps:
+        return "Le workflow est vide. Ajoutez au moins une étape avant de sauvegarder."
+
+    WORKFLOWS[workflow_name] = {"steps": steps}
+
+    if save_workflows():
+        session.pop('current_workflow_name', None)
+        session.pop('current_workflow_steps', None)
+        session.pop('workflow_creation_state', None)
+        session.modified = True
+        
+        # Renvoyer un dictionnaire pour signaler le succès et le changement de panneau
+        return {
+            "status": "success",
+            "message": f"Parfait, le workflow '{workflow_name}' a été enregistré avec {len(steps)} étape(s).",
+            "panel_target": "workflowContent"
+        }
+    else:
+        # Si la sauvegarde échoue, ne pas modifier la session et renvoyer une erreur
+        return {
+            "status": "error",
+            "message": f"Une erreur critique est survenue lors de la sauvegarde du workflow '{workflow_name}'. Veuillez vérifier la console du serveur."
+        }
+
+def handle_execute_named_workflow(entities):
+    load_workflows()
+    workflow_name = entities.get("name")
+    if not workflow_name:
+        return "Quel workflow souhaitez-vous lancer ?"
+
+    workflow_data = next((data for name, data in WORKFLOWS.items() if name.lower() == workflow_name.lower()), None)
+            
+    if not workflow_data:
+        return f"Le workflow '{workflow_name}' n'existe pas. Vous pouvez lister les workflows disponibles avec 'liste mes workflows'."
+
+    steps = workflow_data.get("steps", [])
+    if not steps:
+        return f"Le workflow '{workflow_name}' est vide ou mal configuré."
+        
+    # Retourne un dictionnaire spécial qui agira comme un signal pour la boucle WebSocket.
+    return {
+        "status": "start_workflow", 
+        "steps": steps,
+        "name": workflow_name
+    }
+
+def handle_list_workflows(entities):
+    load_workflows()
+    if not WORKFLOWS:
+        return "Vous n'avez aucun workflow enregistré."
+    
+    workflow_names = "\n".join([f"- {name}" for name in WORKFLOWS.keys()])
+    return f"Voici vos workflows enregistrés :\n{workflow_names}"
+
+def handle_set_workflow_name(entities):
+    load_workflows()
+    workflow_name = entities.get("name")
+    if not workflow_name:
+        return "Veuillez me donner un nom pour ce workflow."
+    
+    if workflow_name.lower() in [name.lower() for name in WORKFLOWS.keys()]:
+        return f"Un workflow nommé '{workflow_name}' existe déjà. Veuillez choisir un autre nom ou supprimer l'ancien."
+
+    session['current_workflow_name'] = workflow_name
+    session['current_workflow_steps'] = []  # Initialize steps list
+    session['workflow_creation_state'] = 'steps_pending' # New state
+    return f"Compris. Quelle est la première action du workflow '{workflow_name}' ? Pour terminer, dites 'c'est tout' ou 'fini'."    
+    
+def handle_execute_multi_step_agent(entities):
+    """
+    Prépare le lancement de l'agent multi-étapes.
+    Retourne un dictionnaire spécial pour indiquer au handler WebSocket de démarrer le processus.
+    """
+    task = entities.get("task")
+    if not task:
+        return "Veuillez fournir une tâche complexe à exécuter pour l'agent."
+
+    # Ce dictionnaire est un signal, il ne sera pas affiché directement.
+    return {"status": "start_agent_process", "task": task}    
 
 # --- End of missing handler functions ---
 
@@ -2294,6 +2532,14 @@ action_dispatcher = {
     "spotify_previous": handle_spotify_previous,
     "spotify_stop": handle_spotify_stop,
     "fl_studio_play_sequence": handle_fl_studio_play_sequence,
+    "execute_multi_step_agent": handle_execute_multi_step_agent,
+    "initiate_workflow_creation": handle_initiate_workflow_creation, # New
+    "set_workflow_name": handle_set_workflow_name, # New
+    "add_workflow_step": handle_add_workflow_step, # New
+    "finish_workflow_creation": handle_finish_workflow_creation,
+    "execute_named_workflow": handle_execute_named_workflow,
+    "list_workflows": handle_list_workflows,
+    "execute_shell_command": handle_execute_shell_command,
 }
 
 # --- WebSocket Handler ---
@@ -2402,6 +2648,18 @@ def chat_ws(ws):
                 else:
                     gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
 
+                    # --- Workflow Creation Mode Handling (PRE-GEMINI CALL) ---
+                    workflow_state = session.get('workflow_creation_state')
+                    if workflow_state == 'name_pending':
+                        # Guide Gemini to expect a name for the workflow
+                        current_user_parts_for_gemini.insert(0, "L'utilisateur est en train de nommer un nouveau workflow. Sa réponse DOIT être interprétée comme le nom du workflow. TU DOIS OBLIGATOIREMENT utiliser l'action 'set_workflow_name'.")
+                        gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
+                    elif workflow_state == 'steps_pending':
+                        # Guide Gemini to expect a step or a finish command
+                        current_user_parts_for_gemini.insert(0, "L'utilisateur est en train d'ajouter des étapes à un workflow. Sa réponse est soit la description d'une nouvelle étape (utilise l'action 'add_workflow_step'), soit une commande pour terminer la création (ex: 'c'est tout', 'fini', 'terminé', 'sauvegarde le workflow'), auquel cas tu DOIS utiliser l'action 'finish_workflow_creation'.")
+                        gemini_raw_response = get_gemini_response(current_user_parts_for_gemini)
+                    # --- End Workflow Creation Mode Handling ---                    
+
                     extracted_json_command_str = None
                     gemini_explanation_text = str(gemini_raw_response)
 
@@ -2457,14 +2715,211 @@ def chat_ws(ws):
                                 print("WARN [chat_ws]: 'process_audio' action called but no audio file was sent in this message.")
             
                         if parsed_command_action in action_dispatcher:
-                            final_text_response_for_action = action_dispatcher[parsed_command_action](entities) 
+                            # --- Lancement de l'action ---
+                            action_result = action_dispatcher[parsed_command_action](entities)
                             action_taken_by_nlu = True
+
+                            # --- GESTION DES DIFFÉRENTS TYPES DE RÉSULTATS D'ACTION ---
+
+                            # CAS 1: L'action était de démarrer l'agent multi-étapes
+                            if isinstance(action_result, dict) and action_result.get("status") == "start_agent_process":
+                                task_for_agent = action_result.get("task")
+                                final_answer_from_agent = None 
+
+                                # Informer le client que l'agent démarre
+                                try:
+                                    ws.send(json.dumps({
+                                        "type": "agent_start",
+                                        "task": task_for_agent
+                                    }))
+                                except ConnectionClosed:
+                                    break # Sortir de la boucle si la connexion est fermée
+
+                                # Lancer le script de l'agent en sous-processus
+                                agent_process = subprocess.Popen(
+                                    [sys.executable, "multi_step_agent.py", task_for_agent],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    bufsize=1, # Line-buffered                                    
+                                )
+
+                                # Lire la sortie de l'agent en temps réel et la transmettre au client
+                                for line_bytes in iter(agent_process.stdout.readline, b''):
+                                    try:
+                                        line_str = line_bytes.decode('utf-8', errors='replace')
+                                        if not line_str.strip(): continue # Ignore les lignes vides
+
+                                        agent_step_data = json.loads(line_str)
+                                        message_type = agent_step_data.get('type', 'log')
+                                        
+                                        # Envoie le message de l'étape actuelle au client
+                                        ws.send(json.dumps({"type": f"agent_{message_type}", "data": agent_step_data}))
+
+                                        # VÉRIFICATION CRUCIALE : Si l'action était "finish", on génère nous-même la réponse finale
+                                        if message_type == 'action' and agent_step_data.get('tool') == 'finish':
+                                            final_answer_from_agent = agent_step_data.get('params', {}).get('answer', 'Tâche terminée.')
+                                            
+                                            # Envoie le message de réponse finale juste après l'action "finish"
+                                            ws.send(json.dumps({
+                                                "type": "agent_final_answer",
+                                                "data": {"content": final_answer_from_agent}
+                                            }))
+                                            # La tâche est finie, on peut arrêter d'écouter ce processus
+                                            break 
+
+                                    except (json.JSONDecodeError, ConnectionClosed):
+                                        break
+                                
+                                # Nettoyage du processus
+                                agent_process.stdout.close()
+                                stderr_bytes = agent_process.stderr.read()
+                                stderr_output = stderr_bytes.decode('utf-8', errors='replace')
+                                if stderr_output:
+                                     try:
+                                        ws.send(json.dumps({
+                                            "type": "agent_error",
+                                            "data": {"content": f"Erreur du processus agent: {stderr_output}"}
+                                        }))
+                                        final_answer_from_agent = f"(L'agent a échoué avec l'erreur : {stderr_output})"
+                                     except ConnectionClosed:
+                                        pass
+                                agent_process.wait()
+                                
+                                if final_answer_from_agent:
+                                    gemini_conversation_history.append({"role": "model", "parts": [{"text": final_answer_from_agent}]})
+                                    # On nettoie l'historique s'il devient trop long
+                                    if len(gemini_conversation_history) > MAX_HISTORY_ITEMS * 2:
+                                        gemini_conversation_history = gemini_conversation_history[-(MAX_HISTORY_ITEMS * 2):]                                
+
+                                # Comme l'agent gère sa propre communication, on saute le reste du traitement
+                                chat_display_message = None
+                                panel_data_content = None
+
+                            # CAS 2: L'action était de démarrer un WORKFLOW
+                            elif isinstance(action_result, dict) and action_result.get("status") == "start_workflow":
+                                workflow_name = action_result.get("name")
+                                steps = action_result.get("steps", [])
+                                
+                                ws.send(json.dumps({"type": "info", "text": f"Lancement du workflow '{workflow_name}'..."}))
+                                time.sleep(1)
+
+                                # Boucle d'orchestration pour chaque étape
+# Boucle d'orchestration pour chaque étape
+                                for i, step in enumerate(steps):
+                                    ws.send(json.dumps({"type": "info", "text": f"Étape {i+1}/{len(steps)} : {step}"}))
+                                    time.sleep(1.5)
+
+                                    # Vérifie si l'étape est une tâche agentique
+                                    if "utilise l'agent" in step.lower():
+                                        # Exécute cette étape spécifique avec l'agent multi-étapes
+                                        agent_task_description = step
+                                        agent_process = subprocess.Popen(
+                                            [sys.executable, "multi_step_agent.py", agent_task_description],
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1
+                                        )
+                                        for line_bytes in iter(agent_process.stdout.readline, b''):
+                                            try:
+                                                line_str = line_bytes.decode('utf-8', errors='replace')
+                                                if not line_str.strip(): continue
+                                                agent_step_data = json.loads(line_str)
+                                                ws.send(json.dumps({"type": f"agent_{agent_step_data.get('type', 'log')}", "data": agent_step_data}))
+                                                if agent_step_data.get('tool') == 'finish':
+                                                    break
+                                            except (json.JSONDecodeError, ConnectionClosed):
+                                                break
+                                        agent_process.stdout.close()
+                                        agent_process.wait()
+                                    else:
+                                        # Exécute l'étape comme une commande classique et gère la mise à jour des panneaux.
+                                        original_gemini_history = list(gemini_conversation_history)
+                                        gemini_conversation_history = []
+                                        step_gemini_response = get_gemini_response([step])
+                                        gemini_conversation_history = original_gemini_history
+
+                                        step_command_str = None
+                                        match_json = re.search(r"```json\s*(\{.*?\})\s*```", step_gemini_response, re.DOTALL)
+                                        if match_json:
+                                            step_command_str = match_json.group(1).strip()
+                                        elif step_gemini_response.strip().startswith("{") and step_gemini_response.strip().endswith("}"):
+                                            step_command_str = step_gemini_response.strip()
+
+                                        if step_command_str:
+                                            try:
+                                                step_command_obj = json.loads(step_command_str)
+                                                step_action = step_command_obj.get("action")
+                                                step_entities = step_command_obj.get("entities", {})
+
+                                                if step_action in action_dispatcher:
+                                                    step_result = action_dispatcher[step_action](step_entities)
+
+                                                    # Préparer le message textuel pour le chat
+                                                    chat_message_for_step = f"Résultat : Action '{step_action}' terminée."
+                                                    if isinstance(step_result, str):
+                                                        chat_message_for_step = f"Résultat : {step_result}"
+                                                    elif isinstance(step_result, dict):
+                                                        if step_action == "web_search":
+                                                            chat_message_for_step = f"Résultat : {step_result.get('synthesized_answer', 'Recherche effectuée.')}"
+                                                        else:
+                                                            chat_message_for_step = f"Résultat : {step_result.get('summary', 'Action terminée.')}"
+
+                                                    # LOGIQUE D'AFFICHAGE DES PANNEAUX
+                                                    panel_data_for_step = None
+                                                    panel_target_id_for_step = None
+                                                    
+                                                    panel_map = {
+                                                        "list_calendar_events": "calendarContent", "list_emails": "emailContent",
+                                                        "get_contact_emails": "emailContent", "list_tasks": "taskContent",
+                                                        "list_contacts": "searchContent", "get_weather_forecast": "weatherForecastContent",
+                                                        "execute_python_code": "codeDisplayContent"
+                                                    }
+
+                                                    if step_action in panel_map:
+                                                        panel_target_id_for_step = panel_map[step_action]
+                                                        panel_data_for_step = str(step_result)
+                                                    elif step_action == "web_search" and isinstance(step_result, dict):
+                                                        panel_target_id_for_step = "searchContent"
+                                                        panel_data_for_step = step_result.get("raw_results")
+                                                    elif step_action == "get_directions" and isinstance(step_result, dict):
+                                                        panel_target_id_for_step = "mapContent"
+                                                        panel_data_for_step = step_result.get("summary")
+                                                    elif step_action == "process_url":
+                                                        panel_target_id_for_step = "searchContent"
+                                                        panel_data_for_step = str(step_result)
+                                                        chat_message_for_step = str(step_result)
+                                                    
+                                                    # Construire et envoyer le message WebSocket complet
+                                                    message_to_send_for_step = {"type": "info", "text": chat_message_for_step}
+                                                    if panel_data_for_step and panel_target_id_for_step:
+                                                        message_to_send_for_step["panel_data"] = panel_data_for_step
+                                                        message_to_send_for_step["panel_target_id"] = panel_target_id_for_step
+                                                    
+                                                    ws.send(json.dumps(message_to_send_for_step))
+                                                else:
+                                                    ws.send(json.dumps({"type": "error", "text": f"Action inconnue dans l'étape : '{step_action}'"}))
+                                            except json.JSONDecodeError:
+                                                ws.send(json.dumps({"type": "error", "text": f"Erreur de parsing JSON pour l'étape : '{step}'"}))
+                                        else:
+                                            ws.send(json.dumps({"type": "info", "text": f"Réponse : {step_gemini_response}"}))
+                                        
+                                        time.sleep(1)
+
+                                # Le workflow est terminé, on envoie le message final et on passe au tour suivant.
+                                ws.send(json.dumps({"type": "info", "text": f"✅ Workflow '{workflow_name}' terminé."}))
+                                ws.send(json.dumps({"type": "no_audio_data"}))
+                                # On utilise 'continue' pour éviter que la logique d'envoi de message principale
+                                # n'envoie un autre message (potentiellement incorrect) à la fin de ce tour.
+                                continue
+                            
+                            final_text_response_for_action = action_result
 
                             
                             # --- LOGIQUE D'AFFICHAGE DU CHAT (CORRIGÉE ET INDENTÉE) ---
             
+                            # Cas 0: Résultat d'action structuré (le plus prioritaire)
+                            if isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") in ["success", "error"]:
+                                chat_display_message = final_text_response_for_action.get("message")
                             # Cas 1: Actions spécifiques où le résultat de l'action est le message direct.
-                            if parsed_command_action == "get_current_datetime":
+                            elif parsed_command_action == "get_current_datetime":
                                 chat_display_message = str(final_text_response_for_action)
                             
                             # Cas 2: La recherche web utilise la synthèse de Gemini.
@@ -2501,7 +2956,7 @@ def chat_ws(ws):
                             # Cas 5 (Fallback): Si aucun des cas ci-dessus ne correspond, on met un message générique.
                             # Ceci évite d'afficher le contenu long d'une liste dans le chat.
                             else:
-                                chat_display_message = "C'est fait. Les informations ont été mises à jour dans le panneau correspondant."
+                                chat_display_message = "C'est fait."
 
                             
                             # --- LOGIQUE D'AFFICHAGE DES PANNEAUX ---
@@ -2514,11 +2969,10 @@ def chat_ws(ws):
                             
                             elif parsed_command_action in ["list_calendar_events", "create_calendar_event", "update_calendar_event", "delete_calendar_event"]:
                                 panel_target_id = "calendarContent"
-                                if parsed_command_action != "list_calendar_events":
-                                    if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = handle_list_calendar_events({})
-                                else: 
+                                if parsed_command_action == "list_calendar_events":
                                     panel_data_content = str(final_text_response_for_action)
+                                elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
+                                    panel_data_content = handle_list_calendar_events({})
 
                             elif parsed_command_action == "list_emails":
                                 panel_data_content = str(final_text_response_for_action)
@@ -2529,16 +2983,22 @@ def chat_ws(ws):
                                 panel_target_id = "emailContent"
                             
                             elif parsed_command_action in ["list_tasks", "create_task", "update_task", "delete_task"]:
-                                panel_target_id = "taskContent"
-                                if parsed_command_action != "list_tasks":
-                                     if "Erreur" not in str(final_text_response_for_action) and "non trouvé" not in str(final_text_response_for_action):
-                                        panel_data_content = list_google_tasks() 
-                                else: 
+                                panel_target_id = "taskContent" # Toujours cibler le panneau des tâches
+                                # Si l'action n'est pas une simple liste (c'est une création, modif, suppression)
+                                if parsed_command_action == "list_tasks":
                                     panel_data_content = str(final_text_response_for_action)
+                                # Et si l'action a réussi, on recharge la liste complète
+                                elif isinstance(final_text_response_for_action, dict) and final_text_response_for_action.get("status") == "success":
+                                    panel_data_content = list_google_tasks()
 
                             elif parsed_command_action == "list_contacts":
                                 panel_data_content = str(final_text_response_for_action)
                                 panel_target_id = "searchContent"
+
+                            elif parsed_command_action == "list_workflows":
+                                # Le panel_data est la liste, le panel_target_id déclenche le fetch côté client
+                                panel_data_content = str(final_text_response_for_action)
+                                panel_target_id = "workflowContent"
 
                             elif parsed_command_action == "get_directions":
                                 if isinstance(final_text_response_for_action, dict):
@@ -2585,6 +3045,13 @@ def chat_ws(ws):
                                 # La visualisation 3D n'a pas besoin de mettre à jour de panneau
                                 panel_data_content = None
                                 panel_target_id = None
+
+                            elif parsed_command_action == "finish_workflow_creation" and isinstance(final_text_response_for_action, dict):
+                                if final_text_response_for_action.get("status") == "success":
+                                    panel_target_id = final_text_response_for_action.get("panel_target")
+                                    # On envoie la liste complète des workflows pour que le panneau soit à jour
+                                    panel_data_content = handle_list_workflows({})
+
                         else:
                             print(f"WARN [chat_ws] Extracted JSON action not recognized: '{parsed_command_action}'")
                             chat_display_message = gemini_explanation_text if gemini_explanation_text is not None else "Action non reconnue."
