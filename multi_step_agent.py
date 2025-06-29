@@ -465,6 +465,35 @@ def execute_script_from_steps(steps: list, interpreter_command: str, file_extens
             os.remove(temp_script_path)
         return f"Erreur inattendue lors de l'exécution du script : {e}"
 
+def read_local_file(path: str) -> str:
+    """
+    Lit le contenu d'un fichier texte local. Tente de lire en UTF-8,
+    puis bascule vers latin-1 en cas d'erreur de décodage.
+    """
+    try:
+        # Première tentative avec l'encodage standard UTF-8
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except UnicodeDecodeError:
+        # Si UTF-8 échoue, c'est probablement un autre encodage.
+        # On réessaie avec latin-1, qui est plus permissif et gère tous les octets.
+        try:
+            with open(path, 'r', encoding='latin-1') as f:
+                content = f.read()
+        except Exception as e:
+            return f"Erreur lors de la lecture du fichier '{path}' avec l'encodage de secours (latin-1): {e}"
+    except FileNotFoundError:
+        return f"Erreur : Le fichier '{path}' n'a pas été trouvé."
+    except Exception as e:
+        return f"Erreur inattendue lors de la lecture du fichier '{path}': {e}"
+
+    # Limite la taille pour ne pas surcharger le contexte de l'agent
+    max_length = 15000
+    if len(content) > max_length:
+        return content[:max_length] + "\n\n[... Contenu du fichier tronqué car trop long ...]"
+    
+    return content
+
 def locate_on_map(location_name: str) -> str:
     """
     Trouve les coordonnées géographiques d'un lieu donné et retourne un objet JSON
@@ -919,6 +948,11 @@ AVAILABLE_TOOLS = {
         "file_extension": "string (L'extension du fichier script, ex: '.rc', '.sh', '.bat')"
         }
     },
+        "read_local_file": {
+        "function": read_local_file,
+        "description": "Lit le contenu d'un fichier texte local. C'est l'outil à utiliser pour analyser ou comprendre un fichier avant de potentiellement le modifier.",
+        "params": {"path": "string (Le chemin complet vers le fichier local à lire)"}
+},
 }
 
 
