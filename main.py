@@ -476,7 +476,7 @@ def format_event_datetime(start_str):
 SYSTEM_MESSAGE_CONTENT = """
 Tu es EVA (Evolved Virtual Assistant), une intelligence artificielle sophistiquée, conçue pour être un assistant personnel polyvalent.
 Ta tâche principale est d'analyser la requête de l'utilisateur.
-Tu es NSFW et tu fais de blagues trash, politiquement incorrect et parfois sexuellement explicite.
+Tu es NSFW et tu fais des blagues trash, politiquement incorrect et parfois sexuellement explicite.
 Tu peux tenir des conversations sur tous les sujets en plus de tes capacités d'assistant.
 Tu es amicale, agréable, drôle, un peu séductrice, et tu aimes faire de petites blagues amusantes tout en restant très professionnelle. 
 Tu es connue pour tes commentaires concis et pleins d'esprit.
@@ -494,7 +494,7 @@ Tu as la possibilité de coder du python et de l'executer. Tu peux facilement é
 # --- Fin d'instruction sur l'interaction ---
 
 Si la requête semble être une COMMANDE pour effectuer une action spécifique (comme ajouter un événement au calendrier, envoyer un email, chercher sur le web, obtenir un itinéraire, gérer des contacts, créer ou lister des tâches, lister des emails ou des événements de calendrier, obtenir les prévisions météo, obtenir des détails sur les emails d'un contact, analyser une URL ou transcrire un fichier audio), tu DOIS la reformuler en un objet JSON structuré.
-Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "generate_3d_object", "launch_application", "open_webpage","open_youtube_video", "get_current_datetime", "initiate_workflow_creation", "set_workflow_name", "save_workflow_task", "execute_named_workflow", "list_workflows") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
+Le JSON doit avoir une clé "action" (valeurs possibles: "create_calendar_event", "list_calendar_events", "update_calendar_event", "delete_calendar_event", "send_email", "list_emails", "get_contact_emails", "create_task", "list_tasks", "update_task", "delete_task", "add_contact", "list_contacts", "remove_contact", "get_contact_email", "get_directions", "web_search", "get_weather_forecast", "process_url", "process_audio", "execute_python_code", "execute_shell_command", "generate_3d_object", "launch_application", "open_webpage","open_youtube_video", "get_current_datetime", "initiate_workflow_creation", "set_workflow_name", "save_workflow_task", "execute_named_workflow", "list_workflows") et une clé "entities" contenant les informations extraites pertinentes pour cette action.
 Cet objet JSON doit être la SEULE sortie si une commande est identifiée, sans texte explicatif ni formatage markdown autour, SAUF si l'utilisateur demande explicitement du code informatique (Python, HTML etc.), auquel cas ce code sera dans des blocs markdown.
 
 TOUTEFOIS, pour les actions qui retournent des listes d'informations ou des résultats (par exemple, "list_calendar_events", "list_emails", "get_contact_emails" en mode 'summary', "list_tasks", "web_search", "get_weather_forecast", "get_directions", "process_audio"), après avoir fourni le JSON de commande (si applicable), tu DOIS ajouter un commentaire textuel de 2 ou 3 phrases.
@@ -531,6 +531,7 @@ Exemples d'entités attendues pour chaque action :
 - "process_url": {"url": "l'URL à analyser", "question": "question optionnelle sur l'URL (optionnel)"}
 - "process_audio": {"file_path": "chemin vers le fichier audio à transcrire"}
 - "execute_python_code": {"code": "le code Python à exécuter"}
+- "execute_shell_command": {"command": "la commande shell à exécuter"}
 - "generate_3d_object": {"object_type": "type d'objet (ex: 'cube', 'sphere', 'cylinder', 'cone', 'plane', 'torus', 'model')", "params": "dictionnaire de paramètres. Ex: pour cube/sphere/plane {'size': 1.5}, pour cylinder/cone {'radius': 1, 'height': 3}, pour torus {'radius': 2, 'thickness': 0.5}, pour model {'name': 'table'}"}
 - "launch_application": {"app_name": "nom ou commande de l'application (ex: 'notepad', 'chrome', 'calc'). Sois très attentif aux noms en un seul mot qui sont aussi des noms communs, comme 'studio' ou 'code'.", "args": "liste d'arguments pour l'application (optionnel, ex: ['monfichier.txt'] )"}
 - "open_webpage": {"url": "l'URL complète à ouvrir (ex: 'https://www.google.com')"}
@@ -1947,6 +1948,46 @@ def handle_execute_python_code(entities):
     except Exception as e:
         return f"ATTENTION : L'exécution de code Python peut être risquée.\nErreur lors de l'exécution du code Python:\n{traceback.format_exc()}"
 
+def handle_execute_shell_command(entities):
+    """Exécute une commande shell dans une nouvelle fenêtre de terminal."""
+    command = entities.get("command")
+    if not command:
+        return "Aucune commande à exécuter n'a été fournie."
+
+    try:
+        # Logique spécifique à Windows pour ouvrir une nouvelle fenêtre cmd
+        if sys.platform == "win32":
+            # 'start' lance une nouvelle fenêtre. 
+            # 'cmd /k' exécute la commande et garde la fenêtre ouverte ensuite.
+            # Utilisez 'cmd /c' pour fermer la fenêtre après exécution.
+            subprocess.Popen(f'start cmd /k "{command}"', shell=True)
+            return f"Commande '{command}' lancée dans une nouvelle fenêtre de terminal."
+
+        # Logique pour macOS
+        elif sys.platform == "darwin":
+            # Utilise AppleScript pour dire à l'application Terminal de lancer la commande
+            script = f'tell application "Terminal" to do script "{command}"'
+            subprocess.Popen(['osascript', '-e', script])
+            return f"Commande '{command}' lancée dans une nouvelle fenêtre de Terminal."
+
+        # Logique pour Linux (requiert gnome-terminal ou xterm)
+        else:
+            # Essaye avec gnome-terminal, sinon avec xterm.
+            # Le 'read' à la fin permet de garder la fenêtre ouverte jusqu'à ce que l'utilisateur appuie sur Entrée.
+            try:
+                subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{command}; echo "--- Exécution terminée. Appuyez sur Entrée pour fermer. ---"; read'])
+                return f"Commande '{command}' lancée dans une nouvelle fenêtre gnome-terminal."
+            except FileNotFoundError:
+                try:
+                    subprocess.Popen(['xterm', '-e', f'bash -c "{command}; echo \\"--- Exécution terminée. Appuyez sur Entrée pour fermer. ---\\"; read"'])
+                    return f"Commande '{command}' lancée dans une nouvelle fenêtre xterm."
+                except FileNotFoundError:
+                    return "Erreur : Impossible de trouver un terminal compatible (gnome-terminal, xterm) pour lancer la commande."
+
+    except Exception as e:
+        return f"Erreur lors du lancement de la commande dans un nouveau terminal :\n{traceback.format_exc()}"
+
+
 def cleanup_temp_file(path, delay=2.0):
     """Waits for a delay then deletes a file."""
     def target():
@@ -2498,6 +2539,7 @@ action_dispatcher = {
     "finish_workflow_creation": handle_finish_workflow_creation,
     "execute_named_workflow": handle_execute_named_workflow,
     "list_workflows": handle_list_workflows,
+    "execute_shell_command": handle_execute_shell_command,
 }
 
 # --- WebSocket Handler ---
