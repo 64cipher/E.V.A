@@ -14,6 +14,7 @@ import contextlib
 import subprocess
 import googlemaps # Ajouté pour le géocodage
 import urllib.parse
+import pathlib
 # Nouveaux imports pour l'analyse d'images et de documents
 from PIL import Image
 import PyPDF2
@@ -415,47 +416,54 @@ def execute_shell_command(command: str, wait_for_completion: bool = True) -> str
 
 def execute_script_from_steps(steps: list, interpreter_command: str, file_extension: str = ".tmp") -> str:
     """
-    Exécute une séquence d'étapes en les écrivant dans un script temporaire,
-    puis en lançant un interpréteur pour exécuter ce script dans un nouveau terminal.
-    C'est la méthode robuste pour les sessions interactives comme msfconsole ou les scripts shell.
+    Exécute un script en arrière-plan et capture sa sortie standard et ses erreurs.
+    Cette version est conçue pour l'automatisation, permettant à l'agent de récupérer et d'analyser le résultat du script.
     """
     if not all([steps, interpreter_command]):
         return "Erreur : Les étapes du script ou la commande de l'interpréteur sont manquantes."
 
     temp_script_path = None
     try:
-        # Créer un fichier temporaire sécurisé
+        # Créer un fichier temporaire sécurisé avec l'extension appropriée
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=file_extension, encoding='utf-8') as tmp_file:
             temp_script_path = tmp_file.name
-            tmp_file.write('\n'.join(steps))
+            # Écrit les commandes dans le script. Ajoute un saut de ligne final pour la robustesse.
+            tmp_file.write('\n'.join(steps) + '\n')
         
-        # Remplacer le placeholder par le chemin réel du script
-        # Utilise shlex.quote pour s'assurer que le chemin est correctement échappé pour le shell
-        final_command = interpreter_command.format(script_path=shlex.quote(temp_script_path))
+        # Prépare le chemin pour le shell, en le convertissant au format POSIX si nécessaire (pour Bash sur Windows)
+        script_path_for_shell = pathlib.Path(temp_script_path).as_posix()
+        quoted_path = shlex.quote(script_path_for_shell)
+        final_command_str = interpreter_command.format(script_path=quoted_path)
 
-        # Logique pour lancer le terminal
-        if sys.platform == "win32":
-            # /k garde la fenêtre ouverte après l'exécution pour voir le résultat
-            subprocess.Popen(f'start "Agent Script" cmd /k "{final_command}"', shell=True)
-        elif sys.platform == "darwin":
-            script_for_osascript = f'tell application "Terminal" to do script "{final_command}"'
-            subprocess.Popen(['osascript', '-e', script_for_osascript])
-        else: # Linux
-            try:
-                subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{final_command}; exec bash'])
-            except FileNotFoundError:
-                subprocess.Popen(['xterm', '-e', f'bash -c "{final_command}; exec bash"'])
-        
-        # Programme le nettoyage du fichier temporaire après un délai
-        cleanup_thread = threading.Timer(20.0, os.remove, args=[temp_script_path])
-        cleanup_thread.start()
-        
-        return f"Script pour '{interpreter_command.split(' ')[0]}' lancé dans un nouveau terminal via {os.path.basename(temp_script_path)}."
+        # Exécute la commande en arrière-plan, capture la sortie, et attend qu'elle se termine.
+        # `shell=True` est nécessaire pour que des commandes comme `msfconsole` ou les interpréteurs soient trouvés dans le PATH.
+        # `capture_output=True` redirige stdout/stderr vers l'objet result.
+        # `text=True` décode stdout/stderr en utilisant l'encodage système.
+        result = subprocess.run(final_command_str, shell=True, capture_output=True, text=True, timeout=300) # Timeout de 5 minutes
 
+        # Nettoyage immédiat du fichier temporaire
+        os.remove(temp_script_path)
+
+        # Formate la sortie pour l'agent
+        output = f"--- SCRIPT EXECUTÉ ---\n"
+        output += f"Code de sortie: {result.returncode}\n"
+        
+        if result.stdout:
+            output += f"\n--- SORTIE STANDARD (STDOUT) ---\n{result.stdout.strip()}\n"
+        
+        if result.stderr:
+            output += f"\n--- ERREUR STANDARD (STDERR) ---\n{result.stderr.strip()}\n"
+            
+        return output
+
+    except subprocess.TimeoutExpired:
+        if temp_script_path and os.path.exists(temp_script_path):
+            os.remove(temp_script_path)
+        return "Erreur : Le script a mis plus de 5 minutes à s'exécuter et a été terminé."
     except Exception as e:
         if temp_script_path and os.path.exists(temp_script_path):
             os.remove(temp_script_path)
-        return f"Erreur lors de l'exécution du script : {e}"    
+        return f"Erreur inattendue lors de l'exécution du script : {e}"
 
 def locate_on_map(location_name: str) -> str:
     """
