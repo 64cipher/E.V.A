@@ -2905,6 +2905,7 @@ def chat_ws(ws):
 
                                 # Le workflow est terminé, on envoie le message final et on passe au tour suivant.
                                 ws.send(json.dumps({"type": "info", "text": f"✅ Workflow '{workflow_name}' terminé."}))
+                                ws.send(json.dumps({"type": "no_audio_data"}))
                                 # On utilise 'continue' pour éviter que la logique d'envoi de message principale
                                 # n'envoie un autre message (potentiellement incorrect) à la fin de ce tour.
                                 continue
