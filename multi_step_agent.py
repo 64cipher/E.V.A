@@ -21,6 +21,7 @@ from io import BytesIO
 from email.message import EmailMessage
 import tempfile
 import shlex
+import threading
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 import locale
@@ -411,7 +412,50 @@ def execute_shell_command(command: str, wait_for_completion: bool = True) -> str
             os.remove(stdout_path)
         if stderr_path and os.path.exists(stderr_path):
             os.remove(stderr_path)
-    
+
+def execute_script_from_steps(steps: list, interpreter_command: str, file_extension: str = ".tmp") -> str:
+    """
+    Exécute une séquence d'étapes en les écrivant dans un script temporaire,
+    puis en lançant un interpréteur pour exécuter ce script dans un nouveau terminal.
+    C'est la méthode robuste pour les sessions interactives comme msfconsole ou les scripts shell.
+    """
+    if not all([steps, interpreter_command]):
+        return "Erreur : Les étapes du script ou la commande de l'interpréteur sont manquantes."
+
+    temp_script_path = None
+    try:
+        # Créer un fichier temporaire sécurisé
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=file_extension, encoding='utf-8') as tmp_file:
+            temp_script_path = tmp_file.name
+            tmp_file.write('\n'.join(steps))
+        
+        # Remplacer le placeholder par le chemin réel du script
+        # Utilise shlex.quote pour s'assurer que le chemin est correctement échappé pour le shell
+        final_command = interpreter_command.format(script_path=shlex.quote(temp_script_path))
+
+        # Logique pour lancer le terminal
+        if sys.platform == "win32":
+            # /k garde la fenêtre ouverte après l'exécution pour voir le résultat
+            subprocess.Popen(f'start "Agent Script" cmd /k "{final_command}"', shell=True)
+        elif sys.platform == "darwin":
+            script_for_osascript = f'tell application "Terminal" to do script "{final_command}"'
+            subprocess.Popen(['osascript', '-e', script_for_osascript])
+        else: # Linux
+            try:
+                subprocess.Popen(['gnome-terminal', '--', 'bash', '-c', f'{final_command}; exec bash'])
+            except FileNotFoundError:
+                subprocess.Popen(['xterm', '-e', f'bash -c "{final_command}; exec bash"'])
+        
+        # Programme le nettoyage du fichier temporaire après un délai
+        cleanup_thread = threading.Timer(20.0, os.remove, args=[temp_script_path])
+        cleanup_thread.start()
+        
+        return f"Script pour '{interpreter_command.split(' ')[0]}' lancé dans un nouveau terminal via {os.path.basename(temp_script_path)}."
+
+    except Exception as e:
+        if temp_script_path and os.path.exists(temp_script_path):
+            os.remove(temp_script_path)
+        return f"Erreur lors de l'exécution du script : {e}"    
 
 def locate_on_map(location_name: str) -> str:
     """
@@ -847,16 +891,25 @@ AVAILABLE_TOOLS = {
         }
     },
         "execute_shell_command": {
-    "function": execute_shell_command,
-    "description": "Exécute une commande shell. Peut attendre la fin pour récupérer le résultat (par défaut) ou non.",
-    "params": {
+        "function": execute_shell_command,
+        "description": "Exécute une commande shell. Peut attendre la fin pour récupérer le résultat (par défaut) ou non.",
+        "params": {
         "command": "string (La commande shell complète à exécuter)",
         "wait_for_completion": "boolean (Optionnel, défaut: True. Mettre à False pour ne pas attendre la fin de la commande et ne pas récupérer sa sortie.)"}   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil    
     },    
         "find_contact_email": {
-            "function": find_contact_email,
-            "description": "Recherche l'adresse e-mail d'un contact à partir de son nom. À utiliser IMPÉRATIVEMENT avant d'envoyer un e-mail si vous ne disposez que d'un nom et non d'une adresse e-mail complète.",
-            "params": {"name": "string (Le nom du contact à rechercher, ex: 'Jean Dupont')"}
+        "function": find_contact_email,
+        "description": "Recherche l'adresse e-mail d'un contact à partir de son nom. À utiliser IMPÉRATIVEMENT avant d'envoyer un e-mail si vous ne disposez que d'un nom et non d'une adresse e-mail complète.",
+        "params": {"name": "string (Le nom du contact à rechercher, ex: 'Jean Dupont')"}
+    },
+        "execute_script_from_steps": {
+        "function": execute_script_from_steps,
+        "description": "Exécute une séquence de commandes pour un programme interactif (ex: msfconsole) ou un script shell. Écrit les étapes dans un fichier temporaire et l'exécute. C'est l'outil OBLIGATOIRE pour les tâches multi-étapes en ligne de commande.",
+        "params": {
+        "steps": "list[string] (Une liste contenant chaque ligne de commande du script)",
+        "interpreter_command": "string (La commande pour lancer le programme avec le placeholder {script_path}, ex: 'msfconsole -r {script_path}' ou 'bash {script_path}')",
+        "file_extension": "string (L'extension du fichier script, ex: '.rc', '.sh', '.bat')"
+        }
     },
 }
 
@@ -871,6 +924,30 @@ Tu es un agent autonome intelligent. Ta mission est de résoudre la tâche donn�
 
 # STRATÉGIE ET RAISONNEMENT
 - **Décomposition Logique**: Décompose les problèmes complexes en étapes séquentielles. La sortie d'une action alimente la suivante.
+- **NOUVEAU - STRATÉGIE POUR LES COMMANDES SHELL**:
+    - Si la tâche est d'exécuter une **seule commande simple et indépendante** (ex: "liste les fichiers du répertoire courant"), utilise l'outil `execute_shell_command`.
+    - Si la tâche requiert d'exécuter une **séquence de commandes qui dépendent les unes des autres**, notamment dans un programme interactif comme `msfconsole`, `mysql`, `ssh`, ou pour créer un script shell complexe, tu dois IMPÉRATIVEMENT utiliser le nouvel outil `execute_script_from_steps`.
+    - **Exemple de scénario interactif**:
+        - Tâche utilisateur : "lance msfconsole, puis utilise exploit/multi/handler, configure le PAYLOAD en linux/x86/meterpreter/reverse_tcp, LHOST sur 127.0.0.1 et lance l'exploit en job."
+        - Ton Action JSON DOIT être :
+        ```json
+        {{
+          "action": {{
+            "tool_name": "execute_script_from_steps",
+            "parameters": {{
+              "steps": [
+                "use exploit/multi/handler",
+                "set PAYLOAD linux/x86/meterpreter/reverse_tcp",
+                "set LHOST 127.0.0.1",
+                "exploit -j"
+              ],
+              "interpreter_command": "msfconsole -r {{script_path}}",
+              "file_extension": ".rc"
+            }}
+          }},
+          "thought": "La tâche requiert une séquence de commandes dans msfconsole. Je vais utiliser execute_script_from_steps pour créer un fichier de ressources .rc et le lancer. C'est la méthode correcte pour une session interactive."
+        }}
+        ```
 - **Stratégie d'Analyse d'Image pour la Géolocalisation**: Pour identifier le lieu d'une photo, suis IMPÉRATIVEMENT cette séquence :
   1.  **Analyse d'abord l'image** avec `analyze_image` pour extraire des indices textuels, des noms de monuments, ou des caractéristiques uniques.
   2.  **Utilise ces indices** avec `web_search` pour formuler une requête et trouver un nom de lieu probable (ville, monument, parc, etc.) et `image_search` pour comparer les images si besoin (ville, rue, batiments, monuments, panneaux, magasin, etc.).
