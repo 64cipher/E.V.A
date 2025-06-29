@@ -23,6 +23,7 @@ import tempfile
 import shlex
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+import locale
 
 import base64
 from google.oauth2.credentials import Credentials
@@ -84,7 +85,7 @@ except json.JSONDecodeError:
 
 genai.configure(api_key=gemini_api_key)
 # Utilisation d'un modèle apte au raisonnement complexe et à l'utilisation d'outils
-agent_model = genai.GenerativeModel('gemini-2.5-flash-lite-preview-06-17')
+agent_model = genai.GenerativeModel('gemini-2.0-flash-lite')
 
 # --- Boîte à Outils de l'Agent ---
 
@@ -310,7 +311,7 @@ def analyze_image(url: str, question: str = "Décris cette image en détail. Si 
         # --- FIN DE L'AMÉLIORATION ---
 
         # 4. Utiliser un modèle multimodal pour l'analyse.
-        vision_model = genai.GenerativeModel('gemini-2.5-flash')
+        vision_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt_parts = [metadata_prompt, image]
         
         vision_response = vision_model.generate_content(prompt_parts)
@@ -345,45 +346,71 @@ def execute_python(code: str) -> str:
     except Exception as e:
         return f"Erreur lors de l'exécution du code:\n{traceback.format_exc()}"
 
-def execute_shell_command(command: str) -> str:
+def execute_shell_command(command: str, wait_for_completion: bool = True) -> str:
     """
-    Exécute une commande shell dans le terminal de l'hôte.
-    ATTENTION : L'utilisation de cette fonction est extrêmement risquée et peut compromettre la sécurité.
-    Elle est dotée d'un délai d'attente de 60 secondes.
+    Exécute une commande shell.
+    - Si wait_for_completion est True (défaut), s'exécute dans une nouvelle fenêtre, attend sa fermeture
+      et capture la sortie via des fichiers temporaires.
+    - Si wait_for_completion est False, lance la commande dans une nouvelle fenêtre et continue immédiatement
+      sans capturer la sortie.
     """
+    if not wait_for_completion:
+        # --- MODE NON-BLOQUANT ---
+        try:
+            if sys.platform == "win32":
+                # Utilise 'start' sans '/wait' pour un lancement non-bloquant
+                subprocess.Popen(f'start "Agent Command (Non-blocking)" cmd /c "{command}"', shell=True)
+            # D'autres implémentations pour macOS/Linux pourraient être ajoutées ici si nécessaire
+            else:
+                # Sur Linux/macOS, ajouter '&' à la fin d'une commande la met en arrière-plan
+                subprocess.Popen(f'{command} &', shell=True, executable='/bin/bash')
+
+            return f"Commande '{command}' lancée en mode non-bloquant. Aucune sortie ne sera récupérée."
+        except Exception as e:
+            return f"Erreur lors du lancement non-bloquant de la commande '{command}': {e}"
+
+    # --- MODE BLOQUANT (AVEC CAPTURE DE SORTIE) ---
+    stdout_path = None
+    stderr_path = None
     try:
-        # shlex.split sépare la commande en une liste d'arguments.
-        # C'est une mesure de sécurité cruciale pour éviter les injections de commandes.
-        args = shlex.split(command)
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as f_out:
+            stdout_path = f_out.name
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as f_err:
+            stderr_path = f_err.name
 
-        # Exécution de la commande de manière sécurisée sans 'shell=True'
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,        # Pour obtenir stdout/stderr en tant que chaines de caractères
-            timeout=60,       # Un délai de sécurité pour éviter que les commandes ne bloquent
-            check=False       # N'échoue pas si le code de retour est non-nul
-        )
+        redirected_command = f'({command}) > "{stdout_path}" 2> "{stderr_path}"'
 
-        # Formatage de la sortie pour l'agent
-        output = f"Commande: '{command}'\nCode de retour: {result.returncode}\n"
-        if result.stdout:
-            output += f"--- STDOUT ---\n{result.stdout.strip()}\n"
-        if result.stderr:
-            output += f"--- STDERR ---\n{result.stderr.strip()}\n"
+        if sys.platform == "win32":
+            final_command = f'start "Agent Command" /wait cmd /c "{redirected_command}"'
+            proc = subprocess.Popen(final_command, shell=True)
+            proc.wait()
+        # ... (autres logiques pour macOS/Linux) ...
+        else:
+             return "Le mode attente n'est actuellement bien supporté que sur Windows."
 
-        if not result.stdout and not result.stderr:
+        system_encoding = locale.getpreferredencoding(False)
+        with open(stdout_path, 'r', encoding=system_encoding, errors='replace') as f:
+            stdout_content = f.read().strip()
+        with open(stderr_path, 'r', encoding=system_encoding, errors='replace') as f:
+            stderr_content = f.read().strip()
+
+        output = f"Commande exécutée dans une nouvelle fenêtre: '{command}'\n"
+        if stdout_content:
+            output += f"--- SORTIE STANDARD (STDOUT) ---\n{stdout_content}\n"
+        if stderr_content:
+            output += f"--- ERREUR STANDARD (STDERR) ---\n{stderr_content}\n"
+        if not stdout_content and not stderr_content:
             output += "La commande a été exécutée sans produire de sortie."
 
         return output.strip()
 
-    except subprocess.TimeoutExpired:
-        return f"Erreur : La commande a dépassé le délai de 60 secondes."
-    except FileNotFoundError:
-        return f"Erreur : Commande ou programme '{args[0] if args else ''}' introuvable. Vérifiez qu'il est installé et dans le PATH du système."
     except Exception as e:
         return f"Erreur inattendue lors de l'exécution de la commande '{command}': {e}"
-
+    finally:
+        if stdout_path and os.path.exists(stdout_path):
+            os.remove(stdout_path)
+        if stderr_path and os.path.exists(stderr_path):
+            os.remove(stderr_path)
     
 
 def locate_on_map(location_name: str) -> str:
@@ -689,7 +716,7 @@ def summarize_youtube_speech(url: str, topic: str = "les points clés") -> str:
         # 3. Résumé du texte complet (inchangé)
         max_length = 15000
         truncated_text = full_transcript[:max_length]
-        summarizer_model = genai.GenerativeModel('gemini-2.5-flash')
+        summarizer_model = genai.GenerativeModel('gemini-2.0-flash')
         prompt = f"Voici la transcription d'une vidéo YouTube. Résume le contenu en te concentrant sur {topic}. Le résumé doit être concis et informatif:\n\n---\n{truncated_text}\n---"
         summary_response = summarizer_model.generate_content(prompt)
         
@@ -819,11 +846,13 @@ AVAILABLE_TOOLS = {
             "query": "string", "num_results": "integer (optionnel, défaut 5)"
         }
     },
-        "execute_shell_command": {  # <--- Votre nouvelle fonction
-        "function": execute_shell_command,
-        "description": "...",
-        "params": {"command": "string (La commande shell complète à exécuter)"}
-    },   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil
+        "execute_shell_command": {
+    "function": execute_shell_command,
+    "description": "Exécute une commande shell. Peut attendre la fin pour récupérer le résultat (par défaut) ou non.",
+    "params": {
+        "command": "string (La commande shell complète à exécuter)",
+        "wait_for_completion": "boolean (Optionnel, défaut: True. Mettre à False pour ne pas attendre la fin de la commande et ne pas récupérer sa sortie.)"}   # <--- Ajoutez une virgule ici si ce n'est pas le dernier outil    
+    },    
         "find_contact_email": {
             "function": find_contact_email,
             "description": "Recherche l'adresse e-mail d'un contact à partir de son nom. À utiliser IMPÉRATIVEMENT avant d'envoyer un e-mail si vous ne disposez que d'un nom et non d'une adresse e-mail complète.",
