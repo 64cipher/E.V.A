@@ -2737,7 +2737,7 @@ def chat_ws(ws):
 
                                 # Lancer le script de l'agent en sous-processus
                                 agent_process = subprocess.Popen(
-                                    [sys.executable, "multi_step_agent1.py", task_for_agent],
+                                    [sys.executable, "multi_step_agent.py", task_for_agent],
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     bufsize=1, # Line-buffered                                    
@@ -2814,7 +2814,7 @@ def chat_ws(ws):
                                         # Exécute cette étape spécifique avec l'agent multi-étapes
                                         agent_task_description = step
                                         agent_process = subprocess.Popen(
-                                            [sys.executable, "multi_step_agent1.py", agent_task_description],
+                                            [sys.executable, "multi_step_agent.py", agent_task_description],
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1
                                         )
                                         for line_bytes in iter(agent_process.stdout.readline, b''):
