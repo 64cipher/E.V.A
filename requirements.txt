@@ -16,3 +16,8 @@ beautifulsoup4
 openai-whisper
 ffmpeg-python
 pyvista
+spotipy
+mido
+PyPDF2
+rtmidi-python
+yt-dlp
