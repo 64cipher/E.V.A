@@ -580,6 +580,7 @@ Le système principal (Python) gère l'authentification Google et l'appel aux AP
 Le système principal gère un carnet d'adresses local.
 L'origine par défaut pour les itinéraires est "Thonon-les-Bains" si non spécifiée par l'utilisateur.
 Les prévisions météo sont gérées par le client (JavaScript) pour l'affichage, mais tu dois fournir un résumé verbal comme indiqué plus haut.
+Pour executer msfvenom et msfconsole, utilise les commandes "wsl /snap/bin/msfvenom" et "wsl /snap/bin/msfconsole"
 """
 
 import google.generativeai as genai
