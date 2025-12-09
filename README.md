@@ -29,7 +29,7 @@ Le mode Agent est très couteux en ressource sur API, donc faites attention.
 
 ---
 
-## Fonctionnalités clés
+## Fonctionnalités
 
 | Catégorie         | Détail                                                                        |
 | ----------------- | ----------------------------------------------------------------------------- |
