@@ -45,7 +45,7 @@ Le mode Agent est très couteux en ressource sur API, donc faites attention.
 | **Visualiseur 3D**     | Demandez à E.V.A de créer un objet comme un cube, une sphere, un cône ou un tore en 3D.    |
 | **Execution de code** | E.V.A peut executer du code python et intéragir avec le shell            |
 | **Mode Agent** | E.V.A peut executer des tâches en plusieurs étapes                               |
-| **Comptibilité MIDI** | E.V.A peut jouer des notes de musique sur votre DAW comme FL Studio (nécessite LoopMIDI) |
+| **Compatibilité MIDI** | E.V.A peut jouer des notes de musique sur votre DAW comme FL Studio (nécessite LoopMIDI) |
 ---
 
 ## Architecture rapide
